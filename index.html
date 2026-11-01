@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.55';
+        manifestLink.href = 'manifest.webmanifest?v=55.56';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.55').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.56').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.55';
+    window.APP_VERSION = '55.56';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -22675,6 +22675,13 @@ const psPriceKey = (offerKey, field) => 'cost_p' + String(offerKey).slice(-1) + 
 // v55.51 (Beta): Kacheln verbinden. Gruppen = zusammengehoerende Kacheln (Index 0..2); pro Gruppe zaehlt
 // nur das Preispaar der ersten Kachel (Leader) in die Summen.
 const psParseEuro = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+// v55.56: Rechner-Eingabe ohne Komma ab 3 Ziffern = letzte 2 Ziffern sind Cent (8499 -> 84,99; 999 -> 9,99).
+// Mit Komma gilt die Eingabe wie getippt (100, -> 100 €). 1-2 Ziffern bleiben ganze Euro.
+const psCalcTerm = t => {
+  t = String(t || '');
+  if (t.indexOf(',') !== -1 || t.length < 3) return t;
+  return t.slice(0, -2) + ',' + t.slice(-2);
+};
 const psJoinGroups = (j12, j23) => {
   const g = [[0]];
   if (j12) g[0].push(1);else g.push([1]);
@@ -27781,9 +27788,9 @@ function App() {
     const c = priceCalc;
     if (!c) return;
     let e = c.expr.replace(/\+$/, '').replace(/,$/, '');
-    let value = e;
+    let value = psCalcTerm(c.expr.replace(/\+$/, '')).replace(/,$/, '');
     if (e.indexOf('+') !== -1) {
-      const t = e.split('+').reduce((s, x) => s + psParseEuro(x), 0);
+      const t = e.split('+').reduce((s, x) => s + psParseEuro(psCalcTerm(x)), 0);
       value = t.toFixed(2).replace('.', ',');
     }
     const sk = psPriceKey(c.offerKey, c.field);
@@ -32986,6 +32993,40 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     };
 
     // ===== Share-PDF: Canvas-Inhalte "einbrennen" (Canvas-Bitmap wird beim cloneNode NICHT kopiert) =====
+    // v55.56: Bounding-Box der Tinte (nicht-transparente Pixel) – damit nach dem Drehen (Hoch <-> Quer) oder bei
+    // grossem, fast leerem Canvas die Handschrift im PDF nicht winzig wird. Rueckgabe in Bitmap-Pixeln.
+    const _psInkBox = cv => {
+      try {
+        const w = cv.width,
+          h = cv.height;
+        if (!w || !h || w * h > 12e6) return null;
+        const d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+        let x0 = w,
+          y0 = h,
+          x1 = -1,
+          y1 = -1;
+        for (let y = 0; y < h; y += 2) {
+          const row = y * w * 4;
+          for (let x = 0; x < w; x += 2) {
+            if (d[row + x * 4 + 3] > 16) {
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+        }
+        if (x1 < 0) return null;
+        return {
+          x: x0,
+          y: y0,
+          w: x1 - x0 + 2,
+          h: y1 - y0 + 2
+        };
+      } catch (e) {
+        return null;
+      }
+    };
     const bakeCanvasesIntoClone = (srcRoot, cloneRoot) => {
       try {
         if (!srcRoot || !cloneRoot) return;
@@ -33010,6 +33051,14 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           img.alt = 'canvas';
           img.setAttribute('data-ps-nw', String(sc.width));
           img.setAttribute('data-ps-nh', String(sc.height));
+          try {
+            const _ib = _psInkBox(sc);
+            if (_ib) {
+              img.setAttribute('data-ps-ink', [_ib.x, _ib.y, _ib.w, _ib.h].join(','));
+              const _cr = sc.getBoundingClientRect();
+              img.setAttribute('data-ps-dpr', String(_cr.width > 20 ? Math.max(1, sc.width / _cr.width) : 1));
+            }
+          } catch (e) {}
           // v55.54 URSACHE DER VERZERRTEN HANDSCHRIFT: Das Bild erbte die Canvas-Klassen (drawing-canvas,
           // w-full, h-full). Die Regel ".drawing-canvas {width:100%!important;height:100%!important}" hat dann
           // jede Seitenverhaeltnis-Korrektur ueberstimmt → Bild wurde auf die ganze Karte gezogen.
@@ -33824,12 +33873,31 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             const W = p.clientWidth;
             const H = p.clientHeight;
             if (!(W > 2) || !(H > 2)) return;
-            const s = Math.min(W / nw, H / nh);
+            let s = Math.min(W / nw, H / nh);
+            let _inkLeft = null,
+              _inkTop = null;
+            const _inkA = (im.getAttribute('data-ps-ink') || '').split(',').map(parseFloat);
+            if (_inkA.length === 4 && _inkA.every(v => isFinite(v)) && im.getAttribute('data-ps-anchor') !== 'c') {
+              // Nur den beschriebenen Bereich (+Rand) einpassen; ein einziger Faktor fuer X und Y.
+              const dpr = parseFloat(im.getAttribute('data-ps-dpr')) || 1;
+              const padB = 14;
+              const ix0 = Math.max(0, _inkA[0] - padB),
+                iy0 = Math.max(0, _inkA[1] - padB);
+              const ix1 = Math.min(nw, _inkA[0] + _inkA[2] + padB),
+                iy1 = Math.min(nh, _inkA[1] + _inkA[3] + padB);
+              const sFit = Math.min(W / Math.max(1, ix1 - ix0), H / Math.max(1, iy1 - iy0));
+              s = Math.max(s, Math.min(sFit, 1.5 / dpr));
+              _inkLeft = Math.round(-ix0 * s + 4);
+              _inkTop = Math.round(-iy0 * s + 4);
+              try {
+                p.style.overflow = 'hidden';
+              } catch (e) {}
+            }
             const iw = Math.max(1, Math.round(nw * s));
             const ih = Math.max(1, Math.round(nh * s));
             const centered = im.getAttribute('data-ps-anchor') === 'c' || im.hasAttribute('data-ps-fit-ar') && iw < W - 2;
-            const left = centered ? Math.max(0, Math.round((W - iw) / 2)) : 0;
-            const top = im.getAttribute('data-ps-anchor') === 'c' ? Math.max(0, Math.round((H - ih) / 2)) : 0;
+            const left = _inkLeft !== null ? Math.min(0, _inkLeft) : centered ? Math.max(0, Math.round((W - iw) / 2)) : 0;
+            const top = _inkTop !== null ? Math.min(0, _inkTop) : im.getAttribute('data-ps-anchor') === 'c' ? Math.max(0, Math.round((H - ih) / 2)) : 0;
             const z = im.style.zIndex || '10';
             im.style.cssText = 'position:absolute;left:' + left + 'px;top:' + top + 'px;width:' + iw + 'px;height:' + ih + 'px;max-width:none;max-height:none;pointer-events:none;z-index:' + z + ';display:block;';
           } catch (e) {}
@@ -37903,7 +37971,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.55")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.56")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -43363,7 +43431,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }
   }), document.body) : null, (window.__anlageHtml = printRecommendationsEnabled && (wlanSnapshot || techUebernommen && techUebernommen.length > 0 || netBundleMatched || tvSnapshot) ? buildPage3Html() : '', null), priceCalc && ReactDOM.createPortal((() => {
     const ex = priceCalc.expr;
-    const terms = ex.split('+');
+    const terms = ex.split('+').map(psCalcTerm);
     const total = terms.reduce((s, x) => s + psParseEuro(x), 0);
     const fmtE = v => v.toFixed(2).replace('.', ',') + ' €';
     const fieldLabel = (priceCalc.field === 'monatlich' ? 'Monatlich' : 'Einmalig') + ' · Angebot ' + priceCalc.offerKey.slice(-1);
@@ -43434,7 +43502,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       style: {
         color: '#c8c8c8'
       }
-    }, "0") : ex), /*#__PURE__*/React.createElement("div", {
+    }, "0") : terms.join('+')), /*#__PURE__*/React.createElement("div", {
       style: {
         textAlign: 'right',
         fontSize: '13px',
