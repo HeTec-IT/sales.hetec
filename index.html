@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.56';
+        manifestLink.href = 'manifest.webmanifest?v=55.57';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.56').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.57').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -602,6 +602,12 @@
         function pushGuard() {
             try { history.pushState({ psBackGuard: 1 }, '', location.href); } catch (e) {}
         }
+        // v55.57: Stift-Schutz. Schreibt man mit dem Stift am linken Rand (Kachel 1), loest Android die System-
+        // Zurueck-Geste aus. Eine Web-App kann die Geste nicht sperren, aber ein "Zurueck" waehrend bzw. direkt
+        // nach Stift-Eingabe (Schweben, Schreiben, Abbruch) wird ignoriert: kein Dialog, kein Verlassen.
+        function penRecent(ms) {
+            return Date.now() - (window.__psPenTs || 0) < ms;
+        }
         function hasData() {
             // Nur eine Beratung mit Eingaben ist schuetzenswert. Ohne Eingaben verlaesst "Zurueck" die App
             // direkt, ohne Dialog (Funktion kommt aus der React-App; vor dem Start gibt es keine Eingaben).
@@ -622,6 +628,11 @@
                 watcher.addEventListener('close', function () {
                     if (nativeBackWatcher === watcher) nativeBackWatcher = null;
                     if (window.__PS_WIPING) return;
+                    // Zurueck durch den Stift (Randgeste beim Schreiben): ignorieren, Schutz sofort wieder scharf.
+                    if (penRecent(1800)) {
+                        window.setTimeout(ensureGuard, 0);
+                        return;
+                    }
                     // Leere Beratung: nichts zu schuetzen, das naechste Zurueck verlaesst die App ohne Dialog.
                     if (hasData()) {
                         if (dialogVisible) hideDialog();
@@ -642,7 +653,7 @@
         function ensureGuard() {
             if (!armed || window.__PS_WIPING) return;
             if (document.visibilityState === 'hidden') return;
-            var data = hasData();
+            var data = hasData() || penRecent(4000);
             if (nativeBackMode) {
                 if (data) armNativeBack();
                 else disarmNativeBack();
@@ -912,6 +923,11 @@
         }
         function onBack() {
             if (window.__PS_WIPING) return;
+            if (penRecent(1800)) {
+                pushGuard();
+                guarded = true;
+                return;
+            }
             // Leere Beratung: nichts zu schuetzen. Der Guard-Eintrag ist verbraucht, das naechste
             // Zurueck verlaesst die App ohne Dialog.
             if (!hasData()) { guarded = false; return; }
@@ -939,6 +955,18 @@
         }, true);
         ['pointerup', 'touchend', 'click', 'keydown'].forEach(function (ev) {
             document.addEventListener(ev, arm, true);
+        });
+        // v55.57: Stift-Aktivitaet merken (auch Schweben ueber dem Display und pointercancel durch die Randgeste).
+        ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'pointerover', 'pointerenter'].forEach(function (ev) {
+            document.addEventListener(ev, function (e) {
+                if (!e || e.pointerType !== 'pen') return;
+                var prev = window.__psPenTs || 0;
+                window.__psPenTs = Date.now();
+                // Erster Stift-Kontakt nach einer Pause: Schutz sofort scharf stellen (nicht erst nach dem ersten Strich).
+                if (window.__psPenTs - prev > 700) {
+                    try { arm(); ensureGuard(); } catch (_) {}
+                }
+            }, { capture: true, passive: true });
         });
         // Vollmodus nach "App beenden": Der Browser erlaubt Vollbild nur nach einer Beruehrung.
         // Deshalb merkt sich "App beenden" den Vollmodus; beim ersten Tippen nach dem Neustart geht die App wieder hinein.
@@ -1068,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.56';
+    window.APP_VERSION = '55.57';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -37971,7 +37999,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.56")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.57")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
