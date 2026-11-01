@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.50';
+        manifestLink.href = 'manifest.webmanifest?v=55.51';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.50').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.51').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.50';
+    window.APP_VERSION = '55.51';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -3117,6 +3117,18 @@ body.pdf-share-mode .share-page:last-child{
     visibility: hidden !important;
     pointer-events: none !important;
     /* KEIN display:none -> Grid darf nicht kollabieren */
+}
+/* v55.51 (Beta): verbundene Kacheln - Naht ohne Spalt */
+.ps-off-card[data-join*="r"] .offer-canvas-container{
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-right-width: 0 !important;
+    box-shadow: none !important;
+}
+.ps-off-card[data-join*="l"] .offer-canvas-container{
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    box-shadow: none !important;
 }
 /* v55.50 (Beta): Design C (Windows Fluent) - Preisfelder + Summenkarten */
 .ps-fl-box input{
@@ -22656,6 +22668,32 @@ const OfferCanvas = React.memo(({
 // v55.47 (Beta): Preisleiste unter jeder Angebotskarte (Monatlich / Einmalig je Angebot)
 const PS_PRICE_FIELDS = [['offer1', 'monatlich'], ['offer1', 'einmalig'], ['offer2', 'monatlich'], ['offer2', 'einmalig'], ['offer3', 'monatlich'], ['offer3', 'einmalig']];
 const psPriceKey = (offerKey, field) => 'cost_p' + String(offerKey).slice(-1) + '_' + field;
+// v55.51 (Beta): Kacheln verbinden. Gruppen = zusammengehoerende Kacheln (Index 0..2); pro Gruppe zaehlt
+// nur das Preispaar der ersten Kachel (Leader) in die Summen.
+const psParseEuro = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+const psJoinGroups = (j12, j23) => {
+  const g = [[0]];
+  if (j12) g[0].push(1);else g.push([1]);
+  if (j23) g[g.length - 1].push(2);else g.push([2]);
+  return g;
+};
+const psLeaderKeys = (j12, j23) => psJoinGroups(j12, j23).map(grp => 'offer' + (grp[0] + 1));
+const psPriceTotals = (prices, j12, j23, m2Manual) => {
+  const keys = psLeaderKeys(j12, j23);
+  const totalE = keys.reduce((s, k) => s + psParseEuro((prices[k] || {}).einmalig), 0);
+  const totalM = keys.reduce((s, k) => s + psParseEuro((prices[k] || {}).monatlich), 0);
+  const out = {
+    einmalig: totalE,
+    einmaligRaw: totalE > 0 ? totalE.toFixed(2).replace('.', ',') : '',
+    monatlich1: totalM,
+    monatlich1Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : ''
+  };
+  if (!m2Manual) {
+    out.monatlich2 = totalM;
+    out.monatlich2Raw = totalM > 0 ? totalM.toFixed(2).replace('.', ',') : '';
+  }
+  return out;
+};
 const SmallInputCanvas = ({
   inputMode,
   canvasRef,
@@ -27387,20 +27425,11 @@ function App() {
       }
     };
     setPackagePrices(updated);
-    const keys = ['offer1', 'offer2', 'offer3'];
-    const totalE = keys.reduce((s, k) => s + parseP((updated[k] || {}).einmalig), 0);
-    const totalM = keys.reduce((s, k) => s + parseP((updated[k] || {}).monatlich), 0);
+    // v55.50: "ab Monat 13" ist mit der Summe vorbelegt, solange nicht manuell geaendert
+    // v55.51: verbundene Kacheln zaehlen nur einmal (Preispaar der ersten Kachel)
     setOfferData(prev => ({
       ...prev,
-      einmalig: totalE,
-      einmaligRaw: totalE > 0 ? totalE.toFixed(2).replace('.', ',') : '',
-      monatlich1: totalM,
-      monatlich1Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : '',
-      // v55.50: "ab Monat 13" ist mit der Summe vorbelegt, solange nicht manuell geaendert
-      ...(prev.monatlich2Manual ? {} : {
-        monatlich2: totalM,
-        monatlich2Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : ''
-      })
+      ...psPriceTotals(updated, jEff.j12, jEff.j23, prev.monatlich2Manual)
     }));
   };
   const [showSavingsBlock, setShowSavingsBlock] = React.useState(false);
@@ -27716,6 +27745,47 @@ function App() {
       if (inputMode !== 'keyboard') document.body.classList.remove('keyboard-mode-active');
     };
   }, [inputMode]);
+
+  // v55.51 (Beta): Kacheln verbinden – nur im Querformat/Grid (md+) und nicht im Schritt-Modus.
+  const [psWide, setPsWide] = useState(() => {
+    try {
+      return window.matchMedia('(orientation: landscape) and (min-width: 768px)').matches;
+    } catch (e) {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia('(orientation: landscape) and (min-width: 768px)');
+      const h = () => setPsWide(mq.matches);
+      if (mq.addEventListener) mq.addEventListener('change', h);else mq.addListener(h);
+      return () => {
+        if (mq.removeEventListener) mq.removeEventListener('change', h);else mq.removeListener(h);
+      };
+    } catch (e) {}
+  }, []);
+  const jEff = psWide && offerLayoutMode !== 'step' ? {
+    j12: !!offerData.joined12,
+    j23: !!offerData.joined23
+  } : {
+    j12: false,
+    j23: false
+  };
+  const toggleJoin = which => setOfferData(prev => ({
+    ...prev,
+    [which]: !prev[which]
+  }));
+  const jKey = (jEff.j12 ? '1' : '0') + (jEff.j23 ? '1' : '0');
+  const jPrevRef = useRef(jKey);
+  useEffect(() => {
+    window.__psJoin = jEff;
+    if (jPrevRef.current === jKey) return;
+    jPrevRef.current = jKey;
+    setOfferData(prev => ({
+      ...prev,
+      ...psPriceTotals(packagePrices, jEff.j12, jEff.j23, prev.monatlich2Manual)
+    }));
+  }, [jKey]);
 
   // Brücke: Canvas-Fusion-Modus für PDF-Export
   React.useEffect(() => {
@@ -31788,7 +31858,7 @@ function App() {
         const manual = value.trim() !== '';
         next.monatlich2Manual = manual;
         if (!manual) {
-          const sumM = ['offer1', 'offer2', 'offer3'].reduce((s, k) => s + (parseFloat(String((packagePrices[k] || {}).monatlich || '').replace(',', '.')) || 0), 0);
+          const sumM = psPriceTotals(packagePrices, jEff.j12, jEff.j23, false).monatlich1;
           next.monatlich2 = sumM;
           next.monatlich2Raw = sumM > 0 ? sumM.toFixed(2).replace('.', ',') : '';
         }
@@ -31852,7 +31922,7 @@ function App() {
       triggerRedraw: redrawCounter
     })));
   };
-  const renderPriceStrip = offerKey => /*#__PURE__*/React.createElement("div", {
+  const renderPriceStrip = (offerKey, spanN) => /*#__PURE__*/React.createElement("div", {
     "data-ps-price-strip": offerKey,
     className: "ps-price-strip",
     style: {
@@ -31860,7 +31930,12 @@ function App() {
       gridTemplateColumns: '1fr 1fr',
       gap: '8px',
       marginTop: '6px',
-      flex: '0 0 auto'
+      height: '58px',
+      flex: '0 0 auto',
+      ...(spanN > 1 ? {
+        width: 'calc(' + spanN * 100 + '% - 1.5rem)',
+        position: 'relative'
+      } : {})
     }
   }, renderPriceField(offerKey, 'monatlich'), renderPriceField(offerKey, 'einmalig'));
   const renderOfferInput = (key, labelKey, type = 'text') => {
@@ -33623,7 +33698,18 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
 
       // --- 3 Karten nebeneinander – nehmen ~72% der Höhe ---
       const cardsRow = doc.createElement('div');
-      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';gap:10px;overflow:hidden;';
+      // v55.51: Karten in Zeile 1, Preisleisten in Zeile 2 (verbundene Kacheln: eine Leiste ueber mehrere Spalten).
+      // Spaltenabstand 0, dafuer 5px Innenabstand je Karte (an Nahtstellen verbundener Karten 0).
+      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr) auto;column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
+      const _jn = fusionMode ? {
+        j12: false,
+        j23: false
+      } : window.__psJoin || {
+        j12: false,
+        j23: false
+      };
+      const _jGroups = psJoinGroups(!!_jn.j12, !!_jn.j23);
+      let _colPos = 0;
       const grid = tmpClone.querySelector('.offer-print-grid');
       const cols = grid ? Array.from(grid.children) : [];
 
@@ -33644,7 +33730,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         if (hiddenIdx.has(i)) continue;
         const col = cols[i];
         const card = doc.createElement('div');
-        card.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;box-sizing:border-box;';
+        _colPos++;
+        const _jg = _jGroups.find(g => g.includes(i));
+        const _jHasPrev = _jg.indexOf(i) > 0;
+        const _jHasNext = _jg.indexOf(i) < _jg.length - 1;
+        card.style.cssText = 'display:flex;flex-direction:column;height:100%;overflow:hidden;box-sizing:border-box;grid-row:1;grid-column:' + _colPos + ';padding:0 ' + (_jHasNext ? 0 : 5) + 'px 0 ' + (_jHasPrev ? 0 : 5) + 'px;';
         if (col) {
           // Buttons verstecken
           col.querySelectorAll('button:not([data-print-keep="1"])').forEach(b => b.style.display = 'none');
@@ -33655,6 +33745,16 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
           // Rahmenfarbe
           container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
+          // v55.51: verbundene Kacheln – Naht ohne Rahmen/Rundung
+          if (_jHasNext) {
+            container.style.borderTopRightRadius = '0';
+            container.style.borderBottomRightRadius = '0';
+            container.style.borderRightWidth = '0px';
+          }
+          if (_jHasPrev) {
+            container.style.borderTopLeftRadius = '0';
+            container.style.borderBottomLeftRadius = '0';
+          }
           // Quell-Spalte (Bildschirm) dieser Karte – passend zur Klon-Spalte
           let srcColLive = null;
           try {
@@ -33746,9 +33846,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             }
           } catch (e) {}
           col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;';
-          try {
-            col.appendChild(buildPdfPriceStrip(i));
-          } catch (e) {}
           card.appendChild(col);
         } else {
           card.style.borderRadius = '14px';
@@ -33757,6 +33854,27 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         }
         cardsRow.appendChild(card);
       }
+      // v55.51: Preisleisten (Zeile 2) – je Gruppe eine Leiste, bei Verbindung ueber mehrere Spalten
+      try {
+        if (fusionMode) {
+          let _cp = 0;
+          for (let i = 0; i < 3; i++) {
+            if (hiddenIdx.has(i)) continue;
+            _cp++;
+            const cell = doc.createElement('div');
+            cell.style.cssText = 'grid-row:2;grid-column:' + _cp + ';padding:0 5px;box-sizing:border-box;min-width:0;';
+            cell.appendChild(buildPdfPriceStrip(i));
+            cardsRow.appendChild(cell);
+          }
+        } else {
+          _jGroups.forEach(grp => {
+            const cell = doc.createElement('div');
+            cell.style.cssText = 'grid-row:2;grid-column:' + (grp[0] + 1) + ' / span ' + grp.length + ';padding:0 5px;box-sizing:border-box;min-width:0;';
+            cell.appendChild(buildPdfPriceStrip(grp[0]));
+            cardsRow.appendChild(cell);
+          });
+        }
+      } catch (e) {}
       wrapper.appendChild(cardsRow);
 
       // Kostenübersicht kommt auf Seite 3 — hier nur die Karten, volle Höhe
@@ -37503,7 +37621,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.50")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.51")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41448,12 +41566,67 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const orderClass = key === 'offer1' ? 'order-1' : key === 'offer2' ? 'order-2' : 'order-3';
     const hidden = offerLayoutMode === 'step' && currentOfferStep !== idx;
     // v52.2: Maximieren-Button entfernt (nicht benötigt)
+    // v55.51: verbundene Kacheln (Gruppe, Position, Leader)
+    const jGroups = psJoinGroups(jEff.j12, jEff.j23);
+    const jGrp = jGroups.find(g => g.includes(idx));
+    const jPos = jGrp.indexOf(idx);
+    const jN = jGrp.length;
+    const jHasNext = jPos < jN - 1;
+    const jHasPrev = jPos > 0;
+    const jIsLeader = jPos === 0;
+    const jBtnOn = idx === 0 ? jEff.j12 : jEff.j23;
+    const joinBtn = idx < 2 && psWide && offerLayoutMode !== 'step' ? /*#__PURE__*/React.createElement("button", {
+      key: 'joinbtn',
+      type: 'button',
+      "data-ps-join-btn": idx === 0 ? '12' : '23',
+      title: jBtnOn ? 'Verbindung aufheben' : 'Kacheln verbinden',
+      "aria-label": jBtnOn ? 'Verbindung aufheben' : 'Kacheln verbinden',
+      onClick: () => toggleJoin(idx === 0 ? 'joined12' : 'joined23'),
+      style: {
+        position: 'absolute',
+        top: '14px',
+        right: jBtnOn ? '-13px' : '-25px',
+        zIndex: 80,
+        width: '26px',
+        height: '26px',
+        borderRadius: '50%',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        border: jBtnOn ? '1px solid #0067c0' : '1px solid #d1d1d1',
+        background: jBtnOn ? '#0067c0' : '#ffffff',
+        color: jBtnOn ? '#ffffff' : '#616161',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.25)'
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "14",
+      height: "14",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2.2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+    }))) : null;
     return /*#__PURE__*/React.createElement("div", {
       className: `ps-off-card ${orderClass}`,
+      "data-join": (jHasPrev ? 'l' : '') + (jHasNext ? 'r' : ''),
       style: {
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
+        ...(jN > 1 ? {
+          zIndex: 10 - jPos
+        } : {}),
+        ...(jHasNext ? {
+          marginRight: '-1.5rem'
+        } : {}),
         ...(hidden ? {
           display: 'none'
         } : offerLayoutMode === 'step' ? {
@@ -41495,7 +41668,14 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onOpenBundleModal: openBundleModal,
       packagePriceData: packagePrices[key],
       triggerToast: triggerToast
-    }), renderPriceStrip(key));
+    }), jIsLeader ? renderPriceStrip(key, jN) : /*#__PURE__*/React.createElement("div", {
+      "data-ps-price-spacer": "1",
+      style: {
+        height: '64px',
+        flex: '0 0 auto',
+        pointerEvents: 'none'
+      }
+    }), joinBtn);
   })), (() => {
     const monthly = offerData.monatlich1 || 0;
     const monthly2 = offerData.monatlich2 || 0;
@@ -42522,8 +42702,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // v55.50 (Beta) Design C (Windows Fluent): drei Summenkarten
     const fmtE = v => v > 0 ? v.toFixed(2).replace('.', ',') + ' €' : '–';
     const parseP = v => parseFloat(String(v || '').replace(',', '.')) || 0;
-    const nE = ['offer1', 'offer2', 'offer3'].filter(k => parseP((packagePrices[k] || {}).einmalig) > 0).length;
-    const nM = ['offer1', 'offer2', 'offer3'].filter(k => parseP((packagePrices[k] || {}).monatlich) > 0).length;
+    const nE = psLeaderKeys(jEff.j12, jEff.j23).filter(k => parseP((packagePrices[k] || {}).einmalig) > 0).length;
+    const nM = psLeaderKeys(jEff.j12, jEff.j23).filter(k => parseP((packagePrices[k] || {}).monatlich) > 0).length;
     const sumE = offerData.einmalig || 0;
     const sumM = offerData.monatlich1 || 0;
     const m13 = offerData.monatlich2 || 0;
