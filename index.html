@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.46';
+        manifestLink.href = 'manifest.webmanifest?v=55.47';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.46').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.47').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.46';
+    window.APP_VERSION = '55.47';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -22635,6 +22635,9 @@ const OfferCanvas = React.memo(({
 // --- SMALL INPUT CANVAS (Patched with drawing-canvas class) ---
 
 // --- SMALL INPUT CANVAS (shows background value even in Pen mode) ---
+// v55.47 (Beta): Preisleiste unter jeder Angebotskarte (Monatlich / Einmalig je Angebot)
+const PS_PRICE_FIELDS = [['offer1', 'monatlich'], ['offer1', 'einmalig'], ['offer2', 'monatlich'], ['offer2', 'einmalig'], ['offer3', 'monatlich'], ['offer3', 'einmalig']];
+const psPriceKey = (offerKey, field) => 'cost_p' + String(offerKey).slice(-1) + '_' + field;
 const SmallInputCanvas = ({
   inputMode,
   canvasRef,
@@ -26115,6 +26118,12 @@ function App() {
     cost_monatlich1: [],
     cost_monatlich2: [],
     cost_smartphone: [],
+    cost_p1_monatlich: [],
+    cost_p1_einmalig: [],
+    cost_p2_monatlich: [],
+    cost_p2_einmalig: [],
+    cost_p3_monatlich: [],
+    cost_p3_einmalig: [],
     agent_name: [],
     date_field: [],
     offer_valid_until: []
@@ -27343,6 +27352,34 @@ function App() {
     }));
     setShowPriceModal(false);
   };
+  // v55.47 (Beta): Preisleiste unter der Karte schreibt direkt in packagePrices und haelt die
+  // Summen (offerData.einmalig / monatlich1) fuer Ersparnis- und Smartphone-Rechnung synchron.
+  // "Monatlich im 2. Jahr" und "Smartphone Finanzierung" bleiben unberuehrt.
+  const setPackagePriceField = (offerKey, field, value) => {
+    const parseP = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+    const base = packagePrices[offerKey] || {
+      einmalig: '',
+      monatlich: ''
+    };
+    const updated = {
+      ...packagePrices,
+      [offerKey]: {
+        ...base,
+        [field]: value
+      }
+    };
+    setPackagePrices(updated);
+    const keys = ['offer1', 'offer2', 'offer3'];
+    const totalE = keys.reduce((s, k) => s + parseP((updated[k] || {}).einmalig), 0);
+    const totalM = keys.reduce((s, k) => s + parseP((updated[k] || {}).monatlich), 0);
+    setOfferData(prev => ({
+      ...prev,
+      einmalig: totalE,
+      einmaligRaw: totalE > 0 ? totalE.toFixed(2).replace('.', ',') : '',
+      monatlich1: totalM,
+      monatlich1Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : ''
+    }));
+  };
   const [showSavingsBlock, setShowSavingsBlock] = React.useState(false);
   const [dismissSavingsHint, setDismissSavingsHint] = React.useState(false);
   const [offerData, setOfferData] = useState(initialOfferData);
@@ -27419,6 +27456,16 @@ function App() {
   const offerCost2Ref = useRef(null);
   const offerCost3Ref = useRef(null);
   const offerCostSmartphoneRef = useRef(null);
+  // v55.47: je Angebot zwei Preisfelder (Monatlich / Einmalig) direkt unter der Karte
+  const priceFieldRefs = {
+    offer1_monatlich: useRef(null),
+    offer1_einmalig: useRef(null),
+    offer2_monatlich: useRef(null),
+    offer2_einmalig: useRef(null),
+    offer3_monatlich: useRef(null),
+    offer3_einmalig: useRef(null)
+  };
+  const isPriceFieldRef = r => !!r && Object.keys(priceFieldRefs).some(k => priceFieldRefs[k] === r);
   const offerAgentRef = useRef(null);
   const offerDateRef = useRef(null);
   const offerValidUntilRef = useRef(null);
@@ -28005,6 +28052,7 @@ function App() {
       sit_Nutzung: [], sit_Haushalt: [], sit_WeitereProdukte: [], sit_Fernsehen: [],
       sit_WiFi: [], sit_Gesamtkosten: [], offer1: [], offer2: [], offer3: [],
       cost_einmalig: [], cost_monatlich1: [], cost_monatlich2: [], cost_smartphone: [],
+      cost_p1_monatlich: [], cost_p1_einmalig: [], cost_p2_monatlich: [], cost_p2_einmalig: [], cost_p3_monatlich: [], cost_p3_einmalig: [],
       agent_name: [], date_field: [], offer_valid_until: []
     });
     setEmailText('');
@@ -30322,7 +30370,12 @@ function App() {
       key: 'date_field',
       mode: inputMode,
       condition: true
-    }];
+    }].concat(PS_PRICE_FIELDS.map(([o, f]) => ({
+      ref: priceFieldRefs[o + '_' + f],
+      key: psPriceKey(o, f),
+      mode: inputMode,
+      condition: true
+    })));
     const resizeCanvas = (ref, key) => {
       const canvas = ref.current;
       if (!canvas || !key) return;
@@ -30811,7 +30864,7 @@ function App() {
     const isSituationCanvasActive = key && key.startsWith('sit_') && inputMode === 'pen';
     const isSmallCanvasPenActive = ref === emailCanvasRef && emailMode === 'pen' || ref === providerCanvasRef && providerMode === 'pen' || ref === notesCanvasRef && notesMode === 'pen' || ref === skipReasonCanvasRef && skipReasonMode === 'pen' || ref === beratungsIdCanvasRef && beratungsIdMode === 'pen';
     const isOfferCanvasActive = (ref === offerCanvasRef1 || ref === offerCanvasRef2 || ref === offerCanvasRef3) && inputMode === 'pen';
-    const isOfferInputActive = (ref === offerCost1Ref || ref === offerCost2Ref || ref === offerCost3Ref || ref === offerCostSmartphoneRef || ref === offerAgentRef || ref === offerDateRef || ref === offerValidUntilRef) && inputMode === 'pen';
+    const isOfferInputActive = (ref === offerCost1Ref || ref === offerCost2Ref || ref === offerCost3Ref || ref === offerCostSmartphoneRef || ref === offerAgentRef || ref === offerDateRef || ref === offerValidUntilRef || isPriceFieldRef(ref)) && inputMode === 'pen';
     if (!isPenInput || !isMainCanvasPenActive && !isSituationCanvasActive && !isSmallCanvasPenActive && !isOfferCanvasActive && !isOfferInputActive) {
       // Kein gültiger Zeichnen-Fall → Pen-Lock zurücksetzen
       if (pointerType === 'pen') {
@@ -31276,6 +31329,11 @@ function App() {
     if (finishedStroke && finishedStroke.points.length > 1) {
       let key = null;
       if (ref === canvasRef) key = 'main';else if (ref === sitCanvasRef_Kundenname) key = 'sit_Kundenname';else if (ref === sitCanvasRef_Rufnummer) key = 'sit_Rufnummer';else if (ref === sitCanvasRef_Anbieter) key = 'sit_Anbieter';else if (ref === sitCanvasRef_Hardware) key = 'sit_Hardware';else if (ref === sitCanvasRef_Nutzung) key = 'sit_Nutzung';else if (ref === sitCanvasRef_Haushalt) key = 'sit_Haushalt';else if (ref === sitCanvasRef_WeitereProdukte) key = 'sit_WeitereProdukte';else if (ref === sitCanvasRef_Fernsehen) key = 'sit_Fernsehen';else if (ref === sitCanvasRef_WiFi) key = 'sit_WiFi';else if (ref === sitCanvasRef_Gesamtkosten) key = 'sit_Gesamtkosten';else if (ref === emailCanvasRef) key = 'email';else if (ref === providerCanvasRef) key = 'provider';else if (ref === notesCanvasRef) key = 'notes';else if (ref === offerCanvasRef1) key = 'offer1';else if (ref === offerCanvasRef2) key = 'offer2';else if (ref === offerCanvasRef3) key = 'offer3';else if (ref === offerCost1Ref) key = 'cost_einmalig';else if (ref === offerCost2Ref) key = 'cost_monatlich1';else if (ref === offerCost3Ref) key = 'cost_monatlich2';else if (ref === offerCostSmartphoneRef) key = 'cost_smartphone';else if (ref === offerAgentRef) key = 'agent_name';else if (ref === offerDateRef) key = 'date_field';else if (ref === offerValidUntilRef || typeof offerValidUntilModalRef !== 'undefined' && ref === offerValidUntilModalRef) key = 'offer_valid_until';else if (ref === skipReasonCanvasRef) key = 'skip_reason';else if (ref === beratungsIdCanvasRef) key = 'beratungs_id';
+      if (!key && isPriceFieldRef(ref)) {
+        try {
+          key = canvas.getAttribute('data-cost-key') || null;
+        } catch (e) {}
+      }
       if (key) {
         setDrawnStrokes(prev => ({
           ...prev,
@@ -31702,6 +31760,54 @@ function App() {
       [key]: isNaN(val) || value.trim() === '' ? 0 : val
     }));
   };
+  const renderPriceField = (offerKey, field) => {
+    const ref = priceFieldRefs[offerKey + '_' + field];
+    const strokesKey = psPriceKey(offerKey, field);
+    const label = field === 'monatlich' ? 'Monatlich (€)' : 'Einmalig (€)';
+    const handleChange = e => {
+      try {
+        if (inputMode === 'keyboard') {
+          digitalTouchedRef.current[strokesKey] = true;
+          digitalTouchedRef.current[field === 'monatlich' ? 'cost_monatlich1' : 'cost_einmalig'] = true;
+        }
+      } catch (err) {}
+      setPackagePriceField(offerKey, field, e.target.value);
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      key: field,
+      className: "flex flex-col min-w-0",
+      "data-ps-price-field": offerKey + ':' + field
+    }, /*#__PURE__*/React.createElement("label", {
+      className: "text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+    }, label), /*#__PURE__*/React.createElement("div", {
+      className: "relative h-12 bg-slate-50 border border-slate-300 rounded-lg transition-all"
+    }, /*#__PURE__*/React.createElement(SmallInputCanvas, {
+      inputMode: inputMode,
+      canvasRef: ref,
+      inputKey: strokesKey,
+      inputValue: (packagePrices[offerKey] || {})[field] || '',
+      inputType: 'text',
+      onChange: handleChange,
+      placeholder: label.split(' ')[0],
+      drawnStrokes: drawnStrokes,
+      setDrawnStrokes: setDrawnStrokes,
+      startDrawing: startDrawing,
+      draw: draw,
+      stopDrawing: stopDrawing,
+      triggerRedraw: redrawCounter
+    })));
+  };
+  const renderPriceStrip = offerKey => /*#__PURE__*/React.createElement("div", {
+    "data-ps-price-strip": offerKey,
+    className: "ps-price-strip",
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '10px',
+      marginTop: '10px',
+      flex: '0 0 auto'
+    }
+  }, renderPriceField(offerKey, 'monatlich'), renderPriceField(offerKey, 'einmalig'));
   const renderOfferInput = (key, labelKey, type = 'text') => {
     let ref, rawValue, strokesKey;
     const label = getStaticLabel(labelKey);
@@ -33279,6 +33385,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
 
       // Spalten-Wrapper: volle Höhe
       col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;';
+      try {
+        col.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
+        col.appendChild(buildPdfPriceStrip(offerIndex));
+      } catch (e) {}
       wrapper.appendChild(col);
       return wrapper;
     };
@@ -33336,6 +33446,57 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // Aufbau: Header (52px) | Karten-Reihe (flex-1) | Kostenübersicht (auto)
     // Entspricht exakt dem A4-Querformat-Display-Layout.
 
+    // v55.47: Preisleiste (Monatlich / Einmalig) direkt unter der Karte im PDF.
+    // Werte kommen live von der Bildschirm-Leiste (Text) bzw. dem Handschrift-Canvas des Feldes.
+    const buildPdfPriceStrip = idx => {
+      const offerKey = 'offer' + (idx + 1);
+      const strip = doc.createElement('div');
+      strip.setAttribute('data-ps-pdf-pricestrip', offerKey);
+      strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;margin-top:8px;box-sizing:border-box;width:100%;';
+      [['monatlich', 'MONATLICH (€)'], ['einmalig', 'EINMALIG (€)']].forEach(([field, label]) => {
+        const cell = doc.createElement('div');
+        cell.style.cssText = 'flex:1 1 0;min-width:0;display:flex;flex-direction:column;';
+        const lab = doc.createElement('div');
+        lab.textContent = label;
+        lab.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:0.06em;color:#64748b;margin-bottom:3px;line-height:1.2;';
+        const box = doc.createElement('div');
+        box.style.cssText = 'height:52px;box-sizing:border-box;border:1.5px solid #cbd5e1;border-radius:9px;background:#f8fafc;display:flex;align-items:center;padding:0 10px;overflow:hidden;';
+        let typed = '';
+        let imgUrl = null;
+        try {
+          const fieldEl = sourceOffer.querySelector('[data-ps-price-field="' + offerKey + ':' + field + '"]');
+          if (fieldEl) {
+            const inp = fieldEl.querySelector('input');
+            typed = inp ? String(inp.value || '').trim() : '';
+            const cv = fieldEl.querySelector('canvas');
+            const strokes = (window.__psStrokes || {})[psPriceKey(offerKey, field)] || [];
+            if (cv && cv.width > 0 && cv.height > 0 && strokes.length) imgUrl = cv.toDataURL('image/png');
+          }
+        } catch (e) {}
+        if (imgUrl) {
+          // Handschrift: natuerliches Seitenverhaeltnis (html2canvas ignoriert object-fit)
+          box.style.padding = '0';
+          const im = doc.createElement('img');
+          im.src = imgUrl;
+          im.style.cssText = 'display:block;width:100%;height:auto;';
+          box.appendChild(im);
+        } else if (typed) {
+          const tx = doc.createElement('div');
+          tx.textContent = /€/.test(typed) ? typed : typed + ' €';
+          tx.style.cssText = 'font-size:21px;font-weight:800;color:#0f172a;line-height:1.2;white-space:nowrap;';
+          box.appendChild(tx);
+        } else {
+          const tx = doc.createElement('div');
+          tx.textContent = '–';
+          tx.style.cssText = 'font-size:21px;font-weight:700;color:#cbd5e1;line-height:1.2;';
+          box.appendChild(tx);
+        }
+        cell.appendChild(lab);
+        cell.appendChild(box);
+        strip.appendChild(cell);
+      });
+      return strip;
+    };
     const makeAllOffersPage = () => {
       // --- Canvas-Bitmaps einbrennen ---
       const tmpClone = sourceOffer.cloneNode(true);
@@ -33476,6 +33637,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             }
           } catch (e) {}
           col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;';
+          try {
+            col.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
+            col.appendChild(buildPdfPriceStrip(i));
+          } catch (e) {}
           card.appendChild(col);
         } else {
           card.style.borderRadius = '14px';
@@ -37223,7 +37388,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.45")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.47")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41172,6 +41337,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       className: `ps-off-card ${orderClass}`,
       style: {
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         ...(hidden ? {
           display: 'none'
         } : offerLayoutMode === 'step' ? {
@@ -41211,10 +41378,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onClearImage: () => handleClearImage(key),
       onClearOverlay: () => handleClearOverlay(key),
       onOpenBundleModal: openBundleModal,
-      onSetPackagePrice: openPriceModal,
       packagePriceData: packagePrices[key],
       triggerToast: triggerToast
-    }));
+    }), renderPriceStrip(key));
   })), (() => {
     const monthly = offerData.monatlich1 || 0;
     const monthly2 = offerData.monatlich2 || 0;
@@ -42234,7 +42400,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     className: "text-blue-600"
   }), " ", getStaticLabel('CostHeader')), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-3 gap-4 mt-4 cost-grid-years"
-  }, renderOfferInput('einmalig', 'CostEinmalig', 'text'), renderOfferInput('monatlich1', showSecondYear ? 'CostMonatlich1' : 'CostMonatlich', 'text'), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: `year-2-container ${!showSecondYear ? 'hidden-layer' : ''}`
   }, renderOfferInput('monatlich2', 'CostMonatlich2', 'text'))), /*#__PURE__*/React.createElement("div", {
     className: "mt-3"
