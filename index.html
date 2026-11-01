@@ -1066,7 +1066,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.37';
+    window.APP_VERSION = '55.38';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33383,96 +33383,79 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
           // Rahmenfarbe
           container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
-          // Canvas snapshot → img
+          // Quell-Spalte (Bildschirm) dieser Karte – passend zur Klon-Spalte
+          let srcColLive = null;
+          try {
+            const srcGridLive = sourceOffer.querySelector('.offer-print-grid');
+            srcColLive = srcGridLive ? Array.from(srcGridLive.children)[i] : null;
+          } catch (e) {}
+          // Canvas snapshot → img (nur falls das Einbrennen oben nicht griff).
+          // Bugfix Doppelschrift: Quelle ist jetzt das Canvas DIESER Karte (vorher: Index ueber alle
+          // Canvases der Ansicht → konnte ein falsches Canvas treffen). Ist schon ein eingebranntes
+          // Bild da, wird nie ein zweites Bild darueber gelegt.
           const cvs = container.querySelector('canvas');
           if (cvs) {
             try {
-              const srcCvs = Array.from(sourceOffer.querySelectorAll('canvas'))[i];
-              if (srcCvs) {
+              const srcCvs = srcColLive ? srcColLive.querySelector('canvas:not([data-cost-key])') : null;
+              const hasBaked = !!container.querySelector('img.canvas-baked-image');
+              if (srcCvs && !hasBaked) {
                 const snap = document.createElement('img');
                 snap.src = srcCvs.toDataURL('image/png');
-                snap.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10;image-rendering:crisp-edges;';
+                snap.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:left top;pointer-events:none;z-index:10;image-rendering:crisp-edges;';
                 snap.setAttribute('data-canvas-snapshot', '1');
                 cvs.parentNode.replaceChild(snap, cvs);
+              } else if (hasBaked) {
+                cvs.parentNode.removeChild(cvs);
               }
             } catch (e) {}
           }
-          // Textarea
+          // Textarea: Schriftgroesse/Zeilenhoehe/Abstand 1:1 vom Tablet uebernehmen
           const ta = container.querySelector('textarea');
           if (ta) {
             ta.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;padding:12px;font-size:inherit;line-height:1.7;overflow:hidden;resize:none;border:none;outline:none;background:transparent;white-space:pre-wrap;word-wrap:break-word;z-index:20;';
+            try {
+              const srcTa = srcColLive ? srcColLive.querySelector('textarea') : null;
+              if (srcTa) {
+                const cs = window.getComputedStyle(srcTa);
+                if (cs.fontSize) ta.style.fontSize = cs.fontSize;
+                if (cs.lineHeight && cs.lineHeight !== 'normal') ta.style.lineHeight = cs.lineHeight;
+                if (cs.fontFamily) ta.style.fontFamily = cs.fontFamily;
+                if (cs.fontWeight) ta.style.fontWeight = cs.fontWeight;
+                if (cs.color) ta.style.color = cs.color;
+                if (cs.padding) ta.style.padding = cs.padding;
+              }
+            } catch (e) {}
           }
 
-          // v36: Verkaufsmappe-Import im 3-Spalten-PDF kompakt machen
-          // Ziel: Kennwerte/Preis kleiner, Handy+SIM nebeneinander, Bemerkungen bleiben sichtbar.
+          // v58: Verkaufsmappe-Import wie auf dem Tablet darstellen (keine Verkleinerung der Schrift mehr).
+          // Der Bildschirm-Fit-Faktor (transform: scale) bleibt erhalten; nur der Verschiebe-Offset
+          // (Drag am Bildschirm) wird auf 0 gesetzt und bei schmalerer PDF-Karte minimal angepasst.
           try {
             const ow = container.querySelector('.offer-html-overlay-wrap');
-            const bw = container.querySelector('.bundle-import-wrap');
-            const root = bw || ow;
-            if (root) {
-              root.style.width = '100%';
-              root.style.maxWidth = '100%';
-              root.style.minWidth = '0';
-              root.style.boxSizing = 'border-box';
-              root.style.overflow = 'hidden';
-              root.style.fontSize = '0.62em';
-              root.style.lineHeight = '1.08';
-
-              // Doppelte Gültigkeit oben entfernen (unten bleibt das Angebots-gültig-bis-Feld bestehen).
-              Array.from(root.querySelectorAll('span,div,b,strong,small')).forEach(n => {
-                const t = (n.textContent || '').trim();
-                if (/^(bis|gültig bis)\s*:?/i.test(t) || /^bis\s*[:：]/i.test(t)) {
-                  const box = n.closest('span,div') || n;
-                  box.style.display = 'none';
-                }
-              });
-
-              // Große Titel/Preise verkleinern, damit die Aktionsnamen nicht abgeschnitten werden.
-              root.querySelectorAll('h1,h2,h3,[class*="text-3xl"],[class*="text-2xl"],[class*="text-xl"]').forEach(n => {
-                n.style.fontSize = '18px';
-                n.style.lineHeight = '1.05';
-                n.style.whiteSpace = 'normal';
-                n.style.overflow = 'visible';
-                n.style.textOverflow = 'clip';
-              });
-              root.querySelectorAll('[class*="text-5xl"],[class*="text-4xl"],[style*="font-size: 48"],[style*="font-size:48"],[style*="font-size: 42"],[style*="font-size:42"]').forEach(n => {
-                n.style.fontSize = '30px';
-                n.style.lineHeight = '1';
-              });
-
-              // Medien nebeneinander ausrichten: Bild-Eltern + Großeltern auf Row-Wrap setzen.
-              root.querySelectorAll('img').forEach(img => {
-                img.style.maxHeight = '82px';
-                img.style.maxWidth = '46%';
-                img.style.width = 'auto';
-                img.style.height = 'auto';
-                img.style.objectFit = 'contain';
-                img.style.display = 'inline-block';
-                const p = img.parentElement;
-                if (p) {
-                  p.style.display = 'inline-flex';
-                  p.style.width = 'calc(50% - 5px)';
-                  p.style.maxWidth = 'calc(50% - 5px)';
-                  p.style.minHeight = '92px';
-                  p.style.alignItems = 'center';
-                  p.style.justifyContent = 'center';
-                  p.style.padding = '4px';
-                  p.style.boxSizing = 'border-box';
-                  const gp = p.parentElement;
-                  if (gp && gp !== root) {
-                    gp.style.display = 'flex';
-                    gp.style.flexDirection = 'row';
-                    gp.style.flexWrap = 'wrap';
-                    gp.style.gap = '6px';
-                    gp.style.alignItems = 'center';
-                    gp.style.justifyContent = 'center';
-                  }
-                }
-              });
-              if (ow) {
-                ow.style.transform = 'none';
-                ow.style.width = '100%';
-                ow.style.maxWidth = '100%';
+            if (ow) {
+              const owParent = ow.parentElement;
+              if (owParent && owParent !== container) {
+                owParent.style.setProperty('transform', 'none', 'important');
+                owParent.style.setProperty('left', '0', 'important');
+                owParent.style.setProperty('right', '0', 'important');
+                owParent.style.setProperty('width', '100%', 'important');
+                owParent.style.setProperty('overflow', 'hidden', 'important');
+              }
+              ow.style.setProperty('max-width', '100%', 'important');
+              ow.style.setProperty('opacity', '1', 'important');
+              ow.style.setProperty('filter', 'none', 'important');
+              // Kartenbreite PDF (A4 quer 1122px abzgl. Seitenrand/Abstand) vs. Bildschirmbreite
+              const pdfCardW = (1122 - 24 - 20) / 3;
+              const srcCont = srcColLive ? srcColLive.querySelector('.offer-canvas-container') || srcColLive : null;
+              const screenCardW = srcCont ? srcCont.getBoundingClientRect().width : 0;
+              if (gridTemplate === '1fr 1fr 1fr' && screenCardW > 50 && pdfCardW < screenCardW) {
+                const r = pdfCardW / screenCardW;
+                const tw0 = String(ow.style.transform || '');
+                const m0 = tw0.match(/scale\(([\d.]+)\)/);
+                const base0 = m0 ? parseFloat(m0[1]) : 1;
+                const next = (tw0 && m0) ? tw0.replace(/scale\([\d.]+\)/, 'scale(' + (base0 * r) + ')') : 'scale(' + (base0 * r) + ')';
+                ow.style.setProperty('transform', next, 'important');
+                ow.style.setProperty('transform-origin', 'top center', 'important');
               }
             }
           } catch (e) {}
@@ -33495,8 +33478,22 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // Leere Angebote werden übersprungen (dynamische Seitenzahl). Die Handschrift hat damit
     // eine ganze A4-Querformat-Seite Platz → kein Quetschen in schmale Spalten mehr.
     let offerPageCount = 0;
+    // v58 (Beta): Angebote nebeneinander auf EINER Seite wie auf dem Tablet → PDF hat immer 4 Seiten
+    // (Deckblatt, Situation, Angebote, Kosten/Danke). Auf false setzen = bisherige Einzelseiten je Angebot.
+    const PS_PDF_OFFERS_SIDE_BY_SIDE = true;
+    if (PS_PDF_OFFERS_SIDE_BY_SIDE) {
+      try {
+        const sideBySidePage = wrapSharePage(getStaticLabel('Page2Header'), makeAllOffersPage());
+        stage.appendChild(sideBySidePage);
+        offerPageCount = 1;
+      } catch (e) {
+        console.warn('Angebote-nebeneinander Fehler, Fallback auf Einzelseiten:', e);
+        offerPageCount = 0;
+      }
+    }
+    const __sbsDone = offerPageCount > 0;
     try {
-      for (let oi = 0; oi < 3; oi++) {
+      for (let oi = 0; oi < 3 && !__sbsDone; oi++) {
         let empty = true;
         try {
           empty = isOfferEmpty(sourceOffer, oi);
