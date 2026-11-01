@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.52';
+        manifestLink.href = 'manifest.webmanifest?v=55.53';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.52').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.53').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.52';
+    window.APP_VERSION = '55.53';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -32027,7 +32027,7 @@ function App() {
     className: "ps-price-strip",
     style: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
+      gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 150px)',
       gap: '8px',
       marginTop: '6px',
       height: '58px',
@@ -33725,7 +33725,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;margin-top:6px;box-sizing:border-box;width:100%;';
       [['monatlich', 'Monatlich (€)'], ['einmalig', 'Einmalig (€)']].forEach(([field, label]) => {
         const cell = doc.createElement('div');
-        cell.style.cssText = 'flex:1 1 0;min-width:0;display:flex;flex-direction:column;background:transparent;border:0;padding:0;box-sizing:border-box;';
+        cell.style.cssText = (field === 'einmalig' ? 'flex:0 1 130px;' : 'flex:1 1 0;') + 'min-width:0;display:flex;flex-direction:column;background:transparent;border:0;padding:0;box-sizing:border-box;';
         const lab = doc.createElement('div');
         lab.textContent = label;
         lab.style.cssText = 'font-size:11px;font-weight:400;color:#616161;margin-bottom:3px;line-height:1.2;';
@@ -33755,7 +33755,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           im.src = imgUrl;
           if (inkInfo) {
             // in das Feld einpassen (ca. 130 x 38 px), Seitenverhaeltnis bleibt, max. 2,2-fach vergroessert
-            let iw = Math.min(130, 34 * inkInfo.ar, inkInfo.cssW * 2.2);
+            let iw = Math.min(field === 'einmalig' ? 112 : 130, 34 * inkInfo.ar, inkInfo.cssW * 2.2);
             const ih = iw / inkInfo.ar;
             im.style.cssText = 'display:block;flex:0 0 auto;width:' + Math.round(iw) + 'px;height:' + Math.round(ih) + 'px;';
           } else {
@@ -37778,7 +37778,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.52")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.53")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
