@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.51';
+        manifestLink.href = 'manifest.webmanifest?v=55.52';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.51').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.52').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.51';
+    window.APP_VERSION = '55.52';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -3117,6 +3117,10 @@ body.pdf-share-mode .share-page:last-child{
     visibility: hidden !important;
     pointer-events: none !important;
     /* KEIN display:none -> Grid darf nicht kollabieren */
+}
+/* v55.52 (Beta): Rechner-Knopf im Preisfeld, Loesch-Knopf daneben */
+.ps-fl-box button[title="Löschen"]{
+    right: 40px !important;
 }
 /* v55.51 (Beta): verbundene Kacheln - Naht ohne Spalt */
 .ps-off-card[data-join*="r"] .offer-canvas-container{
@@ -27746,6 +27750,53 @@ function App() {
     };
   }, [inputMode]);
 
+  // v55.52 (Beta): Rechner (Zifferntastatur mit +) fuer die Preisfelder im Stift-Modus.
+  const [priceCalc, setPriceCalc] = useState(null);
+  const priceCalcPress = k => setPriceCalc(c => {
+    if (!c) return c;
+    let e = c.expr;
+    const last = e.split('+').pop();
+    if (/^[0-9]$/.test(k)) {
+      const dec = last.split(',')[1];
+      if (dec !== undefined && dec.length >= 2) return c;
+      if (last === '0') e = e.slice(0, -1) + k;else e += k;
+    } else if (k === ',') {
+      if (last.indexOf(',') !== -1) return c;
+      e += last === '' ? '0,' : ',';
+    } else if (k === '+') {
+      if (e === '' || e.endsWith('+')) return c;
+      if (e.endsWith(',')) e = e.slice(0, -1);
+      e += '+';
+    } else if (k === 'back') {
+      e = e.slice(0, -1);
+    } else if (k === 'clear') {
+      e = '';
+    }
+    return {
+      ...c,
+      expr: e
+    };
+  });
+  const priceCalcConfirm = () => {
+    const c = priceCalc;
+    if (!c) return;
+    let e = c.expr.replace(/\+$/, '').replace(/,$/, '');
+    let value = e;
+    if (e.indexOf('+') !== -1) {
+      const t = e.split('+').reduce((s, x) => s + psParseEuro(x), 0);
+      value = t.toFixed(2).replace('.', ',');
+    }
+    const sk = psPriceKey(c.offerKey, c.field);
+    try {
+      digitalTouchedRef.current[sk] = true;
+    } catch (err) {}
+    setPackagePriceField(c.offerKey, c.field, value);
+    setDrawnStrokes(prev => ({
+      ...prev,
+      [sk]: []
+    }));
+    setPriceCalc(null);
+  };
   // v55.51 (Beta): Kacheln verbinden – nur im Querformat/Grid (md+) und nicht im Schritt-Modus.
   const [psWide, setPsWide] = useState(() => {
     try {
@@ -31898,6 +31949,7 @@ function App() {
       }
     }, label), /*#__PURE__*/React.createElement("div", {
       className: "relative ps-fl-box",
+      "data-ps-fl-box": offerKey + ':' + field,
       style: {
         height: '40px',
         background: '#ffffff',
@@ -31920,7 +31972,55 @@ function App() {
       draw: draw,
       stopDrawing: stopDrawing,
       triggerRedraw: redrawCounter
-    })));
+    }), inputMode === 'pen' ? /*#__PURE__*/React.createElement("button", {
+      type: 'button',
+      key: 'calcbtn',
+      "data-ps-calc-btn": offerKey + ':' + field,
+      title: 'Rechner',
+      "aria-label": 'Rechner',
+      onClick: e => {
+        e.stopPropagation();
+        setPriceCalc({
+          offerKey,
+          field,
+          expr: String((packagePrices[offerKey] || {})[field] || '')
+        });
+      },
+      style: {
+        position: 'absolute',
+        right: '4px',
+        top: '4px',
+        width: '30px',
+        height: '30px',
+        zIndex: 30,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+        cursor: 'pointer',
+        background: '#f3f3f3',
+        border: '1px solid #d1d1d1',
+        borderRadius: '4px',
+        color: '#0067c0'
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "16",
+      height: "16",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: "5",
+      y: "2",
+      width: "14",
+      height: "20",
+      rx: "2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M8 6h8M8 11h2M12 11h2M8 15h2M12 15h2M8 19h8"
+    }))) : null));
   };
   const renderPriceStrip = (offerKey, spanN) => /*#__PURE__*/React.createElement("div", {
     "data-ps-price-strip": offerKey,
@@ -33679,6 +33779,22 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       });
       return strip;
     };
+    // v55.52: Wird eine Karte breiter (weil ein leeres Angebot fehlt), wuerde die Handschrift bei voller Breite
+    // unten abgeschnitten. Dann auf die echte Kartenhoehe einpassen (Seitenverhaeltnis bleibt, mittig).
+    const _psFitCardImages = root => {
+      root.querySelectorAll('img[data-ps-fit-ar]').forEach(img => {
+        try {
+          const ar = parseFloat(img.getAttribute('data-ps-fit-ar'));
+          const p = img.offsetParent;
+          if (!(ar > 0) || !p) return;
+          const W = p.clientWidth;
+          const H = p.clientHeight;
+          if (!W || !H || W * ar <= H + 1) return;
+          const iw = H / ar;
+          img.style.cssText = 'position:absolute;left:' + Math.max(0, Math.round((W - iw) / 2)) + 'px;top:0;pointer-events:none;z-index:10;width:' + Math.round(iw) + 'px;height:' + Math.round(H) + 'px;';
+        } catch (e) {}
+      });
+    };
     const makeAllOffersPage = () => {
       // --- Canvas-Bitmaps einbrennen ---
       const tmpClone = sourceOffer.cloneNode(true);
@@ -33696,11 +33812,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       let gridTemplate = '1fr 1fr 1fr';
       if (fusionMode === 'all') gridTemplate = '1fr';else if (fusionMode === '1+2') gridTemplate = '2fr 1fr';else if (fusionMode === '2+3') gridTemplate = '1fr 2fr';
 
-      // --- 3 Karten nebeneinander – nehmen ~72% der Höhe ---
-      const cardsRow = doc.createElement('div');
-      // v55.51: Karten in Zeile 1, Preisleisten in Zeile 2 (verbundene Kacheln: eine Leiste ueber mehrere Spalten).
-      // Spaltenabstand 0, dafuer 5px Innenabstand je Karte (an Nahtstellen verbundener Karten 0).
-      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr) auto;column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
       const _jn = fusionMode ? {
         j12: false,
         j23: false
@@ -33709,7 +33820,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         j23: false
       };
       const _jGroups = psJoinGroups(!!_jn.j12, !!_jn.j23);
-      let _colPos = 0;
       const grid = tmpClone.querySelector('.offer-print-grid');
       const cols = grid ? Array.from(grid.children) : [];
 
@@ -33725,12 +33835,53 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         hiddenIdx.add(2);
       } // offer3 (idx 2) ausgeblendet
 
+      // v55.52: Leere Angebote (nichts geschrieben/gezeichnet, kein Bild/Bundle, kein Status, kein Preis) kommen
+      // nicht ins PDF; die uebrigen Karten teilen sich die Seitenbreite. Verbundene Kacheln zaehlen als eine Gruppe.
+      // Sind alle leer, bleiben alle drei (kein leeres PDF).
+      if (!fusionMode) {
+        try {
+          const _hasPrice = i => {
+            const k = 'offer' + (i + 1);
+            return ['monatlich', 'einmalig'].some(f => {
+              const fe = sourceOffer.querySelector('[data-ps-price-field="' + k + ':' + f + '"]');
+              const inp = fe ? fe.querySelector('input') : null;
+              const v = inp ? String(inp.value || '').trim() : '';
+              const st = (window.__psStrokes || {})[psPriceKey(k, f)];
+              return !!v || Array.isArray(st) && st.length > 0;
+            });
+          };
+          const _present = [0, 1, 2].map(i => {
+            let empty = false;
+            try {
+              empty = isOfferEmpty(sourceOffer, i);
+            } catch (e) {}
+            return !empty;
+          });
+          const _groupPresent = _jGroups.map(g => g.some(i => _present[i]) || _hasPrice(g[0]));
+          if (_groupPresent.some(Boolean)) {
+            _jGroups.forEach((g, gi) => {
+              if (!_groupPresent[gi]) g.forEach(i => hiddenIdx.add(i));
+            });
+          }
+        } catch (e) {}
+        if (hiddenIdx.size > 0) gridTemplate = new Array(3 - hiddenIdx.size).fill('1fr').join(' ');
+      }
+
+      // --- 3 Karten nebeneinander – nehmen ~72% der Höhe ---
+      const cardsRow = doc.createElement('div');
+      // v55.51: Karten in Zeile 1, Preisleisten in Zeile 2 (verbundene Kacheln: eine Leiste ueber mehrere Spalten).
+      // Spaltenabstand 0, dafuer 5px Innenabstand je Karte (an Nahtstellen verbundener Karten 0).
+      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr) auto;column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
+      let _colPos = 0;
+      const _colOf = {};
+
       for (let i = 0; i < 3; i++) {
         // Ausgeblendete Spalten nicht ins Grid einfügen
         if (hiddenIdx.has(i)) continue;
         const col = cols[i];
         const card = doc.createElement('div');
         _colPos++;
+        _colOf[i] = _colPos;
         const _jg = _jGroups.find(g => g.includes(i));
         const _jHasPrev = _jg.indexOf(i) > 0;
         const _jHasNext = _jg.indexOf(i) < _jg.length - 1;
@@ -33791,6 +33942,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             if (bakedImg && srcCv && srcCv.width > 0 && srcCv.height > 0) {
               const ar = srcCv.height / srcCv.width;
               bakedImg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:10;' + (ar > 1.7 ? 'height:100%;width:auto;' : 'width:100%;height:auto;');
+              bakedImg.setAttribute('data-ps-fit-ar', String(ar));
             }
           } catch (e) {}
           // Textarea: Schriftgroesse/Zeilenhoehe/Abstand 1:1 vom Tablet uebernehmen
@@ -33868,9 +34020,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           }
         } else {
           _jGroups.forEach(grp => {
+            const vis = grp.filter(i => !hiddenIdx.has(i));
+            if (!vis.length) return;
             const cell = doc.createElement('div');
-            cell.style.cssText = 'grid-row:2;grid-column:' + (grp[0] + 1) + ' / span ' + grp.length + ';padding:0 5px;box-sizing:border-box;min-width:0;';
-            cell.appendChild(buildPdfPriceStrip(grp[0]));
+            cell.style.cssText = 'grid-row:2;grid-column:' + _colOf[vis[0]] + ' / span ' + vis.length + ';padding:0 5px;box-sizing:border-box;min-width:0;';
+            cell.appendChild(buildPdfPriceStrip(vis[0]));
             cardsRow.appendChild(cell);
           });
         }
@@ -33892,6 +34046,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       try {
         const sideBySidePage = wrapSharePage(getStaticLabel('Page2Header'), makeAllOffersPage());
         stage.appendChild(sideBySidePage);
+        try {
+          _psFitCardImages(sideBySidePage);
+        } catch (e) {}
         offerPageCount = 1;
       } catch (e) {
         console.warn('Angebote-nebeneinander Fehler, Fallback auf Einzelseiten:', e);
@@ -37621,7 +37778,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.51")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.52")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42710,7 +42867,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const m13Hand = showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0;
     const anyPriceInk = PS_PRICE_FIELDS.some(([k, f]) => (drawnStrokes[psPriceKey(k, f)] || []).length > 0);
     const subTxt = n => n > 0 ? 'Summe aus ' + n + (n === 1 ? ' Angebot' : ' Angeboten') : null;
-    const emptyHint = anyPriceInk ? 'Handschrift wird nicht addiert, bitte Tastatur nutzen' : 'Preise unter den Karten eintragen';
+    const emptyHint = anyPriceInk ? 'Handschrift zählt nicht, bitte Rechner-Symbol im Preisfeld nutzen' : 'Preise unter den Karten eintragen';
     const valNode = (v, perMonth) => [/*#__PURE__*/React.createElement("span", {
       key: 'v'
     }, fmtE(v)), perMonth && v > 0 ? /*#__PURE__*/React.createElement("span", {
@@ -43066,7 +43223,105 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     dangerouslySetInnerHTML: {
       __html: buildPage3Html(true)
     }
-  }), document.body) : null, (window.__anlageHtml = printRecommendationsEnabled && (wlanSnapshot || techUebernommen && techUebernommen.length > 0 || netBundleMatched || tvSnapshot) ? buildPage3Html() : '', null), calcOpen && ReactDOM.createPortal((() => {
+  }), document.body) : null, (window.__anlageHtml = printRecommendationsEnabled && (wlanSnapshot || techUebernommen && techUebernommen.length > 0 || netBundleMatched || tvSnapshot) ? buildPage3Html() : '', null), priceCalc && ReactDOM.createPortal((() => {
+    const ex = priceCalc.expr;
+    const terms = ex.split('+');
+    const total = terms.reduce((s, x) => s + psParseEuro(x), 0);
+    const fmtE = v => v.toFixed(2).replace('.', ',') + ' €';
+    const fieldLabel = (priceCalc.field === 'monatlich' ? 'Monatlich' : 'Einmalig') + ' · Angebot ' + priceCalc.offerKey.slice(-1);
+    const font = "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif";
+    const key = (label, k, extra) => /*#__PURE__*/React.createElement("button", {
+      key: k,
+      type: 'button',
+      "data-ps-calc-key": k,
+      onClick: () => k === 'ok' ? priceCalcConfirm() : priceCalcPress(k),
+      style: {
+        height: '56px',
+        borderRadius: '6px',
+        border: '1px solid #d1d1d1',
+        background: '#fbfbfb',
+        color: '#1b1b1b',
+        fontSize: '22px',
+        fontWeight: 600,
+        fontFamily: font,
+        cursor: 'pointer',
+        touchAction: 'manipulation',
+        ...(extra || {})
+      }
+    }, label);
+    return /*#__PURE__*/React.createElement("div", {
+      "data-ps-calc": "1",
+      onClick: () => setPriceCalc(null),
+      style: {
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100000,
+        background: 'rgba(0,0,0,0.35)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: font
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      style: {
+        width: '320px',
+        background: '#ffffff',
+        borderRadius: '8px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        padding: '16px',
+        boxSizing: 'border-box'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '12px',
+        color: '#616161',
+        marginBottom: '6px'
+      }
+    }, fieldLabel), /*#__PURE__*/React.createElement("div", {
+      "data-ps-calc-display": "1",
+      style: {
+        textAlign: 'right',
+        fontSize: '34px',
+        fontWeight: 600,
+        color: '#1b1b1b',
+        minHeight: '44px',
+        lineHeight: '44px',
+        borderBottom: '2px solid #0067c0',
+        padding: '0 4px',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap'
+      }
+    }, ex === '' ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: '#c8c8c8'
+      }
+    }, "0") : ex), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'right',
+        fontSize: '13px',
+        color: '#616161',
+        height: '20px',
+        marginTop: '4px'
+      }
+    }, terms.length > 1 && total > 0 ? '= ' + fmtE(total) : ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '8px',
+        marginTop: '10px'
+      }
+    }, key('7', '7'), key('8', '8'), key('9', '9'), key('⌫', 'back'), key('4', '4'), key('5', '5'), key('6', '6'), key('+', '+', {
+      color: '#0067c0'
+    }), key('1', '1'), key('2', '2'), key('3', '3'), key('C', 'clear', {
+      color: '#a4262c'
+    }), key(',', ','), key('0', '0'), key('OK', 'ok', {
+      gridColumn: 'span 2',
+      background: '#0067c0',
+      borderColor: '#0067c0',
+      color: '#ffffff'
+    }))));
+  })(), document.body), calcOpen && ReactDOM.createPortal((() => {
     const FIELDS = {
       mobile: {
         label: 'Mobil',
