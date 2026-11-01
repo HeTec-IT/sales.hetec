@@ -1,0 +1,13 @@
+{
+  "o2": {
+    "preise": {
+      "classic": 4.99,
+      "smart": 8.99,
+      "prem": 14.99,
+      "prempro": 24.99
+    },
+    "geprueft": "01.11.2026",
+    "geaendertAm": "07.10.2026",
+    "quelle": "https://www.o2online.de/extras/o2-tv/"
+  }
+}
