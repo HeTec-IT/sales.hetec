@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.45';
+        manifestLink.href = 'manifest.webmanifest?v=55.46';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.45').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.46').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.45';
+    window.APP_VERSION = '55.46';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33411,6 +33411,18 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
               }
             } catch (e) {}
           }
+          // v55.46: Handschrift NICHT verzerren. html2canvas ignoriert object-fit:contain und zieht das
+          // Querformat-Bild auf die schmale, hohe PDF-Karte (Kreise werden zu Ellipsen, Schrift zu hoch).
+          // Deshalb: Bild bekommt sein natuerliches Seitenverhaeltnis (Breite 100 %, Hoehe automatisch),
+          // oben links verankert. Nur bei sehr hohem Hochformat-Bild stattdessen Hoehe 100 %.
+          try {
+            const bakedImg = container.querySelector('img.canvas-baked-image') || container.querySelector('img[data-canvas-snapshot]');
+            const srcCv = srcColLive ? srcColLive.querySelector('canvas:not([data-cost-key])') : null;
+            if (bakedImg && srcCv && srcCv.width > 0 && srcCv.height > 0) {
+              const ar = srcCv.height / srcCv.width;
+              bakedImg.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:10;' + (ar > 1.7 ? 'height:100%;width:auto;' : 'width:100%;height:auto;');
+            }
+          } catch (e) {}
           // Textarea: Schriftgroesse/Zeilenhoehe/Abstand 1:1 vom Tablet uebernehmen
           const ta = container.querySelector('textarea');
           if (ta) {
