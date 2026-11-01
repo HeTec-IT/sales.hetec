@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.49';
+        manifestLink.href = 'manifest.webmanifest?v=55.50';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.49').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.50').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.49';
+    window.APP_VERSION = '55.50';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -3117,6 +3117,24 @@ body.pdf-share-mode .share-page:last-child{
     visibility: hidden !important;
     pointer-events: none !important;
     /* KEIN display:none -> Grid darf nicht kollabieren */
+}
+/* v55.50 (Beta): Design C (Windows Fluent) - Preisfelder + Summenkarten */
+.ps-fl-box input{
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #1b1b1b !important;
+    font-family: 'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif !important;
+}
+.ps-fl-box:focus-within{
+    border-bottom: 2px solid #0067c0 !important;
+}
+.cost-overview-print .cost-grid-years.ps-y2-collapsed{
+    display: none !important;
+    margin: 0 !important;
+}
+.cost-overview-print .cost-grid-years.ps-y2-open{
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
 }
 
 /* nichts darf ausbrechen -> verhindert Versatz */
@@ -9798,7 +9816,7 @@ const STATIC_LABELS = {
   'CostEinmalig': 'EINMALIG (€)',
   'CostMonatlich1': 'MONATLICH IM 1. JAHR (€)',
   'CostMonatlich': 'MONATLICH (€)',
-  'CostMonatlich2': 'MONATLICH IM 2. JAHR (€)',
+  'CostMonatlich2': 'MONATLICH AB MONAT 13 (€)',
   'CostSmartphone': 'SMARTPHONE FINANZIERUNG (€/MTL)',
   'AgentLabel': 'PERSÖNLICHER AGENT',
   'DateLabel': 'DATUM',
@@ -27377,7 +27395,12 @@ function App() {
       einmalig: totalE,
       einmaligRaw: totalE > 0 ? totalE.toFixed(2).replace('.', ',') : '',
       monatlich1: totalM,
-      monatlich1Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : ''
+      monatlich1Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : '',
+      // v55.50: "ab Monat 13" ist mit der Summe vorbelegt, solange nicht manuell geaendert
+      ...(prev.monatlich2Manual ? {} : {
+        monatlich2: totalM,
+        monatlich2Raw: totalM > 0 ? totalM.toFixed(2).replace('.', ',') : ''
+      })
     }));
   };
   const [showSavingsBlock, setShowSavingsBlock] = React.useState(false);
@@ -31754,11 +31777,24 @@ function App() {
     const cleanValue = value.replace(',', '.');
     let val = parseFloat(cleanValue);
     const rawKey = `${key}Raw`;
-    setOfferData(prev => ({
-      ...prev,
-      [rawKey]: value,
-      [key]: isNaN(val) || value.trim() === '' ? 0 : val
-    }));
+    setOfferData(prev => {
+      const next = {
+        ...prev,
+        [rawKey]: value,
+        [key]: isNaN(val) || value.trim() === '' ? 0 : val
+      };
+      if (key === 'monatlich2') {
+        // v55.50: manuell geaenderter Wert ab Monat 13 bleibt; leeres Feld -> wieder Summe
+        const manual = value.trim() !== '';
+        next.monatlich2Manual = manual;
+        if (!manual) {
+          const sumM = ['offer1', 'offer2', 'offer3'].reduce((s, k) => s + (parseFloat(String((packagePrices[k] || {}).monatlich || '').replace(',', '.')) || 0), 0);
+          next.monatlich2 = sumM;
+          next.monatlich2Raw = sumM > 0 ? sumM.toFixed(2).replace('.', ',') : '';
+        }
+      }
+      return next;
+    });
   };
   const renderPriceField = (offerKey, field) => {
     const ref = priceFieldRefs[offerKey + '_' + field];
@@ -31778,15 +31814,28 @@ function App() {
       className: "flex flex-col min-w-0",
       "data-ps-price-field": offerKey + ':' + field,
       style: {
-        background: '#ffffff',
-        border: '1.5px solid #e2e8f0',
-        borderRadius: '12px',
-        padding: '4px 8px 6px'
+        background: 'transparent',
+        border: 'none',
+        padding: 0
       }
     }, /*#__PURE__*/React.createElement("label", {
-      className: "text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
+      style: {
+        fontSize: '12px',
+        fontWeight: 400,
+        color: '#616161',
+        marginBottom: '3px',
+        lineHeight: 1.2
+      }
     }, label), /*#__PURE__*/React.createElement("div", {
-      className: "relative h-12 bg-slate-50 border border-slate-300 rounded-lg transition-all"
+      className: "relative ps-fl-box",
+      style: {
+        height: '40px',
+        background: '#ffffff',
+        border: '1px solid #d1d1d1',
+        borderBottom: '1px solid #8a8a8a',
+        borderRadius: '4px',
+        overflow: 'hidden'
+      }
     }, /*#__PURE__*/React.createElement(SmallInputCanvas, {
       inputMode: inputMode,
       canvasRef: ref,
@@ -31810,7 +31859,7 @@ function App() {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: '8px',
-      marginTop: '4px',
+      marginTop: '6px',
       flex: '0 0 auto'
     }
   }, renderPriceField(offerKey, 'monatlich'), renderPriceField(offerKey, 'einmalig'));
@@ -33498,15 +33547,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       const offerKey = 'offer' + (idx + 1);
       const strip = doc.createElement('div');
       strip.setAttribute('data-ps-pdf-pricestrip', offerKey);
-      strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;margin-top:4px;box-sizing:border-box;width:100%;';
-      [['monatlich', 'MONATLICH (€)'], ['einmalig', 'EINMALIG (€)']].forEach(([field, label]) => {
+      strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;margin-top:6px;box-sizing:border-box;width:100%;';
+      [['monatlich', 'Monatlich (€)'], ['einmalig', 'Einmalig (€)']].forEach(([field, label]) => {
         const cell = doc.createElement('div');
-        cell.style.cssText = 'flex:1 1 0;min-width:0;display:flex;flex-direction:column;background:#ffffff;border:1.5px solid #e2e8f0;border-radius:10px;padding:4px 6px 6px;box-sizing:border-box;';
+        cell.style.cssText = 'flex:1 1 0;min-width:0;display:flex;flex-direction:column;background:transparent;border:0;padding:0;box-sizing:border-box;';
         const lab = doc.createElement('div');
         lab.textContent = label;
-        lab.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:0.06em;color:#64748b;margin-bottom:3px;line-height:1.2;';
+        lab.style.cssText = 'font-size:11px;font-weight:400;color:#616161;margin-bottom:3px;line-height:1.2;';
         const box = doc.createElement('div');
-        box.style.cssText = 'height:48px;box-sizing:border-box;border:1.5px solid #cbd5e1;border-radius:9px;background:#f8fafc;display:flex;align-items:center;padding:0 10px;overflow:hidden;';
+        box.style.cssText = 'height:42px;box-sizing:border-box;border:1px solid #d1d1d1;border-bottom:1px solid #8a8a8a;border-radius:4px;background:#ffffff;display:flex;align-items:center;padding:0 10px;overflow:hidden;';
         let typed = '';
         let imgUrl = null;
         let inkInfo = null;
@@ -33531,7 +33580,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           im.src = imgUrl;
           if (inkInfo) {
             // in das Feld einpassen (ca. 130 x 38 px), Seitenverhaeltnis bleibt, max. 2,2-fach vergroessert
-            let iw = Math.min(130, 38 * inkInfo.ar, inkInfo.cssW * 2.2);
+            let iw = Math.min(130, 34 * inkInfo.ar, inkInfo.cssW * 2.2);
             const ih = iw / inkInfo.ar;
             im.style.cssText = 'display:block;flex:0 0 auto;width:' + Math.round(iw) + 'px;height:' + Math.round(ih) + 'px;';
           } else {
@@ -33541,12 +33590,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         } else if (typed) {
           const tx = doc.createElement('div');
           tx.textContent = /€/.test(typed) ? typed : typed + ' €';
-          tx.style.cssText = 'font-size:21px;font-weight:800;color:#0f172a;line-height:1.2;white-space:nowrap;';
+          tx.style.cssText = 'font-size:20px;font-weight:600;color:#1b1b1b;line-height:1.2;white-space:nowrap;';
           box.appendChild(tx);
         } else {
           const tx = doc.createElement('div');
           tx.textContent = '–';
-          tx.style.cssText = 'font-size:21px;font-weight:700;color:#cbd5e1;line-height:1.2;';
+          tx.style.cssText = 'font-size:20px;font-weight:400;color:#c8c8c8;line-height:1.2;';
           box.appendChild(tx);
         }
         cell.appendChild(lab);
@@ -33820,6 +33869,13 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // Breite kompensiert scale-Verkleinerung damit keine Lücken entstehen
       costClone.style.cssText = ['display:block', 'margin:0', `transform:scale(${COST_SCALE})`, 'transform-origin:top left', `width:${Math.round(100 / COST_SCALE)}%`, 'padding:8px 14px 4px 14px', 'box-sizing:border-box'].join(';');
       costClone.querySelectorAll('button:not([data-print-keep="1"])').forEach(b => b.style.display = 'none');
+      // v55.50: Bedienhinweise der Summenkarten gehoeren nicht ins PDF; Ueberschreib-Feld nur bei Handschrift
+      costClone.querySelectorAll('[data-ps-noprint]').forEach(n => n.remove());
+      try {
+        const _y2 = costClone.querySelector('.cost-grid-years');
+        const _y2Hand = window.__psStrokes && Array.isArray(window.__psStrokes.cost_monatlich2) && window.__psStrokes.cost_monatlich2.length > 0;
+        if (_y2 && !_y2Hand) _y2.remove();
+      } catch (e) {}
       // Bedien-Hinweis "Datumsauswahl" gehört nicht ins PDF
       costClone.querySelectorAll('span').forEach(sp => {
         if ((sp.textContent || '').trim() === 'Datumsauswahl') sp.remove();
@@ -37447,7 +37503,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.49")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.50")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41694,7 +41750,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         background: 'rgba(0,0,0,0.2)',
         borderRadius: '999px'
       }
-    }, saving2 > 0 ? `2. Jahr: ${saving2.toFixed(2).replace('.', ',')} €/Mo` : `2. Jahr: +${Math.abs(saving2).toFixed(2).replace('.', ',')} € teurer`))), /*#__PURE__*/React.createElement("a", {
+    }, saving2 > 0 ? `ab Monat 13: ${saving2.toFixed(2).replace('.', ',')} €/Mo` : `ab Monat 13: +${Math.abs(saving2).toFixed(2).replace('.', ',')} € teurer`))), /*#__PURE__*/React.createElement("a", {
       href: `https://www.o2online.de/e-shop/handys-ohne-vertrag?ohne-tarif=ja`,
       target: "_blank",
       rel: "noopener noreferrer",
@@ -42450,17 +42506,133 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     className: "bg-white p-6 rounded-2xl border border-slate-200 shadow-xl shrink-0 cost-overview-print",
     style: offerLayoutMode === 'step' && currentOfferStep !== 3 ? {
       display: 'none'
-    } : {}
+    } : {
+      borderRadius: '8px',
+      background: '#fbfbfb',
+      borderColor: '#e0e0e0',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    }
   }, /*#__PURE__*/React.createElement("h3", {
     className: "text-lg font-black text-slate-800 mb-4 flex items-center gap-2"
   }, /*#__PURE__*/React.createElement(Icon, {
     d: ICONS.Calculator,
     size: 20,
     className: "text-blue-600"
-  }), " ", getStaticLabel('CostHeader')), /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-3 gap-4 mt-4 cost-grid-years"
+  }), " ", getStaticLabel('CostHeader')), (() => {
+    // v55.50 (Beta) Design C (Windows Fluent): drei Summenkarten
+    const fmtE = v => v > 0 ? v.toFixed(2).replace('.', ',') + ' €' : '–';
+    const parseP = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+    const nE = ['offer1', 'offer2', 'offer3'].filter(k => parseP((packagePrices[k] || {}).einmalig) > 0).length;
+    const nM = ['offer1', 'offer2', 'offer3'].filter(k => parseP((packagePrices[k] || {}).monatlich) > 0).length;
+    const sumE = offerData.einmalig || 0;
+    const sumM = offerData.monatlich1 || 0;
+    const m13 = offerData.monatlich2 || 0;
+    const m13Hand = showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0;
+    const anyPriceInk = PS_PRICE_FIELDS.some(([k, f]) => (drawnStrokes[psPriceKey(k, f)] || []).length > 0);
+    const subTxt = n => n > 0 ? 'Summe aus ' + n + (n === 1 ? ' Angebot' : ' Angeboten') : null;
+    const emptyHint = anyPriceInk ? 'Handschrift wird nicht addiert, bitte Tastatur nutzen' : 'Preise unter den Karten eintragen';
+    const valNode = (v, perMonth) => [/*#__PURE__*/React.createElement("span", {
+      key: 'v'
+    }, fmtE(v)), perMonth && v > 0 ? /*#__PURE__*/React.createElement("span", {
+      key: 'm',
+      style: {
+        fontSize: '13px',
+        fontWeight: 400,
+        color: '#616161',
+        marginLeft: '5px'
+      }
+    }, "/ Monat") : null];
+    const stat = (id, label, accent, valueNode, subNode, extra) => /*#__PURE__*/React.createElement("div", Object.assign({
+      key: id,
+      "data-ps-stat": id,
+      style: {
+        background: '#ffffff',
+        borderStyle: 'solid',
+        borderWidth: '3px 1px 1px 1px',
+        borderColor: accent + ' #e0e0e0 #e0e0e0 #e0e0e0',
+        borderRadius: '6px',
+        padding: '10px 14px',
+        minWidth: 0,
+        textAlign: 'left',
+        fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
+      }
+    }, extra || {}), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: '12px',
+        color: '#616161',
+        lineHeight: 1.3
+      }
+    }, /*#__PURE__*/React.createElement("span", null, label), id === 'm13' ? /*#__PURE__*/React.createElement("svg", {
+      "data-ps-noprint": "1",
+      width: "16",
+      height: "16",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: showSecondYear ? '#0067c0' : '#616161',
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M3 21l3-1 12-12-2-2L4 18l-1 3z"
+    })) : null), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '32px',
+        lineHeight: 1.15,
+        fontWeight: 600,
+        color: '#1b1b1b',
+        marginTop: '2px',
+        letterSpacing: '-0.01em'
+      }
+    }, valueNode), subNode);
+    const sub = (txt, noprint) => txt ? /*#__PURE__*/React.createElement("div", Object.assign({
+      style: {
+        fontSize: '12px',
+        color: '#616161',
+        marginTop: '1px'
+      }
+    }, noprint ? {
+      "data-ps-noprint": "1"
+    } : {}), txt) : null;
+    return /*#__PURE__*/React.createElement("div", {
+      "data-ps-stats": "1",
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: '10px',
+        marginTop: '4px'
+      }
+    }, stat('einmalig', 'Einmalig gesamt', '#0067c0', valNode(sumE, false), sumE > 0 ? sub(subTxt(nE)) : sub(emptyHint, true)), stat('m12', 'Monatlich, Monat 1–12', '#005a9e', valNode(sumM, true), sumM > 0 ? sub(subTxt(nM)) : sub(emptyHint, true)), stat('m13', 'Monatlich, ab Monat 13', '#8764b8', m13Hand ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '20px',
+        fontWeight: 600
+      }
+    }, "handschriftlich") : valNode(m13, true), sub(m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, antippen zum Ändern', !m13Hand), {
+      role: 'button',
+      onClick: () => setShowSecondYear(v => !v),
+      style: {
+        background: '#ffffff',
+        borderStyle: 'solid',
+        borderWidth: '3px 1px 1px 1px',
+        borderColor: '#8764b8 ' + (showSecondYear ? '#0067c0' : '#e0e0e0') + ' ' + (showSecondYear ? '#0067c0' : '#e0e0e0') + ' ' + (showSecondYear ? '#0067c0' : '#e0e0e0'),
+        borderRadius: '6px',
+        padding: '10px 14px',
+        minWidth: 0,
+        textAlign: 'left',
+        cursor: 'pointer',
+        userSelect: 'none',
+        fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
+      }
+    }));
+  })(), /*#__PURE__*/React.createElement("div", {
+    className: `grid grid-cols-3 gap-4 mt-3 cost-grid-years ${showSecondYear ? 'ps-y2-open' : 'ps-y2-collapsed'}`
   }, /*#__PURE__*/React.createElement("div", {
-    className: `year-2-container ${!showSecondYear ? 'hidden-layer' : ''}`
+    className: `year-2-container ${!showSecondYear ? 'hidden-layer' : ''}`,
+    style: {
+      gridColumn: '3'
+    }
   }, renderOfferInput('monatlich2', 'CostMonatlich2', 'text'))), /*#__PURE__*/React.createElement("div", {
     className: "mt-3"
   }, /*#__PURE__*/React.createElement("button", {
@@ -42560,12 +42732,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        width: '60px',
+        width: '72px',
         color: '#64748b',
         fontWeight: 600,
         fontSize: '10px'
       }
-    }, "1. Jahr"), /*#__PURE__*/React.createElement("span", {
+    }, "Monat 1–12"), /*#__PURE__*/React.createElement("span", {
       style: {
         color: '#1d4ed8',
         fontFamily: 'monospace'
@@ -42602,7 +42774,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         fontSize: '9px',
         fontWeight: 500
       }
-    }, "Gerät")), showSecondYear && m2 > 0 && /*#__PURE__*/React.createElement("div", {
+    }, "Gerät")), m2 > 0 && m2 !== m1 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
@@ -42613,12 +42785,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        width: '60px',
+        width: '72px',
         color: '#64748b',
         fontWeight: 600,
         fontSize: '10px'
       }
-    }, "2. Jahr"), /*#__PURE__*/React.createElement("span", {
+    }, "ab Monat 13"), /*#__PURE__*/React.createElement("span", {
       style: {
         color: '#1d4ed8',
         fontFamily: 'monospace'
@@ -42680,17 +42852,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       }
     }, fmt(smartphoneVal)), " – der Tarif bleibt."));
   })()), /*#__PURE__*/React.createElement("div", {
-    className: "mt-3"
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    className: "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors select-none",
-    onClick: () => setShowSecondYear(v => !v)
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "text-xs font-bold text-slate-600 uppercase tracking-wider"
-  }, getStaticLabel('CostMonatlich2')), /*#__PURE__*/React.createElement("span", {
-    className: "w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 font-black text-lg leading-none"
-  }, showSecondYear ? '−' : '+'))), /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-1 md:grid-cols-5 gap-4 items-end"
+    className: "grid grid-cols-1 md:grid-cols-5 gap-4 items-end mt-3"
   }, renderOfferInput('agent', 'AgentLabel', 'text'), renderOfferInput('datum', 'DateLabel', 'text'), renderOfferInput('gueltig', 'ValidUntilLabel', 'date'), /*#__PURE__*/React.createElement("div", {
     className: "col-span-2"
   }, /*#__PURE__*/React.createElement("div", {
