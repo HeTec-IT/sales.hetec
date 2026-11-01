@@ -1,6 +1,7 @@
 {
-  "name": "Pencil Selling – o2",
-  "short_name": "Pencil o2",
+  "id": "/sales.hetec/beta",
+  "name": "Pencil Selling – BETA",
+  "short_name": "Pencil BETA",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
