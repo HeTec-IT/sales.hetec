@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.47';
+        manifestLink.href = 'manifest.webmanifest?v=55.48';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.47').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.48').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.47';
+    window.APP_VERSION = '55.48';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -21816,7 +21816,8 @@ const OfferCanvas = React.memo(({
   htmlOverlayProp,
   bundleInsertCount,
   viewOfferCount,
-  getStaticLabel
+  getStaticLabel,
+  footer
 }) => {
   const SIZE_DIFFERENCE_THRESHOLD = 5;
 
@@ -22629,7 +22630,7 @@ const OfferCanvas = React.memo(({
       userSelect: 'none',
       borderRadius: '4px'
     }
-  })));
+  })), footer || null);
 });
 
 // --- SMALL INPUT CANVAS (Patched with drawing-canvas class) ---
@@ -31776,7 +31777,13 @@ function App() {
     return /*#__PURE__*/React.createElement("div", {
       key: field,
       className: "flex flex-col min-w-0",
-      "data-ps-price-field": offerKey + ':' + field
+      "data-ps-price-field": offerKey + ':' + field,
+      style: {
+        background: '#ffffff',
+        border: '1.5px solid #e2e8f0',
+        borderRadius: '12px',
+        padding: '6px 8px 8px'
+      }
     }, /*#__PURE__*/React.createElement("label", {
       className: "text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"
     }, label), /*#__PURE__*/React.createElement("div", {
@@ -31804,8 +31811,12 @@ function App() {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: '10px',
-      marginTop: '10px',
-      flex: '0 0 auto'
+      padding: '10px 12px 12px',
+      borderTop: '1.5px solid #e2e8f0',
+      background: '#f8fafc',
+      flex: '0 0 auto',
+      position: 'relative',
+      zIndex: 40
     }
   }, renderPriceField(offerKey, 'monatlich'), renderPriceField(offerKey, 'einmalig'));
   const renderOfferInput = (key, labelKey, type = 'text') => {
@@ -33120,6 +33131,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
 
       // Den offer-canvas-container aus der Spalte holen
       const container = col.querySelector('.offer-canvas-container') || col;
+      // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
+      container.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
 
       // Container: exakt volle Breite + volle Höhe des Wrappers
       container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'min-height:0', 'border-width:4px', 'border-style:solid', 'border-radius:1rem', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
@@ -33386,8 +33399,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // Spalten-Wrapper: volle Höhe
       col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;';
       try {
-        col.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
-        col.appendChild(buildPdfPriceStrip(offerIndex));
+        container.appendChild(buildPdfPriceStrip(offerIndex));
       } catch (e) {}
       wrapper.appendChild(col);
       return wrapper;
@@ -33448,21 +33460,61 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
 
     // v55.47: Preisleiste (Monatlich / Einmalig) direkt unter der Karte im PDF.
     // Werte kommen live von der Bildschirm-Leiste (Text) bzw. dem Handschrift-Canvas des Feldes.
+    // Handschrift auf die Tinte zuschneiden (leerer Rand weg), damit sie im schmalen PDF-Feld gross genug bleibt.
+    const cropPriceInk = cv => {
+      try {
+        const w = cv.width;
+        const h = cv.height;
+        const d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            if (d[(y * w + x) * 4 + 3] > 20) {
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+        }
+        if (x1 < 0) return null;
+        const dprX = window.devicePixelRatio || 1;
+        const pad = Math.round(3 * dprX);
+        x0 = Math.max(0, x0 - pad);
+        y0 = Math.max(0, y0 - pad);
+        x1 = Math.min(w - 1, x1 + pad);
+        y1 = Math.min(h - 1, y1 + pad);
+        const cw = x1 - x0 + 1;
+        const ch = y1 - y0 + 1;
+        const oc = document.createElement('canvas');
+        oc.width = cw;
+        oc.height = ch;
+        oc.getContext('2d').drawImage(cv, x0, y0, cw, ch, 0, 0, cw, ch);
+        return {
+          url: oc.toDataURL('image/png'),
+          ar: cw / ch,
+          cssW: cw / dprX
+        };
+      } catch (e) {
+        return null;
+      }
+    };
     const buildPdfPriceStrip = idx => {
       const offerKey = 'offer' + (idx + 1);
       const strip = doc.createElement('div');
       strip.setAttribute('data-ps-pdf-pricestrip', offerKey);
-      strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;margin-top:8px;box-sizing:border-box;width:100%;';
+      strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;padding:7px 9px 9px;border-top:1.5px solid #e2e8f0;background:#f8fafc;box-sizing:border-box;width:100%;';
       [['monatlich', 'MONATLICH (€)'], ['einmalig', 'EINMALIG (€)']].forEach(([field, label]) => {
         const cell = doc.createElement('div');
-        cell.style.cssText = 'flex:1 1 0;min-width:0;display:flex;flex-direction:column;';
+        cell.style.cssText = 'flex:1 1 0;min-width:0;display:flex;flex-direction:column;background:#ffffff;border:1.5px solid #e2e8f0;border-radius:10px;padding:4px 6px 6px;box-sizing:border-box;';
         const lab = doc.createElement('div');
         lab.textContent = label;
         lab.style.cssText = 'font-size:10px;font-weight:800;letter-spacing:0.06em;color:#64748b;margin-bottom:3px;line-height:1.2;';
         const box = doc.createElement('div');
-        box.style.cssText = 'height:52px;box-sizing:border-box;border:1.5px solid #cbd5e1;border-radius:9px;background:#f8fafc;display:flex;align-items:center;padding:0 10px;overflow:hidden;';
+        box.style.cssText = 'height:48px;box-sizing:border-box;border:1.5px solid #cbd5e1;border-radius:9px;background:#f8fafc;display:flex;align-items:center;padding:0 10px;overflow:hidden;';
         let typed = '';
         let imgUrl = null;
+        let inkInfo = null;
         try {
           const fieldEl = sourceOffer.querySelector('[data-ps-price-field="' + offerKey + ':' + field + '"]');
           if (fieldEl) {
@@ -33470,15 +33522,26 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             typed = inp ? String(inp.value || '').trim() : '';
             const cv = fieldEl.querySelector('canvas');
             const strokes = (window.__psStrokes || {})[psPriceKey(offerKey, field)] || [];
-            if (cv && cv.width > 0 && cv.height > 0 && strokes.length) imgUrl = cv.toDataURL('image/png');
+            if (cv && cv.width > 0 && cv.height > 0 && strokes.length) {
+              inkInfo = cropPriceInk(cv);
+              imgUrl = inkInfo ? inkInfo.url : cv.toDataURL('image/png');
+            }
           }
         } catch (e) {}
         if (imgUrl) {
           // Handschrift: natuerliches Seitenverhaeltnis (html2canvas ignoriert object-fit)
           box.style.padding = '0';
+          box.style.justifyContent = 'center';
           const im = doc.createElement('img');
           im.src = imgUrl;
-          im.style.cssText = 'display:block;width:100%;height:auto;';
+          if (inkInfo) {
+            // in das Feld einpassen (ca. 130 x 38 px), Seitenverhaeltnis bleibt, max. 2,2-fach vergroessert
+            let iw = Math.min(130, 38 * inkInfo.ar, inkInfo.cssW * 2.2);
+            const ih = iw / inkInfo.ar;
+            im.style.cssText = 'display:block;flex:0 0 auto;width:' + Math.round(iw) + 'px;height:' + Math.round(ih) + 'px;';
+          } else {
+            im.style.cssText = 'display:block;width:100%;height:auto;';
+          }
           box.appendChild(im);
         } else if (typed) {
           const tx = doc.createElement('div');
@@ -33543,6 +33606,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           col.querySelectorAll('button:not([data-print-keep="1"])').forEach(b => b.style.display = 'none');
           // Container (die Karte mit Rahmen)
           const container = col.querySelector('.offer-canvas-container') || col;
+          // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
+          container.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
           // Rahmenfarbe
           container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
@@ -33638,8 +33703,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           } catch (e) {}
           col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;';
           try {
-            col.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
-            col.appendChild(buildPdfPriceStrip(i));
+            container.appendChild(buildPdfPriceStrip(i));
           } catch (e) {}
           card.appendChild(col);
         } else {
@@ -37388,7 +37452,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.47")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.48")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41337,8 +41401,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       className: `ps-off-card ${orderClass}`,
       style: {
         position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
         ...(hidden ? {
           display: 'none'
         } : offerLayoutMode === 'step' ? {
@@ -41379,8 +41441,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onClearOverlay: () => handleClearOverlay(key),
       onOpenBundleModal: openBundleModal,
       packagePriceData: packagePrices[key],
-      triggerToast: triggerToast
-    }), renderPriceStrip(key));
+      triggerToast: triggerToast,
+      footer: renderPriceStrip(key)
+    }));
   })), (() => {
     const monthly = offerData.monatlich1 || 0;
     const monthly2 = offerData.monatlich2 || 0;
