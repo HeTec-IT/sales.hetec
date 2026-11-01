@@ -292,7 +292,7 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.40';
+        manifestLink.href = 'manifest.webmanifest?v=55.41';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
@@ -320,7 +320,9 @@
     -->
     <script>
     (function () {
-        var STORAGE_KEY = 'ps_install_prompt_shown';
+        // v55.41: pro App-Pfad trennen – localStorage gilt fuer die ganze Domain hetec-it.github.io,
+        // sonst blockiert ein Merker der Live-App den Install-Banner der Beta.
+        var STORAGE_KEY = 'ps_install_prompt_shown:' + (location.pathname || '/');
         var deferredInstallPrompt = null;
 
         try {
@@ -1066,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.40';
+    window.APP_VERSION = '55.41';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
