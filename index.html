@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.54';
+        manifestLink.href = 'manifest.webmanifest?v=55.55';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.54').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.55').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.54';
+    window.APP_VERSION = '55.55';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33359,7 +33359,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // Den offer-canvas-container aus der Spalte holen
       const container = col.querySelector('.offer-canvas-container') || col;
       // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
-      col.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
+      col.querySelectorAll('[data-ps-price-strip],[data-ps-price-spacer]').forEach(n => n.remove());
 
       // Container: exakt volle Breite + volle Höhe des Wrappers
       container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'min-height:0', 'border-width:4px', 'border-style:solid', 'border-radius:1rem', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
@@ -33730,6 +33730,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         return null;
       }
     };
+    // v55.54: Preisfelder (Monatlich/Einmalig) unter den Karten bleiben auf dem Tablet (Kunde sieht sie), kommen aber
+    // NICHT ins PDF. Die Summen stehen im Kostenblock (letzte Seite). true = alte Preisleisten im PDF.
+    const PS_PDF_CARD_STRIPS = false;
     const buildPdfPriceStrip = idx => {
       const offerKey = 'offer' + (idx + 1);
       const strip = doc.createElement('div');
@@ -33895,7 +33898,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             } catch (e) {}
             return !empty;
           });
-          const _groupPresent = _jGroups.map(g => g.some(i => _present[i]) || _hasPrice(g[0]));
+          const _groupPresent = _jGroups.map(g => g.some(i => _present[i]) || PS_PDF_CARD_STRIPS && _hasPrice(g[0]));
           if (_groupPresent.some(Boolean)) {
             _jGroups.forEach((g, gi) => {
               if (!_groupPresent[gi]) g.forEach(i => hiddenIdx.add(i));
@@ -33909,7 +33912,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       const cardsRow = doc.createElement('div');
       // v55.51: Karten in Zeile 1, Preisleisten in Zeile 2 (verbundene Kacheln: eine Leiste ueber mehrere Spalten).
       // Spaltenabstand 0, dafuer 5px Innenabstand je Karte (an Nahtstellen verbundener Karten 0).
-      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr) auto;column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
+      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr)' + (PS_PDF_CARD_STRIPS ? ' auto' : '') + ';column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
       let _colPos = 0;
       const _colOf = {};
 
@@ -33930,7 +33933,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           // Container (die Karte mit Rahmen)
           const container = col.querySelector('.offer-canvas-container') || col;
           // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
-          col.querySelectorAll('[data-ps-price-strip]').forEach(n => n.remove());
+          col.querySelectorAll('[data-ps-price-strip],[data-ps-price-spacer]').forEach(n => n.remove());
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
           // Rahmenfarbe
           container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
@@ -34048,7 +34051,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       }
       // v55.51: Preisleisten (Zeile 2) – je Gruppe eine Leiste, bei Verbindung ueber mehrere Spalten
       try {
-        if (fusionMode) {
+        if (!PS_PDF_CARD_STRIPS) {// Preisleisten im PDF aus
+        } else if (fusionMode) {
           let _cp = 0;
           for (let i = 0; i < 3; i++) {
             if (hiddenIdx.has(i)) continue;
@@ -37899,7 +37903,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.54")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.55")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -43023,19 +43027,25 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         color: '#616161',
         lineHeight: 1.3
       }
-    }, /*#__PURE__*/React.createElement("span", null, label), id === 'm13' ? /*#__PURE__*/React.createElement("svg", {
+    }, /*#__PURE__*/React.createElement("span", null, label), id === 'm13' ? /*#__PURE__*/React.createElement("span", {
       "data-ps-noprint": "1",
-      width: "16",
-      height: "16",
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: showSecondYear ? '#0067c0' : '#616161',
-      strokeWidth: "2",
-      strokeLinecap: "round",
-      strokeLinejoin: "round"
-    }, /*#__PURE__*/React.createElement("path", {
-      d: "M3 21l3-1 12-12-2-2L4 18l-1 3z"
-    })) : null), /*#__PURE__*/React.createElement("div", {
+      "data-ps-y2-off": "1",
+      role: "button",
+      title: "Ab Monat 13 ausblenden",
+      "aria-label": "Ab Monat 13 ausblenden",
+      onClick: e => {
+        e.stopPropagation();
+        setShowSecondYear(false);
+      },
+      style: {
+        cursor: 'pointer',
+        fontSize: '20px',
+        lineHeight: 1,
+        color: '#616161',
+        padding: '0 4px',
+        userSelect: 'none'
+      }
+    }, "\u00D7") : null), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: '32px',
         lineHeight: 1.15,
@@ -43054,36 +43064,39 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }, noprint ? {
       "data-ps-noprint": "1"
     } : {}), txt) : null;
-    return /*#__PURE__*/React.createElement("div", {
+    // v55.54: Standard = zwei Karten (Einmalig, Monatlich). "Monatlich ab Monat 13" nur nach Aktivierung (Chip);
+    // Hinweistexte unter den Summen erscheinen nie im PDF.
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       "data-ps-stats": "1",
       style: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(' + (showSecondYear ? 3 : 2) + ', minmax(0, 1fr))',
         gap: '10px',
         marginTop: '4px'
       }
-    }, stat('einmalig', 'Einmalig gesamt', '#0067c0', valNode(sumE, false), sumE > 0 ? sub(subTxt(nE)) : sub(emptyHint, true)), stat('m12', 'Monatlich, Monat 1–12', '#005a9e', valNode(sumM, true), sumM > 0 ? sub(subTxt(nM)) : sub(emptyHint, true)), stat('m13', 'Monatlich, ab Monat 13', '#8764b8', m13Hand ? /*#__PURE__*/React.createElement("span", {
+    }, stat('einmalig', 'Einmalig', '#0067c0', valNode(sumE, false), sumE > 0 ? sub(subTxt(nE), true) : sub(emptyHint, true)), stat('m12', showSecondYear ? 'Monatlich, Monat 1–12' : 'Monatlich', '#005a9e', valNode(sumM, true), sumM > 0 ? sub(subTxt(nM), true) : sub(emptyHint, true)), showSecondYear ? stat('m13', 'Monatlich, ab Monat 13', '#8764b8', m13Hand ? /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: '20px',
         fontWeight: 600
       }
-    }, "handschriftlich") : valNode(m13, true), sub(m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, antippen zum Ändern', !m13Hand), {
-      role: 'button',
-      onClick: () => setShowSecondYear(v => !v),
+    }, "handschriftlich") : valNode(m13, true), sub(m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, unten änderbar', true)) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      "data-ps-noprint": "1",
+      "data-ps-y2-on": "1",
+      onClick: () => setShowSecondYear(true),
       style: {
+        marginTop: '8px',
+        padding: '6px 12px',
         background: '#ffffff',
-        borderStyle: 'solid',
-        borderWidth: '3px 1px 1px 1px',
-        borderColor: '#8764b8 ' + (showSecondYear ? '#0067c0' : '#e0e0e0') + ' ' + (showSecondYear ? '#0067c0' : '#e0e0e0') + ' ' + (showSecondYear ? '#0067c0' : '#e0e0e0'),
+        border: '1px solid #c8c6c4',
         borderRadius: '6px',
-        padding: '10px 14px',
-        minWidth: 0,
-        textAlign: 'left',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: '#0067c0',
         cursor: 'pointer',
-        userSelect: 'none',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
-    }));
+    }, "+ Monatlich ab Monat 13") : null);
   })(), /*#__PURE__*/React.createElement("div", {
     className: `grid grid-cols-3 gap-4 mt-3 cost-grid-years ${showSecondYear ? 'ps-y2-open' : 'ps-y2-collapsed'}`
   }, /*#__PURE__*/React.createElement("div", {
@@ -43092,7 +43105,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       gridColumn: '3'
     }
   }, renderOfferInput('monatlich2', 'CostMonatlich2', 'text'))), /*#__PURE__*/React.createElement("div", {
-    className: "mt-3"
+    className: "mt-3",
+    "data-ps-noprint": "1",
+    style: {
+      display: 'none'
+    }
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
     className: "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors select-none",
