@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.53';
+        manifestLink.href = 'manifest.webmanifest?v=55.54';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.53').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.54').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1068,7 +1068,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.53';
+    window.APP_VERSION = '55.54';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33008,7 +33008,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           const img = doc.createElement('img');
           img.src = dataUrl;
           img.alt = 'canvas';
-          img.className = (dc.className || '') + ' canvas-baked-image';
+          img.setAttribute('data-ps-nw', String(sc.width));
+          img.setAttribute('data-ps-nh', String(sc.height));
+          // v55.54 URSACHE DER VERZERRTEN HANDSCHRIFT: Das Bild erbte die Canvas-Klassen (drawing-canvas,
+          // w-full, h-full). Die Regel ".drawing-canvas {width:100%!important;height:100%!important}" hat dann
+          // jede Seitenverhaeltnis-Korrektur ueberstimmt → Bild wurde auf die ganze Karte gezogen.
+          img.className = 'canvas-baked-image';
           img.style.cssText = (dc.getAttribute('style') || '') + ';' + 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:left top;pointer-events:none;touch-action:none;';
           // v56 DOPPELSCHRIFT-FIX (Samsung): Erst img sicher einfügen, DANN das Canvas
           // KOMPLETT entfernen (nicht nur visibility:hidden). Manche PDF-Renderer (Android)
@@ -33058,6 +33063,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           img.src = dataUrl;
           img.alt = key;
           img.setAttribute('data-cost-key-baked', key);
+          img.setAttribute('data-ps-nw', String(sc.width));
+          img.setAttribute('data-ps-nh', String(sc.height));
+          img.setAttribute('data-ps-anchor', 'c');
           img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;' + 'object-fit:contain;pointer-events:none;touch-action:none;z-index:15;';
           // v56 DOPPELSCHRIFT-FIX (Samsung): img sicher einfügen, dann Canvas entfernen.
           let __ins2 = false;
@@ -33396,11 +33404,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             const bakedImg = container.querySelector('img.canvas-baked-image');
             if (bakedImg) {
               bakedImg.src = re;
+              bakedImg.setAttribute('data-ps-nw', '1060');
+              bakedImg.setAttribute('data-ps-nh', '540');
               bakedImg.style.objectFit = 'contain';
               bakedImg.style.objectPosition = 'left top';
             } else if (cvs) {
               const im = doc.createElement('img');
               im.src = re;
+              im.setAttribute('data-ps-nw', '1060');
+              im.setAttribute('data-ps-nh', '540');
               im.className = 'canvas-baked-image';
               im.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:left top;pointer-events:none;z-index:10;';
               // v56 DOPPELSCHRIFT-FIX: img einfügen, dann Canvas entfernen (nicht nur verstecken)
@@ -33795,6 +33807,32 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         } catch (e) {}
       });
     };
+    // v55.54: html2canvas ignoriert object-fit und zieht jedes Bild auf seine Box. Deshalb wird jede eingebrannte
+    // Handschrift im ECHTEN Render-Layout (onclone) auf ihr natuerliches Seitenverhaeltnis eingepasst ("contain"):
+    // ein einziger Faktor fuer Breite UND Hoehe → Kreise bleiben Kreise, Schrift bleibt lesbar (wie Samsung Notes).
+    const _psContainBakedImages = d => {
+      try {
+        d.querySelectorAll('img[data-ps-nw][data-ps-nh]').forEach(im => {
+          try {
+            const nw = parseFloat(im.getAttribute('data-ps-nw'));
+            const nh = parseFloat(im.getAttribute('data-ps-nh'));
+            const p = im.offsetParent;
+            if (!(nw > 0) || !(nh > 0) || !p) return;
+            const W = p.clientWidth;
+            const H = p.clientHeight;
+            if (!(W > 2) || !(H > 2)) return;
+            const s = Math.min(W / nw, H / nh);
+            const iw = Math.max(1, Math.round(nw * s));
+            const ih = Math.max(1, Math.round(nh * s));
+            const centered = im.getAttribute('data-ps-anchor') === 'c' || im.hasAttribute('data-ps-fit-ar') && iw < W - 2;
+            const left = centered ? Math.max(0, Math.round((W - iw) / 2)) : 0;
+            const top = im.getAttribute('data-ps-anchor') === 'c' ? Math.max(0, Math.round((H - ih) / 2)) : 0;
+            const z = im.style.zIndex || '10';
+            im.style.cssText = 'position:absolute;left:' + left + 'px;top:' + top + 'px;width:' + iw + 'px;height:' + ih + 'px;max-width:none;max-height:none;pointer-events:none;z-index:' + z + ';display:block;';
+          } catch (e) {}
+        });
+      } catch (e) {}
+    };
     const makeAllOffersPage = () => {
       // --- Canvas-Bitmaps einbrennen ---
       const tmpClone = sourceOffer.cloneNode(true);
@@ -33926,6 +33964,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
                 snap.src = srcCvs.toDataURL('image/png');
                 snap.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:left top;pointer-events:none;z-index:10;image-rendering:crisp-edges;';
                 snap.setAttribute('data-canvas-snapshot', '1');
+                snap.setAttribute('data-ps-nw', String(srcCvs.width));
+                snap.setAttribute('data-ps-nh', String(srcCvs.height));
                 cvs.parentNode.replaceChild(snap, cvs);
               } else if (hasBaked) {
                 cvs.parentNode.removeChild(cvs);
@@ -34502,6 +34542,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
                   // === OFFER-HANDSCHRIFT: für Druck-Kachelgröße NEU rendern ===
                   // (verhindert Verziehen wenn im Hochformat geschrieben wurde)
                   let dataUrl = null;
+                  let reW = 0,
+                    reH = 0;
                   try {
                     const strokeKey = liveCanvas.getAttribute('data-stroke-key');
                     if (strokeKey && strokeKey.startsWith('offer') && window.__psStrokes && Array.isArray(window.__psStrokes[strokeKey]) && window.__psStrokes[strokeKey].length > 0) {
@@ -34522,6 +34564,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
                       }
                       if (tw >= 2 && th >= 2 && typeof renderStrokesForPrint === 'function') {
                         dataUrl = renderStrokesForPrint(window.__psStrokes[strokeKey], tw, th, strokeKey);
+                        if (dataUrl) {
+                          reW = tw;
+                          reH = th;
+                        }
                       }
                     }
                   } catch (e) {}
@@ -34531,11 +34577,20 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
                     dataUrl = liveCanvas.toDataURL('image/png');
                   }
                   if (!dataUrl || dataUrl === 'data:,') return;
+                  // natuerliche Bildgroesse fuer die Seitenverhaeltnis-Anpassung (v55.54)
+                  let snapW = w,
+                    snapH = h;
+                  if (reW > 0 && reH > 0) {
+                    snapW = reW;
+                    snapH = reH;
+                  }
                   // Clone-Canvas durch <img> ersetzen damit html2canvas es sieht
                   const img = clonedDoc.createElement('img');
                   img.src = dataUrl;
                   img.style.cssText = ['position:absolute', 'top:0', 'left:0', 'width:100%', 'height:100%', 'object-fit:contain', 'object-position:left top', 'pointer-events:none', 'z-index:' + (cloneCanvas.style.zIndex || 10), 'image-rendering:crisp-edges', 'display:block', 'transform:none', 'filter:none'].join(';');
                   img.setAttribute('data-canvas-snapshot', '1');
+                  img.setAttribute('data-ps-nw', String(snapW));
+                  img.setAttribute('data-ps-nh', String(snapH));
                   cloneCanvas.parentNode.replaceChild(img, cloneCanvas);
                 } catch (e) {}
               });
@@ -34717,6 +34772,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             } catch (e) {}
             try {
               _psAutoFitText(clonedDoc);
+            } catch (e) {}
+            try {
+              _psContainBakedImages(clonedDoc);
             } catch (e) {}
 
             // ---- Leere letzte Seite entfernen (falls irgendwo ein Spacer entsteht) ----
@@ -35454,6 +35512,69 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       try {
         document.body.classList.remove('exporting');
       } catch (e) {}
+    }
+  };
+
+  // v55.54: PDF-Schnellknopf (Beta) – rendert SOFORT, ohne Name-/Rufnummer-Abfrage und ohne Archivierung.
+  const pdfQuickBusyRef = useRef(false);
+  const handleQuickPdf = async () => {
+    if (pdfQuickBusyRef.current) return;
+    pdfQuickBusyRef.current = true;
+    const ovId = 'pdf-share-overlay';
+    const showOv = () => {
+      let ov = document.getElementById(ovId);
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = ovId;
+        ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;';
+        ov.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.25);padding:18px;min-width:260px;max-width:360px;text-align:center;font-family:Arial,Helvetica,sans-serif;">' + '<div style="width:44px;height:44px;border-radius:999px;border:5px solid #e2e8f0;border-top-color:#2563eb;margin:0 auto 12px auto;animation:pspin 0.9s linear infinite;"></div>' + '<div id="pdf-share-overlay-text" style="font-weight:800;color:#0f172a;">PDF wird erstellt …</div>' + '<div style="margin-top:6px;font-size:12px;color:#64748b;">Bitte kurz warten…</div></div>' + '<style>@keyframes pspin{to{transform:rotate(360deg)}}</style>';
+        document.body.appendChild(ov);
+      } else {
+        ov.style.display = 'flex';
+      }
+    };
+    const hideOv = () => {
+      const ov = document.getElementById(ovId);
+      if (ov) ov.style.display = 'none';
+    };
+    let blob = null;
+    try {
+      if (!window.html2pdf) {
+        try {
+          triggerToast('PDF-Generator nicht verfügbar.');
+        } catch (e) {}
+        return;
+      }
+      document.body.classList.add('exporting');
+      showOv();
+      blob = await createPrintLookPdfBlob(triggerToast, ensurePrintHeaders, {
+        addPageNumbers: true
+      });
+      try {
+        window.__lastPdfBlob = blob;
+      } catch (e) {}
+      hideOv();
+      await openShareSheet({
+        blob,
+        filename: 'Angebot_' + new Date().toISOString().slice(0, 10) + '.pdf',
+        title: 'PDF ist fertig!',
+        subtitle: 'Jetzt öffnen oder teilen.',
+        shareText: buildKundenNachricht(),
+        shareSubject: KUNDEN_SHARE_BETREFF
+      });
+    } catch (err) {
+      try {
+        console.warn('Quick-PDF failed:', err);
+      } catch (e) {}
+      try {
+        triggerToast('PDF konnte nicht erstellt werden.');
+      } catch (e) {}
+    } finally {
+      hideOv();
+      try {
+        document.body.classList.remove('exporting');
+      } catch (e) {}
+      pdfQuickBusyRef.current = false;
     }
   };
 
@@ -37778,7 +37899,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.53")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.54")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -44468,6 +44589,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     d: ICONS.ArrowLeft,
     size: 14
   }), " Zurück"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleQuickPdf,
+    "data-ps-quick-pdf": "1",
+    title: "PDF sofort erstellen",
+    "aria-label": "PDF sofort erstellen",
+    className: "px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm text-rose-600 hover:bg-rose-50 transition-colors mr-2 flex items-center gap-1 font-bold text-xs"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: ICONS.FileText,
+    size: 18
+  }), "PDF"), /*#__PURE__*/React.createElement("button", {
     onClick: handleFinishOfferClick,
     disabled: !isReadyToFinish,
     className: `px-6 py-2 rounded-lg font-bold shadow-lg text-sm flex items-center gap-2 transition-all ${!isReadyToFinish ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : customerSignature ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700'} text-white`
