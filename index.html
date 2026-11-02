@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.60';
+        manifestLink.href = 'manifest.webmanifest?v=55.61';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.60').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.61').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.60';
+    window.APP_VERSION = '55.61';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33807,69 +33807,118 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         return null;
       }
     };
-    // v55.54: Preisfelder (Monatlich/Einmalig) unter den Karten bleiben auf dem Tablet (Kunde sieht sie), kommen aber
-    // NICHT ins PDF. Die Summen stehen im Kostenblock (letzte Seite). true = alte Preisleisten im PDF.
-    const PS_PDF_CARD_STRIPS = false;
-    const buildPdfPriceStrip = idx => {
-      const offerKey = 'offer' + (idx + 1);
-      const strip = doc.createElement('div');
-      strip.setAttribute('data-ps-pdf-pricestrip', offerKey);
-      strip.style.cssText = 'flex:0 0 auto;display:flex;gap:8px;margin-top:6px;box-sizing:border-box;width:100%;';
-      [['monatlich', 'Monatlich (€)'], ['einmalig', 'Einmalig (€)']].forEach(([field, label]) => {
-        const cell = doc.createElement('div');
-        cell.style.cssText = (field === 'einmalig' ? 'flex:0 1 130px;' : 'flex:1 1 0;') + 'min-width:0;display:flex;flex-direction:column;background:transparent;border:0;padding:0;box-sizing:border-box;';
-        const lab = doc.createElement('div');
-        lab.textContent = label;
-        lab.style.cssText = 'font-size:11px;font-weight:400;color:#616161;margin-bottom:3px;line-height:1.2;';
-        const box = doc.createElement('div');
-        box.style.cssText = 'height:42px;box-sizing:border-box;border:1px solid #d1d1d1;border-bottom:1px solid #8a8a8a;border-radius:4px;background:#ffffff;display:flex;align-items:center;padding:0 10px;overflow:hidden;';
-        let typed = '';
-        let imgUrl = null;
-        let inkInfo = null;
-        try {
-          const fieldEl = sourceOffer.querySelector('[data-ps-price-field="' + offerKey + ':' + field + '"]');
-          if (fieldEl) {
-            const inp = fieldEl.querySelector('input');
-            typed = inp ? String(inp.value || '').trim() : '';
-            const cv = fieldEl.querySelector('canvas');
-            const strokes = (window.__psStrokes || {})[psPriceKey(offerKey, field)] || [];
-            if (cv && cv.width > 0 && cv.height > 0 && strokes.length) {
-              inkInfo = cropPriceInk(cv);
-              imgUrl = inkInfo ? inkInfo.url : cv.toDataURL('image/png');
-            }
+    // v55.61: Preis-Fuss je Kachel (wie Entwurf "Alternative B"): Monatlich gross links, Einmalig klein rechts,
+    // direkt am unteren Kartenrand (gleiche Randfarbe, Karte und Fuss wirken wie EIN Kasten).
+    const _priceValueNode = (offerKey, field, sizePx) => {
+      let typed = '';
+      let imgUrl = null;
+      let inkInfo = null;
+      try {
+        const fieldEl = sourceOffer.querySelector('[data-ps-price-field="' + offerKey + ':' + field + '"]');
+        if (fieldEl) {
+          const inp = fieldEl.querySelector('input');
+          typed = inp ? String(inp.value || '').trim() : '';
+          const cv = fieldEl.querySelector('canvas');
+          const strokes = (window.__psStrokes || {})[psPriceKey(offerKey, field)] || [];
+          if (cv && cv.width > 0 && cv.height > 0 && strokes.length) {
+            inkInfo = cropPriceInk(cv);
+            imgUrl = inkInfo ? inkInfo.url : cv.toDataURL('image/png');
           }
-        } catch (e) {}
-        if (imgUrl) {
-          // Handschrift: natuerliches Seitenverhaeltnis (html2canvas ignoriert object-fit)
-          box.style.padding = '0';
-          box.style.justifyContent = 'center';
-          const im = doc.createElement('img');
-          im.src = imgUrl;
-          if (inkInfo) {
-            // in das Feld einpassen (ca. 130 x 38 px), Seitenverhaeltnis bleibt, max. 2,2-fach vergroessert
-            let iw = Math.min(field === 'einmalig' ? 112 : 130, 34 * inkInfo.ar, inkInfo.cssW * 2.2);
-            const ih = iw / inkInfo.ar;
-            im.style.cssText = 'display:block;flex:0 0 auto;width:' + Math.round(iw) + 'px;height:' + Math.round(ih) + 'px;';
-          } else {
-            im.style.cssText = 'display:block;width:100%;height:auto;';
-          }
-          box.appendChild(im);
-        } else if (typed) {
-          const tx = doc.createElement('div');
-          tx.textContent = /€/.test(typed) ? typed : typed + ' €';
-          tx.style.cssText = 'font-size:20px;font-weight:600;color:#1b1b1b;line-height:1.2;white-space:nowrap;';
-          box.appendChild(tx);
-        } else {
-          const tx = doc.createElement('div');
-          tx.textContent = '–';
-          tx.style.cssText = 'font-size:20px;font-weight:400;color:#c8c8c8;line-height:1.2;';
-          box.appendChild(tx);
         }
-        cell.appendChild(lab);
-        cell.appendChild(box);
-        strip.appendChild(cell);
-      });
-      return strip;
+      } catch (e) {}
+      if (imgUrl) {
+        const im = doc.createElement('img');
+        im.src = imgUrl;
+        const ih = sizePx;
+        const iw = Math.min(inkInfo ? ih * inkInfo.ar : ih * 2.2, sizePx * 6.5);
+        im.style.cssText = 'display:inline-block;vertical-align:middle;height:' + Math.round(ih) + 'px;width:' + Math.round(iw) + 'px;';
+        return {
+          node: im,
+          has: true
+        };
+      }
+      const tx = doc.createElement('span');
+      if (typed) {
+        tx.textContent = /€/.test(typed) ? typed : typed + ' €';
+      } else {
+        tx.textContent = '–';
+        tx.style.color = '#c8c8c8';
+        tx.style.fontWeight = '400';
+      }
+      return {
+        node: tx,
+        has: !!typed
+      };
+    };
+    const buildPdfPriceFooter = (idx, borderColor) => {
+      const offerKey = 'offer' + (idx + 1);
+      const bc = borderColor || '#cbd5e1';
+      const foot = doc.createElement('div');
+      foot.setAttribute('data-ps-pdf-pricefoot', offerKey);
+      foot.style.cssText = 'flex:0 0 auto;display:flex;align-items:baseline;justify-content:space-between;gap:10px;' + 'border:3px solid ' + bc + ';border-top:1px solid #e2e8f0;background:#f8fafc;padding:9px 14px;' + 'border-bottom-left-radius:14px;border-bottom-right-radius:14px;box-sizing:border-box;min-width:0;overflow:hidden;';
+      const mWrap = doc.createElement('div');
+      mWrap.style.cssText = 'font-size:25px;font-weight:700;letter-spacing:-0.01em;color:#0f172a;display:flex;align-items:baseline;gap:3px;min-width:0;overflow:hidden;white-space:nowrap;';
+      const mRes = _priceValueNode(offerKey, 'monatlich', 25);
+      mWrap.appendChild(mRes.node);
+      if (mRes.has) {
+        const perMon = doc.createElement('small');
+        perMon.textContent = '/ Monat';
+        perMon.style.cssText = 'font-size:12px;font-weight:400;color:#616161;';
+        mWrap.appendChild(perMon);
+      }
+      const eWrap = doc.createElement('div');
+      eWrap.style.cssText = 'font-size:12px;color:#616161;text-align:right;line-height:1.25;flex:0 0 auto;';
+      const eLab = doc.createElement('div');
+      eLab.textContent = 'einmalig';
+      eWrap.appendChild(eLab);
+      const eVal = doc.createElement('div');
+      eVal.style.cssText = 'font-size:15px;font-weight:700;color:#0f172a;';
+      eVal.appendChild(_priceValueNode(offerKey, 'einmalig', 15).node);
+      eWrap.appendChild(eVal);
+      foot.appendChild(mWrap);
+      foot.appendChild(eWrap);
+      return foot;
+    };
+    // v55.61: dunkles Gesamtkosten-Band unter den Angebotskarten (Seite 2) – Einmalig + Monatlich auf einen Blick.
+    const _psPdfTotalsBand = () => {
+      const fmtE = v => v > 0 ? v.toFixed(2).replace('.', ',') + ' €' : '–';
+      const band = doc.createElement('div');
+      band.setAttribute('data-ps-pdf-totals', '1');
+      band.style.cssText = 'flex:0 0 auto;background:#0f2d6b;color:#ffffff;border-radius:12px;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;';
+      const lab = doc.createElement('div');
+      lab.textContent = 'Ihre Gesamtkosten';
+      lab.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;opacity:0.75;';
+      const side = doc.createElement('div');
+      side.style.cssText = 'display:flex;align-items:center;';
+      const grp = (labelTxt, valTxt, suffix) => {
+        const g = doc.createElement('div');
+        g.style.cssText = 'display:flex;align-items:baseline;gap:10px;';
+        const l = doc.createElement('span');
+        l.textContent = labelTxt;
+        l.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;opacity:0.75;';
+        const v = doc.createElement('span');
+        v.style.cssText = 'font-size:34px;font-weight:700;letter-spacing:-0.01em;';
+        v.textContent = valTxt;
+        if (suffix) {
+          const s = doc.createElement('small');
+          s.textContent = suffix;
+          s.style.cssText = 'font-size:14px;font-weight:400;opacity:0.8;margin-left:4px;';
+          v.appendChild(s);
+        }
+        g.appendChild(l);
+        g.appendChild(v);
+        return g;
+      };
+      const sumE = offerData.einmalig || 0;
+      const sumM = offerData.monatlich1 || 0;
+      side.appendChild(grp('Einmalig', fmtE(sumE)));
+      const sep = doc.createElement('div');
+      sep.style.cssText = 'width:1px;height:38px;background:rgba(255,255,255,0.25);margin:0 26px;';
+      side.appendChild(sep);
+      side.appendChild(grp('Monatlich', fmtE(sumM), sumM > 0 ? '/ Monat' : null));
+      band.appendChild(lab);
+      band.appendChild(side);
+      return band;
     };
     // v55.52: Wird eine Karte breiter (weil ein leeres Angebot fehlt), wuerde die Handschrift bei voller Breite
     // unten abgeschnitten. Dann auf die echte Kartenhoehe einpassen (Seitenverhaeltnis bleibt, mittig).
@@ -34033,7 +34082,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             } catch (e) {}
             return !empty;
           });
-          const _groupPresent = _jGroups.map(g => g.some(i => _present[i]) || PS_PDF_CARD_STRIPS && _hasPrice(g[0]));
+          const _groupPresent = _jGroups.map(g => g.some(i => _present[i]) || _hasPrice(g[0]));
           if (_groupPresent.some(Boolean)) {
             _jGroups.forEach((g, gi) => {
               if (!_groupPresent[gi]) g.forEach(i => hiddenIdx.add(i));
@@ -34047,9 +34096,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       const cardsRow = doc.createElement('div');
       // v55.51: Karten in Zeile 1, Preisleisten in Zeile 2 (verbundene Kacheln: eine Leiste ueber mehrere Spalten).
       // Spaltenabstand 0, dafuer 5px Innenabstand je Karte (an Nahtstellen verbundener Karten 0).
-      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr)' + (PS_PDF_CARD_STRIPS ? ' auto' : '') + ';column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
+      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr) auto;column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
       let _colPos = 0;
       const _colOf = {};
+      const _borderColorOf = {};
 
       for (let i = 0; i < 3; i++) {
         // Ausgeblendete Spalten nicht ins Grid einfügen
@@ -34070,8 +34120,14 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
           col.querySelectorAll('[data-ps-price-strip],[data-ps-price-spacer]').forEach(n => n.remove());
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
-          // Rahmenfarbe
-          container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
+          // Rahmenfarbe – gemerkt fuer den Preis-Fuss darunter (v55.61)
+          const _bc = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
+          container.style.borderColor = _bc;
+          _borderColorOf[i] = _bc;
+          // Karte geht nahtlos in den Preis-Fuss darunter ueber: kein eigener unterer Rand/Rundung.
+          container.style.borderBottomWidth = '0px';
+          container.style.borderBottomLeftRadius = '0';
+          container.style.borderBottomRightRadius = '0';
           // v55.51: verbundene Kacheln – Naht ohne Rahmen/Rundung
           if (_jHasNext) {
             container.style.borderTopRightRadius = '0';
@@ -34184,21 +34240,24 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         } else {
           card.style.borderRadius = '14px';
           card.style.border = '3px solid #cbd5e1';
+          card.style.borderBottomWidth = '0px';
+          card.style.borderBottomLeftRadius = '0';
+          card.style.borderBottomRightRadius = '0';
           card.style.background = '#fff';
+          _borderColorOf[i] = '#cbd5e1';
         }
         cardsRow.appendChild(card);
       }
-      // v55.51: Preisleisten (Zeile 2) – je Gruppe eine Leiste, bei Verbindung ueber mehrere Spalten
+      // v55.61: Preis-Fuss (Zeile 2) – je Gruppe ein Fuss, bei Verbindung ueber mehrere Spalten
       try {
-        if (!PS_PDF_CARD_STRIPS) {// Preisleisten im PDF aus
-        } else if (fusionMode) {
+        if (fusionMode) {
           let _cp = 0;
           for (let i = 0; i < 3; i++) {
             if (hiddenIdx.has(i)) continue;
             _cp++;
             const cell = doc.createElement('div');
             cell.style.cssText = 'grid-row:2;grid-column:' + _cp + ';padding:0 5px;box-sizing:border-box;min-width:0;';
-            cell.appendChild(buildPdfPriceStrip(i));
+            cell.appendChild(buildPdfPriceFooter(i, _borderColorOf[i]));
             cardsRow.appendChild(cell);
           }
         } else {
@@ -34207,14 +34266,18 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             if (!vis.length) return;
             const cell = doc.createElement('div');
             cell.style.cssText = 'grid-row:2;grid-column:' + _colOf[vis[0]] + ' / span ' + vis.length + ';padding:0 5px;box-sizing:border-box;min-width:0;';
-            cell.appendChild(buildPdfPriceStrip(vis[0]));
+            cell.appendChild(buildPdfPriceFooter(vis[0], _borderColorOf[vis[0]]));
             cardsRow.appendChild(cell);
           });
         }
       } catch (e) {}
       wrapper.appendChild(cardsRow);
+      // v55.61: Gesamtkosten-Band direkt unter den Angebotskarten (Entwurf "Alternative B").
+      try {
+        wrapper.appendChild(_psPdfTotalsBand());
+      } catch (e) {}
 
-      // Kostenübersicht kommt auf Seite 3 — hier nur die Karten, volle Höhe
+      // Kostenübersicht (mit Unterschrift/Agent/Datum) kommt zusaetzlich auf der letzten Seite.
       return wrapper;
     };
 
@@ -38045,7 +38108,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.60")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.61")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
