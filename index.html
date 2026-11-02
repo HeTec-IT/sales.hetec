@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.98';
+        manifestLink.href = 'manifest.webmanifest?v=55.99';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.98').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.99').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.98';
+    window.APP_VERSION = '55.99';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4283,6 +4283,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 @media screen and (min-width: 1100px){
   .sit-chips-panel{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 }
+/* v55.99: Querformat – Spalten fuellen die Hoehe, Groessen wachsen mit der Bildschirmhoehe (--k) */
 /* v55.98: Querformat ohne Scrollen – Schnellauswahl kompakt (Preise als Zeile → Preisfenster, Summe oben) */
 .sit-sum-pill{ display:inline-flex; align-items:baseline; gap:6px; padding:5px 12px; border-radius:10px; background:#f8fafc; border:1.5px solid #e2e8f0; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; white-space:nowrap; flex-shrink:0; }
 .sit-sum-pill b{ font-size:17px; letter-spacing:0; color:#94a3b8; }
@@ -4290,14 +4291,15 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-sum-pill.has b{ color:#1d4ed8; }
 .sit-sum-pill em{ font-style:normal; font-size:11px; letter-spacing:0; text-transform:none; color:#475569; }
 @media screen and (orientation: landscape) and (min-width: 1100px){
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ overflow-y:auto; overscroll-behavior:contain; gap:10px; padding-bottom:0; margin-bottom:56px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block{ padding:7px 10px; gap:5px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title{ font-size:12.5px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ --k:clamp(0px,calc(100vh - 800px),300px); overflow-y:auto; overscroll-behavior:contain; gap:10px; align-content:stretch; grid-auto-rows:1fr; padding-bottom:0; margin-bottom:56px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block > div:not(.sit-chip-title){ flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block{ padding:calc(7px + var(--k)*0.03) 10px; gap:calc(5px + var(--k)*0.02); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title{ font-size:calc(12.5px + var(--k)*0.01); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title i{ width:22px; height:22px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-label{ margin-bottom:3px; font-size:10px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-row{ gap:5px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip{ min-height:32px; padding:0 10px; font-size:12.5px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar{ margin-top:5px; min-height:34px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-label{ margin-bottom:calc(3px + var(--k)*0.02); font-size:calc(10px + var(--k)*0.008); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-row{ gap:calc(5px + var(--k)*0.02); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip{ min-height:calc(32px + var(--k)*0.07); padding:0 calc(10px + var(--k)*0.02); font-size:calc(12.5px + var(--k)*0.012); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(34px + var(--k)*0.06); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-dp{ width:28px; height:28px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-hint span{ width:26px; height:26px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar.ink{ min-height:40px; }
@@ -4305,7 +4307,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block > div > .sit-price{ margin-top:6px; padding:5px 8px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-price-hd{ min-height:30px; font-size:12.5px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-stp-r button{ width:34px; height:34px; font-size:19px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-c{ margin-top:5px; min-height:36px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-c{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(36px + var(--k)*0.07); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] .sit-card-canvas{ height:44px!important; min-height:44px!important; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] > div:not([data-sit-offtab]) > button{ padding-top:6px!important; padding-bottom:4px!important; min-height:0!important; }
 }
@@ -40158,7 +40160,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.98")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.99")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
