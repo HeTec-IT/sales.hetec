@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.82';
+        manifestLink.href = 'manifest.webmanifest?v=55.83';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.82').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.83').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -426,8 +426,11 @@
                 return info;
             } catch (_) { return null; }
         }
+        // v55.83: Nach einem NEUSTART (App beendet/weggewischt, Update) wird nur noch eine bewusst per
+        // "App pausieren" gesicherte Beratung wiederhergestellt – eine automatische Hintergrund-Sicherung nicht.
         window.__psIsManualPause = function (snap) {
             var info = validPause();
+            if (info && info.reason === 'background') return false;
             return !!(info && snap && Number(snap.ts) === Number(info.ts) &&
                 String(snap.ownerUid || '') === String(info.uid));
         };
@@ -477,7 +480,8 @@
             else if (document.visibilityState === 'visible') window.__psResumeBackgroundPause();
         });
         // Login, Cloud-Angebote, Archiv und geparkte Abschluesse bleiben erhalten.
-        if (validPause()) window.__PS_PAUSED = true;
+        var _vpStart = validPause();
+        if (_vpStart && _vpStart.reason !== 'background') window.__PS_PAUSED = true;
         else clear();
         // Auch ein Wegwischen/Schliessen via Betriebssystem kann pagehide ausloesen.
         // Das ist eine Pause, kein bewusstes "App beenden".
@@ -542,7 +546,7 @@
         var SNAP_PREFIX = 'ps_o2_autosave_v2_';
         var PAUSE_KEY = 'ps_o2_manual_pause_v1';
         var DEFAULT_MSG = 'Du bist mitten in einer Kundenberatung. Möchtest du die App wirklich verlassen?';
-        var IDLE_TEXT = 'Home-Geste, App-Wechsel und „App pausieren“ starten die 5-Minuten-Frist. „App beenden“ und „App Refresh“ löschen die laufende Beratung sofort.';
+        var IDLE_TEXT = 'Nur „App pausieren“ sichert die Beratung 5 Minuten lang. Beim App-Wechsel bleibt sie nur erhalten, solange die App im Hintergrund offen bleibt. Beenden, Neustart, Update, „App beenden“ und „App Refresh“ löschen die laufende Beratung.';
 
         function windowMs() {
             var configured = Number(window.__PS_RESTORE_WINDOW_MS);
@@ -1096,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.82';
+    window.APP_VERSION = '55.83';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33327,7 +33331,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           if (!(W > 20) || !(H > 20) || ink.length !== 4 || !ink.every(isFinite)) return;
           const dpr = parseFloat(im.getAttribute('data-ps-dpr')) || 1;
           const padB = Math.round(12 * dpr);
-          const cap = 1.17 / dpr; // v55.82: max. 1,17x (vorher 1,5x – wirkte im PDF zu riesig);
+          const cap = 1.125 / dpr; // v55.83: max. 1,125x (= 25 % kleiner als die frueheren 1,5x)
           const s0 = Math.min(cap, W / (ink[2] + 2 * padB), H / (ink[3] + 2 * padB));
           if (s0 >= cap * 0.95) return; // Schrift wird ohnehin so gross wie erlaubt
           const box = {
@@ -33411,7 +33415,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             if (!(bx.W > 20) || !(bx.H > 20) || ink.length !== 4 || !ink.every(isFinite)) return;
             const dpr = parseFloat(im.getAttribute('data-ps-dpr')) || 1;
             const padB = Math.round(12 * dpr);
-            const sF = Math.min(1.17 / dpr, bx.W / (ink[2] + 2 * padB), bx.H / (ink[3] + 2 * padB));
+            const sF = Math.min(1.125 / dpr, bx.W / (ink[2] + 2 * padB), bx.H / (ink[3] + 2 * padB));
             if (sF > 0) ss.push(sF * dpr);
           });
           if (ss.length < 2) return;
@@ -34360,7 +34364,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
               const ix1 = Math.min(nw, _inkA[0] + _inkA[2] + padB),
                 iy1 = Math.min(nh, _inkA[1] + _inkA[3] + padB);
               const sFit = Math.min(W / Math.max(1, ix1 - ix0), H / Math.max(1, iy1 - iy0));
-              s = Math.max(s, Math.min(sFit, 1.17 / dpr));
+              s = Math.max(s, Math.min(sFit, 1.125 / dpr));
               const _smax = parseFloat(im.getAttribute('data-ps-smax'));
               if (_smax > 0) s = Math.min(s, _smax); // v55.79: gleiche Schriftgroesse auf allen Karten der Seite
               _inkLeft = Math.round(-ix0 * s + 2);
@@ -38652,7 +38656,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.82")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.83")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -46430,7 +46434,7 @@ function __psHardReload(btn) {
       } catch (e) {}
       return Promise.all(jobs.map(function (p) { return p.catch(function () {}); }));
     })
-    .then(function () { try { if (window.__psStartBackgroundPause) window.__psStartBackgroundPause(); } catch (e) {} window.__psIntentionalReload = true; location.reload(); }, function () { if (timer) clearTimeout(timer); fail(); });
+    .then(function () { try { if (window.__psClearActiveSession) window.__psClearActiveSession(); } catch (e) {} window.__psIntentionalReload = true; location.reload(); }, function () { if (timer) clearTimeout(timer); fail(); }); // v55.83: Update = laufende Beratung loeschen
 }
 
 function __psAddFloatingLogout() {
