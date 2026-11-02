@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.72';
+        manifestLink.href = 'manifest.webmanifest?v=55.73';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.72').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.73').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.72';
+    window.APP_VERSION = '55.73';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -34141,11 +34141,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         if (hiddenIdx.size > 0) gridTemplate = new Array(3 - hiddenIdx.size).fill('1fr').join(' ');
       }
 
-      // --- 3 Karten nebeneinander – nehmen ~72% der Höhe ---
+      // --- 3 Karten nebeneinander – v55.73: feste 62% der Höhe statt ganze Seite (ohne Preis-Fuss/Leiste
+      // wirkten die Karten sonst endlos lang mit viel Leerraum unten; jetzt ist unten sichtbar Schluss) ---
       const cardsRow = doc.createElement('div');
       // v55.51: Karten in Zeile 1, Preisleisten in Zeile 2 (verbundene Kacheln: eine Leiste ueber mehrere Spalten).
       // Spaltenabstand 0, dafuer 5px Innenabstand je Karte (an Nahtstellen verbundener Karten 0).
-      cardsRow.style.cssText = 'flex:1 1 auto;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr);column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
+      cardsRow.style.cssText = 'flex:0 0 62%;min-height:0;display:grid;grid-template-columns:' + gridTemplate + ';grid-template-rows:minmax(0,1fr);column-gap:0;row-gap:0;margin:0 -5px;overflow:hidden;';
       let _colPos = 0;
       const _colOf = {};
 
@@ -38122,7 +38123,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.72")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.73")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
