@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.103';
+        manifestLink.href = 'manifest.webmanifest?v=55.104';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.103').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.104').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.103';
+    window.APP_VERSION = '55.104';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -35223,7 +35223,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           <div class="share-outro-name">${_esc(_agentName)}</div>
           <div class="share-outro-p" style="margin-top:4px">${_kontaktZeilen}</div>
           <div class="share-outro-qr">
-            <img crossorigin="anonymous" referrerpolicy="no-referrer" src="${qrUrl(_vcard)}" alt="QR Kontakt" />
+            <img data-no-avoid="1" crossorigin="anonymous" referrerpolicy="no-referrer" src="${qrUrl(_vcard)}" alt="QR Kontakt" />
           </div>
           <div class="share-outro-link">KONTAKT SCANNEN &amp; SPEICHERN</div>
         </div>` : `
@@ -36612,7 +36612,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       filename: `Angebot_o2_${new Date().toISOString().split('T')[0]}.pdf`,
       pagebreak: {
         mode: ['css', 'legacy'],
-        avoid: ['tr', 'img', '.offer-canvas-wrap']
+        avoid: ['tr', 'img:not([data-no-avoid])', '.offer-canvas-wrap']
       },
       // ══════════════════════════════════════════════════════════════════
       // v53s: JPEG MIT SEHR HOHER QUALITAET (0.98) – bewusst NICHT PNG
@@ -40176,7 +40176,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.103")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.104")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
