@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.79';
+        manifestLink.href = 'manifest.webmanifest?v=55.80';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.79').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.80').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.79';
+    window.APP_VERSION = '55.80';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33277,7 +33277,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           if (!(W > 20)) W = c.clientWidth - 6;
           if (!(H > 20)) {
             const hd = c.firstElementChild;
-            H = c.clientHeight - Math.max(hd ? hd.offsetHeight : 0, 110) - 6;
+            const hh = hd && hd.offsetHeight > 0 ? Math.max(hd.offsetHeight, 110) : 0;
+            H = c.clientHeight - hh - 6;
           }
         }
         return {
@@ -33301,7 +33302,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           const padB = Math.round(12 * dpr);
           const cap = 1.5 / dpr;
           const s0 = Math.min(cap, W / (ink[2] + 2 * padB), H / (ink[3] + 2 * padB));
-          if (s0 * dpr >= 0.95) return; // Schrift bleibt ohnehin (fast) in Originalgroesse
+          if (s0 >= cap * 0.95) return; // Schrift wird ohnehin so gross wie erlaubt
           const box = {
             x: Math.max(0, Math.floor(ink[0])),
             y: Math.max(0, Math.floor(ink[1])),
@@ -33311,7 +33312,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           if (box.w < 4 || box.h < 4 || box.w * box.h > 12e6) return;
           const lines = _psSegmentInk(sc, box);
           if (!lines || !lines.length) return;
-          const avail = Math.max(10, (W - 4) * dpr - 2 * padB);
+          // Umbruchbreite so waehlen, dass die Schrift danach in Zielgroesse (cap) passt
+          const avail = Math.max(10, (W - 4) / cap - 2 * padB);
           const maxWord = Math.max(...lines.flatMap(l => l.words.map(w => w.w)));
           const L = Math.max(avail, maxWord);
           const placed = [];
@@ -34372,7 +34374,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         });
       } catch (e) {}
     };
-    const makeAllOffersPage = () => {
+    const makeAllOffersPage = onlyIdx => {
+      // v55.80: onlyIdx (0/1/2) = nur dieses Angebot (eigene Seite im Design "Seitenleiste"), Karte ohne eigenen Kopf.
+      const _solo = onlyIdx === 0 || onlyIdx === 1 || onlyIdx === 2;
       // --- Canvas-Bitmaps einbrennen ---
       const tmpClone = sourceOffer.cloneNode(true);
       bakeCanvasesIntoClone(sourceOffer, tmpClone);
@@ -34380,6 +34384,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // --- Wrapper: volle Seite, blau ---
       const wrapper = doc.createElement('div');
       wrapper.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;box-sizing:border-box;background:#eff6ff;overflow:hidden;padding:8px 12px 10px 12px;gap:6px;';
+      if (_solo) wrapper.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;box-sizing:border-box;background:transparent;overflow:hidden;padding:0;';
 
       // --- Fusion-Modus aus React-Brücke lesen ---
       const fusionMode = window.__mergedCanvases || null; // null | '1+2' | '2+3' | 'all'
@@ -34398,7 +34403,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       };
       // v55.76: alle drei verbunden = EIN Blatt (nur Angebot 1, volle Breite, keine Naehte)
       const _jAll = !fusionMode && !!_jn.j12 && !!_jn.j23;
-      const _jGroups = _jAll ? [[0]] : psJoinGroups(!!_jn.j12, !!_jn.j23);
+      const _jGroups = _solo ? [[onlyIdx]] : _jAll ? [[0]] : psJoinGroups(!!_jn.j12, !!_jn.j23);
       const grid = tmpClone.querySelector('.offer-print-grid');
       const cols = grid ? Array.from(grid.children) : [];
 
@@ -34418,11 +34423,17 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         hiddenIdx.add(2);
         gridTemplate = '1fr';
       }
+      if (_solo) {
+        [0, 1, 2].forEach(i => {
+          if (i !== onlyIdx) hiddenIdx.add(i);
+        });
+        gridTemplate = '1fr';
+      }
 
       // v55.52: Leere Angebote (nichts geschrieben/gezeichnet, kein Bild/Bundle, kein Status, kein Preis) kommen
       // nicht ins PDF; die uebrigen Karten teilen sich die Seitenbreite. Verbundene Kacheln zaehlen als eine Gruppe.
       // Sind alle leer, bleiben alle drei (kein leeres PDF).
-      if (!fusionMode) {
+      if (!fusionMode && !_solo) {
         try {
           const _hasPrice = i => {
             const k = 'offer' + (i + 1);
@@ -34483,6 +34494,17 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
           // Rahmenfarbe nach Status
           container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
+          if (_solo) {
+            // Design "Seitenleiste": Titel/Status stehen links im blauen Streifen → Kartenkopf weg, Karte = Notizpapier
+            try {
+              const _hd = container.firstElementChild && /\bp-4\b/.test(container.firstElementChild.className) ? container.firstElementChild : container.querySelector(':scope > .p-4');
+              if (_hd) _hd.style.setProperty('display', 'none', 'important');
+            } catch (e) {}
+            container.style.borderWidth = '1px';
+            container.style.borderColor = '#e2e8f0';
+            container.style.borderRadius = '14px';
+            container.style.background = '#fbfdff';
+          }
           // v55.75: Karte darf nie hoeher als ihre Spalte werden (min-height-Regeln aus Tailwind/Print-CSS
           // drueckten sie sonst ueber den Seitenrand → unterer Rahmen abgeschnitten). Kette bis zur Spalte begrenzen.
           try {
@@ -34628,7 +34650,136 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     let offerPageCount = 0;
     // v58 (Beta): Angebote nebeneinander auf EINER Seite wie auf dem Tablet → PDF hat immer 4 Seiten
     // (Deckblatt, Situation, Angebote, Kosten/Danke). Auf false setzen = bisherige Einzelseiten je Angebot.
-    const PS_PDF_OFFERS_SIDE_BY_SIDE = true;
+    // v55.80: Design "Seitenleiste" (Vorschlag 2) – jedes Angebot bekommt eine eigene Seite: links blauer Streifen
+    // mit Nummer, Titel, Status und Kontakt, rechts die Notizen gross. Beim grossen Blatt (alle verbunden) eine Seite.
+    const PS_PDF_OFFER_SIDEBAR = true;
+    const _esc2 = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;'
+    })[c]);
+    const makeSidebarOfferPage = (idx, isSheet) => {
+      const FONT = "'Segoe UI Variable','Segoe UI',Inter,Roboto,Arial,sans-serif";
+      const root = doc.createElement('div');
+      root.setAttribute('data-ps-sidebar-page', String(idx + 1));
+      root.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:row;box-sizing:border-box;background:#ffffff;overflow:hidden;font-family:' + FONT + ';';
+      // --- linker Streifen ---
+      const side = doc.createElement('div');
+      side.style.cssText = 'position:relative;width:330px;flex:0 0 330px;height:100%;box-sizing:border-box;padding:34px 30px 30px;display:flex;flex-direction:column;color:#ffffff;overflow:hidden;background:linear-gradient(160deg,#0f2d6b 0%,#1d4ed8 70%,#3b82f6 100%);';
+      const deco = doc.createElement('div');
+      deco.style.cssText = 'position:absolute;right:-90px;bottom:-90px;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,0.07);';
+      side.appendChild(deco);
+      const kick = doc.createElement('div');
+      kick.textContent = 'IHR PERSÖNLICHES ANGEBOT';
+      kick.style.cssText = 'position:relative;font-size:11px;letter-spacing:0.18em;opacity:0.78;font-weight:600;';
+      side.appendChild(kick);
+      if (!isSheet) {
+        const big = doc.createElement('div');
+        big.textContent = '0' + (idx + 1);
+        big.style.cssText = 'position:relative;font-size:118px;font-weight:800;line-height:1;margin:26px 0 8px;letter-spacing:-0.04em;';
+        side.appendChild(big);
+      }
+      let title = isSheet ? 'Angebot' : '';
+      if (!isSheet) {
+        try {
+          title = String(offerTitles[idx] || '').trim().replace(/^\d+\.\s*/, '');
+        } catch (e) {}
+        if (!title) title = 'Angebot ' + (idx + 1);
+      }
+      const h2 = doc.createElement('div');
+      h2.textContent = title;
+      h2.style.cssText = 'position:relative;font-size:' + (isSheet ? '44px' : '26px') + ';font-weight:800;line-height:1.15;' + (isSheet ? 'margin-top:30px;' : '');
+      side.appendChild(h2);
+      let st = 'neutral';
+      try {
+        st = canvasStatus['offer' + (idx + 1)] || 'neutral';
+      } catch (e) {}
+      if (st === 'closed' || st === 'open') {
+        const chip = doc.createElement('div');
+        chip.textContent = st === 'closed' ? '✓ Abgeschlossen' : 'Offen';
+        chip.style.cssText = 'position:relative;align-self:flex-start;margin-top:18px;font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;' + (st === 'closed' ? 'background:#22c55e;color:#ffffff;' : 'background:#ffffff;color:#b91c1c;');
+        side.appendChild(chip);
+      }
+      let agent = '';
+      try {
+        agent = String(window.__PS_PROFILE_NAME || localStorage.getItem('ps_link_agent') || LINK_EMPLOYEE || '').replace(/\s+/g, ' ').trim();
+      } catch (e) {}
+      const contact = doc.createElement('div');
+      contact.style.cssText = 'position:relative;margin-top:auto;font-size:12px;line-height:1.6;opacity:0.9;';
+      const cl = [];
+      if (agent) cl.push('<b style="font-weight:700">' + _esc2(agent) + '</b>');
+      try {
+        cl.push(_esc2(CURRENT_SHOP.name) + (CURRENT_SHOP.tel ? ' · ' + _esc2(CURRENT_SHOP.tel) : ''));
+      } catch (e) {}
+      try {
+        cl.push(_esc2(shareDateDisplay));
+      } catch (e) {}
+      contact.innerHTML = cl.join('<br/>');
+      side.appendChild(contact);
+      root.appendChild(side);
+      // --- rechte Seite: Notizen ---
+      const main = doc.createElement('div');
+      main.style.cssText = 'flex:1 1 auto;min-width:0;height:100%;box-sizing:border-box;padding:26px 34px 28px;display:flex;flex-direction:column;gap:14px;background:#ffffff;';
+      try {
+        const hdr = makeShareHeader('IHRE NOTIZEN AUS DER BERATUNG');
+        hdr.style.background = 'transparent';
+        hdr.style.borderBottom = '0';
+        hdr.style.padding = '0';
+        hdr.style.height = '44px';
+        hdr.style.minHeight = '44px';
+        hdr.style.maxHeight = '44px';
+        const t = hdr.querySelector('[data-share-title]');
+        if (t) {
+          t.style.fontSize = '13px';
+          t.style.fontWeight = '700';
+          t.style.color = '#64748b';
+          t.style.letterSpacing = '0.08em';
+          t.style.fontFamily = FONT;
+        }
+        main.appendChild(hdr);
+      } catch (e) {}
+      const body = doc.createElement('div');
+      body.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;';
+      body.appendChild(makeAllOffersPage(idx));
+      main.appendChild(body);
+      root.appendChild(main);
+      return root;
+    };
+    if (PS_PDF_OFFER_SIDEBAR) {
+      try {
+        const _jj = window.__psJoin || {};
+        const _sheet = !window.__mergedCanvases && !!_jj.j12 && !!_jj.j23;
+        let idxs = _sheet ? [0] : [0, 1, 2].filter(i => {
+          try {
+            return !isOfferEmpty(sourceOffer, i);
+          } catch (e) {
+            return true;
+          }
+        });
+        if (!idxs.length) idxs = [0, 1, 2];
+        idxs.forEach(i => {
+          const pg = wrapSharePage('', makeSidebarOfferPage(i, _sheet), {
+            includeHeader: false
+          });
+          stage.appendChild(pg);
+          try {
+            _psFitCardImages(pg);
+          } catch (e) {}
+          offerPageCount++;
+        });
+      } catch (e) {
+        console.warn('Seitenleisten-Layout Fehler, Fallback:', e);
+        try {
+          stage.querySelectorAll('[data-ps-sidebar-page]').forEach(n => {
+            const pg = n.closest('.share-page');
+            if (pg) pg.remove();
+          });
+        } catch (_) {}
+        offerPageCount = 0;
+      }
+    }
+    const PS_PDF_OFFERS_SIDE_BY_SIDE = offerPageCount === 0;
     if (PS_PDF_OFFERS_SIDE_BY_SIDE) {
       try {
         const sideBySidePage = wrapSharePage(getStaticLabel('Page2Header'), makeAllOffersPage());
@@ -38456,7 +38607,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.79")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.80")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
