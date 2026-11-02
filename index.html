@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.99';
+        manifestLink.href = 'manifest.webmanifest?v=55.100';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.99').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.100').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.99';
+    window.APP_VERSION = '55.100';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4329,6 +4329,14 @@ body.pdf-share-mode .sit-chips-panel, body.pdf-share-mode .sit-seg{ display:none
 .sit-as-row.sum b{ color:#1d4ed8; }
 body.pdf-share-mode .sit-answer-tags:has(.sit-answer-sent) .sit-answer-tag{ display:none!important; }
 body.pdf-share-mode .sit-answer-sent{ display:block!important; }
+/* v55.100: Gesamtkosten im Kunden-PDF – Zeilen zweispaltig, Summe ueber volle Breite, mehr Platz in der Kachel */
+.sit-as-row.sum{ grid-column:1 / -1; }
+@media print{
+  .sit-answer-tags .sit-answer-sent.sit-as-grid{ display:grid!important; grid-template-columns:1fr 1fr; column-gap:14px; row-gap:0; font-size:10.5px; line-height:1.25; }
+  .sit-card-grid > div:has(.sit-as-grid) > div.sit-card-canvas{ flex:0 0 auto!important; min-height:22px!important; height:22px!important; }
+}
+body.pdf-share-mode .sit-answer-tags .sit-answer-sent.sit-as-grid{ display:grid!important; grid-template-columns:1fr 1fr; column-gap:14px; row-gap:0; font-size:10.5px; line-height:1.25; }
+body.pdf-share-mode .sit-card-grid > div:has(.sit-as-grid) > div.sit-card-canvas{ height:22px!important; max-height:22px!important; }
 /* v55.85: wie bei den Angeboten – Kacheln vom linken Bildschirmrand weg (Stift am Rand = Android-Zurueck-Geste) */
 @media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid{ padding-left:24px!important; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-tab-bar{ padding-left:24px; } }
 </style>
@@ -10322,7 +10330,7 @@ const sitSentenceEl = (td, itemId) => {
   const h = React.createElement;
   const lines = sitSentence(td, itemId);
   if (!lines.length) return null;
-  return h('div', { className: 'sit-answer-sent' }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
+  return h('div', { className: 'sit-answer-sent' + (lines.some(l => l.row) ? ' sit-as-grid' : '') }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
 };
 // Für Auswertung/Statistik: Chips zählen wie getippter Text (nur wenn Feld sonst leer)
 const sitTextWithChips = td => {
@@ -35089,9 +35097,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       cloneSituation.querySelectorAll('.sit-card-canvas').forEach(area => {
         const _tags = area.previousElementSibling && area.previousElementSibling.classList.contains('sit-answer-tags');
         area.style.flex = 'none';
-        area.style.height = _tags ? '50px' : '70px';
+        const _cg = !!(area.previousElementSibling && area.previousElementSibling.querySelector && area.previousElementSibling.querySelector('.sit-as-grid'));
+        area.style.height = _cg ? '22px' : (_tags ? '50px' : '70px');
         area.style.minHeight = '0';
-        area.style.maxHeight = _tags ? '50px' : '70px';
+        area.style.maxHeight = _cg ? '22px' : (_tags ? '50px' : '70px');
         area.style.overflow = 'hidden';
       });
       // Kachel-Header Button: etwas kompakter
@@ -40160,7 +40169,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.99")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.100")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
