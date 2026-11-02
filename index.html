@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.74';
+        manifestLink.href = 'manifest.webmanifest?v=55.75';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.74').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.75').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.74';
+    window.APP_VERSION = '55.75';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33471,6 +33471,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // Im Schritt-Modus kann die Spalte display:none haben → für Export sichtbar machen
       col.style.display = 'flex';
       col.style.gridColumn = 'auto';
+      // v55.75: Tablet-Regel "unterer Rand weg wegen Preisleiste" darf im PDF nicht greifen
+      try { col.removeAttribute('data-has-footer'); } catch (e) {}
 
       // Buttons (Toolbar) ausblenden
       col.querySelectorAll('button:not([data-print-keep="1"])').forEach(b => {
@@ -34075,7 +34077,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
 
       // --- Wrapper: volle Seite, blau ---
       const wrapper = doc.createElement('div');
-      wrapper.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;box-sizing:border-box;background:#eff6ff;overflow:hidden;padding:8px 12px 6px 12px;gap:6px;';
+      wrapper.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;box-sizing:border-box;background:#eff6ff;overflow:hidden;padding:8px 12px 10px 12px;gap:6px;';
 
       // --- Fusion-Modus aus React-Brücke lesen ---
       const fusionMode = window.__mergedCanvases || null; // null | '1+2' | '2+3' | 'all'
@@ -34165,11 +34167,27 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           col.querySelectorAll('button:not([data-print-keep="1"])').forEach(b => b.style.display = 'none');
           // Container (die Karte mit Rahmen)
           const container = col.querySelector('.offer-canvas-container') || col;
+          // v55.75: Tablet-Regel "unterer Rand weg wegen Preisleiste" darf im PDF nicht greifen → Rahmen geschlossen
+          try { col.removeAttribute('data-has-footer'); } catch (e) {}
           // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
           col.querySelectorAll('[data-ps-price-strip],[data-ps-price-spacer]').forEach(n => n.remove());
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
           // Rahmenfarbe nach Status
           container.style.borderColor = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
+          // v55.75: Karte darf nie hoeher als ihre Spalte werden (min-height-Regeln aus Tailwind/Print-CSS
+          // drueckten sie sonst ueber den Seitenrand → unterer Rahmen abgeschnitten). Kette bis zur Spalte begrenzen.
+          try {
+            container.style.setProperty('min-height', '0', 'important');
+            container.style.setProperty('max-height', '100%', 'important');
+            container.style.setProperty('height', '100%', 'important');
+            let _p = container.parentElement;
+            while (_p && _p !== card) {
+              _p.style.setProperty('min-height', '0', 'important');
+              _p.style.setProperty('max-height', '100%', 'important');
+              _p.style.setProperty('height', '100%', 'important');
+              _p = _p.parentElement;
+            }
+          } catch (e) {}
           // v55.51: verbundene Kacheln – Naht ohne Rahmen/Rundung
           if (_jHasNext) {
             container.style.borderTopRightRadius = '0';
@@ -34277,7 +34295,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
               }
             }
           } catch (e) {}
-          col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;';
+          col.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;min-height:0;max-height:100%;overflow:hidden;';
           card.appendChild(col);
         } else {
           card.style.borderRadius = '14px';
@@ -38122,7 +38140,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.74")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.75")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
