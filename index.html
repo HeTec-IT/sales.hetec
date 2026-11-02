@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.81';
+        manifestLink.href = 'manifest.webmanifest?v=55.82';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.81').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.82').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.81';
+    window.APP_VERSION = '55.82';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33327,7 +33327,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           if (!(W > 20) || !(H > 20) || ink.length !== 4 || !ink.every(isFinite)) return;
           const dpr = parseFloat(im.getAttribute('data-ps-dpr')) || 1;
           const padB = Math.round(12 * dpr);
-          const cap = 1.5 / dpr;
+          const cap = 1.17 / dpr; // v55.82: max. 1,17x (vorher 1,5x – wirkte im PDF zu riesig);
           const s0 = Math.min(cap, W / (ink[2] + 2 * padB), H / (ink[3] + 2 * padB));
           if (s0 >= cap * 0.95) return; // Schrift wird ohnehin so gross wie erlaubt
           const box = {
@@ -33411,7 +33411,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             if (!(bx.W > 20) || !(bx.H > 20) || ink.length !== 4 || !ink.every(isFinite)) return;
             const dpr = parseFloat(im.getAttribute('data-ps-dpr')) || 1;
             const padB = Math.round(12 * dpr);
-            const sF = Math.min(1.5 / dpr, bx.W / (ink[2] + 2 * padB), bx.H / (ink[3] + 2 * padB));
+            const sF = Math.min(1.17 / dpr, bx.W / (ink[2] + 2 * padB), bx.H / (ink[3] + 2 * padB));
             if (sF > 0) ss.push(sF * dpr);
           });
           if (ss.length < 2) return;
@@ -34360,7 +34360,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
               const ix1 = Math.min(nw, _inkA[0] + _inkA[2] + padB),
                 iy1 = Math.min(nh, _inkA[1] + _inkA[3] + padB);
               const sFit = Math.min(W / Math.max(1, ix1 - ix0), H / Math.max(1, iy1 - iy0));
-              s = Math.max(s, Math.min(sFit, 1.5 / dpr));
+              s = Math.max(s, Math.min(sFit, 1.17 / dpr));
               const _smax = parseFloat(im.getAttribute('data-ps-smax'));
               if (_smax > 0) s = Math.min(s, _smax); // v55.79: gleiche Schriftgroesse auf allen Karten der Seite
               _inkLeft = Math.round(-ix0 * s + 2);
@@ -38652,7 +38652,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.81")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.82")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
