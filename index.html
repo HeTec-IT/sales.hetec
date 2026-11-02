@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.86';
+        manifestLink.href = 'manifest.webmanifest?v=55.87';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.86').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.87').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.86';
+    window.APP_VERSION = '55.87';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -38723,7 +38723,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.86")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.87")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -40635,7 +40635,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         position: 'relative',
         minHeight: '38px'
       }
-    }, /*#__PURE__*/React.createElement("input", {
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "canvas-lines",
+      "aria-hidden": "true"
+    }), /*#__PURE__*/React.createElement("input", {
       type: "text",
       value: getDisplayText(item.id),
       onChange: e => handleTextChange(item.id, e.target.value),
