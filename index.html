@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.87';
+        manifestLink.href = 'manifest.webmanifest?v=55.88';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.87').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.88').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.87';
+    window.APP_VERSION = '55.88';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -26961,7 +26961,7 @@ function App() {
   // SCHRITT-MODUS — komplett neue, saubere Implementierung
   // Eigener Canvas-Ref → kein Ref-Sharing mit Grid-Kacheln
   // ═══════════════════════════════════════════════════════
-  const [sitLayoutMode, setSitLayoutMode] = useState('tabs'); // v55.85 Beta: Themen-Reiter als Standard
+  const [sitLayoutMode, setSitLayoutMode] = useState('grid'); // v55.88: Themen-Reiter wieder aus (altes Layout)
   const [sitTab, setSitTab] = useState(1);
   const [currentSitStep, setCurrentSitStep] = useState(0);
   const stepCanvasRef = useRef(null); // Canvas NUR im Overlay
@@ -28644,7 +28644,7 @@ function App() {
       if (offer.displayLanguage) setDisplayLanguage(offer.displayLanguage);
       if (offer.translatedText) setTranslatedText(offer.translatedText);
       if (offer.staticTranslations) setStaticTranslations(offer.staticTranslations);
-      if (offer.sitLayoutMode) setSitLayoutMode(offer.sitLayoutMode);
+      if (offer.sitLayoutMode) setSitLayoutMode(offer.sitLayoutMode === 'tabs' ? 'grid' : offer.sitLayoutMode);
       if (offer.offerLayoutMode) setOfferLayoutMode(offer.offerLayoutMode);
       setShowSavedOffers(false);
       setLoadedOfferId(offer.id); // v48.1: merken, welches Angebot geladen wurde
@@ -28881,7 +28881,7 @@ function App() {
       if (snap.showSavingsBlock !== undefined) setShowSavingsBlock(snap.showSavingsBlock);
       if (snap.dismissSavingsHint !== undefined) setDismissSavingsHint(snap.dismissSavingsHint);
       if (snap.showCostSection !== undefined) setShowCostSection(snap.showCostSection);
-      if (snap.sitLayoutMode) setSitLayoutMode(snap.sitLayoutMode);
+      if (snap.sitLayoutMode) setSitLayoutMode(snap.sitLayoutMode === 'tabs' ? 'grid' : snap.sitLayoutMode);
       if (snap.offerLayoutMode) setOfferLayoutMode(snap.offerLayoutMode);
       if (snap.view) setView(snap.view);
       forceRestoreRedraw(snap.drawnStrokes);
@@ -38723,7 +38723,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.87")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.88")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -40463,23 +40463,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         color: pct === 100 ? '#16a34a' : '#94a3b8',
         flexShrink: 0
       }
-    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'), /*#__PURE__*/React.createElement("button", {
-      type: 'button',
-      "data-ps-sit-tabsmode": "1",
-      onClick: () => setSitLayoutMode('tabs'),
-      title: 'Themen-Reiter',
-      style: {
-        fontSize: '11px',
-        fontWeight: 700,
-        color: '#2563eb',
-        background: '#ffffff',
-        border: '1px solid #dbeafe',
-        borderRadius: '9px',
-        padding: '5px 10px',
-        cursor: 'pointer',
-        flexShrink: 0
-      }
-    }, 'Themen-Ansicht'));
+    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'));
   })(), /*#__PURE__*/React.createElement("div", {
     className: "custom-scrollbar sit-card-grid",
     "data-sit-tabs": sitLayoutMode === 'tabs' ? String(sitTab) : undefined,
