@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.65';
+        manifestLink.href = 'manifest.webmanifest?v=55.66';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.65').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.66').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.65';
+    window.APP_VERSION = '55.66';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -3161,6 +3161,12 @@ body.pdf-share-mode .share-page:last-child{
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
     box-shadow: none !important;
+}
+/* v55.66: Preisleiste haengt direkt an der Kachel (Fuehrungs-Kachel einer Gruppe) – kein eigener unterer Rand/Rundung mehr. */
+.ps-off-card[data-has-footer="1"] .offer-canvas-container{
+    border-bottom-width: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
 }
 /* v55.50 (Beta): Design C (Windows Fluent) - Preisfelder + Summenkarten */
 .ps-fl-box input{
@@ -22748,7 +22754,9 @@ const SmallInputCanvas = ({
   draw,
   stopDrawing,
   triggerRedraw,
-  forceKeyboard = false
+  forceKeyboard = false,
+  fontSize = '15px',
+  fontWeight
 }) => {
   // forceKeyboard: Felder wie 'Angebot gültig bis' brauchen einen echten
   // Datepicker – Handschrift ergibt dort keinen gültigen Datumswert.
@@ -22787,7 +22795,8 @@ const SmallInputCanvas = ({
     } : undefined,
     className: "absolute inset-0 w-full h-full p-2 text-sm font-medium text-slate-700 bg-transparent focus:ring-1 focus:ring-blue-300 transition-colors focus:outline-none",
     style: {
-      fontSize: '15px',
+      fontSize: fontSize,
+      fontWeight: fontWeight,
       paddingLeft: '8px',
       zIndex: isPen ? 2 : 15,
       pointerEvents: isPen ? 'none' : 'auto',
@@ -31952,10 +31961,11 @@ function App() {
       return next;
     });
   };
-  const renderPriceField = (offerKey, field) => {
+  const renderPriceField = (offerKey, field, opts) => {
     const ref = priceFieldRefs[offerKey + '_' + field];
     const strokesKey = psPriceKey(offerKey, field);
     const label = field === 'monatlich' ? 'Monatlich (€)' : 'Einmalig (€)';
+    const big = !!(opts && opts.big);
     const handleChange = e => {
       try {
         if (inputMode === 'keyboard') {
@@ -31976,21 +31986,21 @@ function App() {
       }
     }, /*#__PURE__*/React.createElement("label", {
       style: {
-        fontSize: '12px',
+        fontSize: '11px',
         fontWeight: 400,
         color: '#616161',
-        marginBottom: '3px',
-        lineHeight: 1.2
+        marginBottom: '2px',
+        lineHeight: 1.2,
+        textAlign: big ? 'left' : 'right'
       }
     }, label), /*#__PURE__*/React.createElement("div", {
       className: "relative ps-fl-box",
       "data-ps-fl-box": offerKey + ':' + field,
       style: {
-        height: '40px',
-        background: '#ffffff',
-        border: '1px solid #d1d1d1',
-        borderBottom: '1px solid #8a8a8a',
-        borderRadius: '4px',
+        height: big ? '38px' : '30px',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 0,
         overflow: 'hidden'
       }
     }, /*#__PURE__*/React.createElement(SmallInputCanvas, {
@@ -31999,6 +32009,8 @@ function App() {
       inputKey: strokesKey,
       inputValue: (packagePrices[offerKey] || {})[field] || '',
       inputType: 'text',
+      fontSize: big ? '26px' : '16px',
+      fontWeight: big ? 700 : 600,
       onChange: handleChange,
       placeholder: label.split(' ')[0],
       drawnStrokes: drawnStrokes,
@@ -32057,22 +32069,49 @@ function App() {
       d: "M8 6h8M8 11h2M12 11h2M8 15h2M12 15h2M8 19h8"
     }))) : null));
   };
-  const renderPriceStrip = (offerKey, spanN) => /*#__PURE__*/React.createElement("div", {
-    "data-ps-price-strip": offerKey,
-    className: "ps-price-strip",
-    style: {
-      display: 'grid',
-      gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 150px)',
-      gap: '8px',
-      marginTop: '6px',
-      height: '58px',
-      flex: '0 0 auto',
-      ...(spanN > 1 ? {
-        width: 'calc(' + spanN * 100 + '% - 1.5rem)',
-        position: 'relative'
-      } : {})
-    }
-  }, renderPriceField(offerKey, 'monatlich'), renderPriceField(offerKey, 'einmalig'));
+  // v55.66: Preisleiste sitzt jetzt direkt an der Kachel (kein Abstand, Randfarbe passend zum Status),
+  // wie im Entwurf "Alternative B" – Monatlich gross links, Einmalig klein rechts.
+  const renderPriceStrip = (offerKey, spanN, borderColor) => {
+    const bc = borderColor || '#cbd5e1';
+    return /*#__PURE__*/React.createElement("div", {
+      "data-ps-price-strip": offerKey,
+      className: "ps-price-strip",
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px',
+        marginTop: '0',
+        flex: '0 0 auto',
+        background: '#f8fafc',
+        borderLeft: '4px solid ' + bc,
+        borderRight: '4px solid ' + bc,
+        borderBottom: '4px solid ' + bc,
+        borderTop: '1px solid #e2e8f0',
+        borderBottomLeftRadius: '1rem',
+        borderBottomRightRadius: '1rem',
+        padding: '6px 14px',
+        boxSizing: 'border-box',
+        ...(spanN > 1 ? {
+          width: 'calc(' + spanN * 100 + '% - 1.5rem)',
+          position: 'relative',
+          zIndex: 5
+        } : {})
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: '1 1 0',
+        minWidth: 0
+      }
+    }, renderPriceField(offerKey, 'monatlich', {
+      big: true
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: '0 0 110px',
+        minWidth: 0
+      }
+    }, renderPriceField(offerKey, 'einmalig')));
+  };
   const renderOfferInput = (key, labelKey, type = 'text') => {
     let ref, rawValue, strokesKey;
     const label = getStaticLabel(labelKey);
@@ -38110,7 +38149,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.65")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.66")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42103,9 +42142,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }), /*#__PURE__*/React.createElement("path", {
       d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
     }))) : null;
+    const _psStatus = canvasStatus[key];
+    const _psBorderColor = _psStatus === 'open' ? '#ef4444' : _psStatus === 'closed' ? '#22c55e' : '#cbd5e1';
     return /*#__PURE__*/React.createElement("div", {
       className: `ps-off-card ${orderClass}`,
       "data-join": (jHasPrev ? 'l' : '') + (jHasNext ? 'r' : ''),
+      "data-has-footer": jIsLeader ? '1' : '0',
       style: {
         position: 'relative',
         display: 'flex',
@@ -42157,7 +42199,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onOpenBundleModal: openBundleModal,
       packagePriceData: packagePrices[key],
       triggerToast: triggerToast
-    }), jIsLeader ? renderPriceStrip(key, jN) : /*#__PURE__*/React.createElement("div", {
+    }), jIsLeader ? renderPriceStrip(key, jN, _psBorderColor) : /*#__PURE__*/React.createElement("div", {
       "data-ps-price-spacer": "1",
       style: {
         height: '64px',
