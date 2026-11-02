@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.88';
+        manifestLink.href = 'manifest.webmanifest?v=55.89';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.88').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.89').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.88';
+    window.APP_VERSION = '55.89';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4153,6 +4153,37 @@ body.pdf-share-mode .ps-cost-donut{ display:none!important; }
 /* v55.85: Themen-Reiter – nur die Kacheln des aktiven Reiters, gross und seitenfuellend */
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-tabs]{ grid-template-rows:repeat(2,minmax(0,1fr))!important; grid-auto-rows:minmax(0,1fr)!important; align-content:stretch!important; height:100%!important; min-height:0!important; overflow-y:hidden!important; }
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-tabs] > div{ min-height:0!important; }
+/* v55.89: Seite 1 Schnellauswahl (Antwort-Chips) – nur Bildschirm; Druck/PDF bleibt das alte Kachel-Format */
+.sit-seg{ display:flex; background:#f1f5f9; border-radius:10px; padding:3px; gap:3px; flex-shrink:0; }
+.sit-seg button{ border:none; background:transparent; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:800; color:#64748b; cursor:pointer; font-family:inherit; white-space:nowrap; }
+.sit-seg button.on{ background:#fff; color:#1d4ed8; box-shadow:0 1px 4px rgba(15,45,107,.12); }
+.sit-answer-tags{ display:flex; flex-wrap:wrap; gap:4px; padding:6px 12px 0 12px; flex-shrink:0; }
+.sit-answer-tag{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; background:#eaf2ff; border:1px solid #c3d6f5; color:#1e40af; white-space:nowrap; }
+.sit-chips-panel{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; align-content:start; padding:2px 2px 90px 2px; touch-action:pan-y; }
+.sit-chip-block{ background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+.sit-chip-title{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; color:#1e293b; }
+.sit-chip-title i{ width:26px; height:26px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-style:normal; }
+.sit-chip-label{ font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:6px; }
+.sit-chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
+.sit-chip{ min-height:40px; padding:0 14px; border-radius:999px; border:1.5px solid #e2e8f0; background:#fff; font-size:13px; font-weight:700; color:#334155; cursor:pointer; font-family:inherit; touch-action:manipulation; }
+.sit-chip.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
+.sit-chip.dyn{ display:inline-flex; align-items:center; gap:6px; border-style:dashed; background:#f8fafc; color:#475569; }
+.sit-chip.dyn.has{ border-style:solid; border-color:#93c5fd; background:#eff6ff; color:#1d4ed8; }
+@media screen{
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips]{ flex:0 0 auto!important; height:auto!important; min-height:0!important; grid-template-rows:auto!important; grid-auto-rows:auto!important; align-content:start!important; padding-bottom:0!important; overflow:visible!important; }
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] > div:not([data-sit-offtab]){ min-height:0!important; height:auto!important; }
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-card-canvas{ flex:none!important; height:68px!important; min-height:68px!important; }
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-question-chips{ display:none!important; }
+}
+@media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ padding-left:24px; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-seg{ margin-left:24px; } }
+/* Druck + PDF: Schnellauswahl-Panel/Umschalter weg, alle 10 Kacheln wie frueher (mit Antwort-Tags) */
+@media print{
+.sit-chips-panel,.sit-seg{ display:none!important; }
+.sit-card-grid[data-sit-chips] > div[data-sit-offtab]{ position:static!important; left:auto!important; top:auto!important; width:auto!important; height:auto!important; visibility:visible!important; pointer-events:auto!important; }
+.sit-answer-tags{ padding:3px 8px 0 8px!important; }
+.sit-answer-tag{ font-size:10px!important; padding:2px 7px!important; }
+}
+body.pdf-share-mode .sit-chips-panel, body.pdf-share-mode .sit-seg{ display:none!important; }
 /* v55.85: wie bei den Angeboten – Kacheln vom linken Bildschirmrand weg (Stift am Rand = Android-Zurueck-Geste) */
 @media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid{ padding-left:24px!important; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-tab-bar{ padding-left:24px; } }
 </style>
@@ -9520,6 +9551,7 @@ const offerAreaHasContent = (key, drawnStrokes, textData) => {
 
 // Helper: does page-1 have enough situation content?
 const situationHasContent = (drawnStrokes, textData) => {
+  textData = sitTextWithChips(textData); // v55.89: Schnellauswahl zählt wie getippter Text
   const sitTextKeys = ['Kundenname', 'Rufnummer', 'Anbieter', 'Hardware', 'Nutzung', 'Haushalt', 'Weitere Produkte', 'WeitereProdukte', 'Fernsehen', 'WiFi', 'Gesamtkosten'];
   for (const k of sitTextKeys) {
     if (String(textData && textData[k] || '').trim().length >= ACT_SIT_MIN_CHARS) return true;
@@ -9544,6 +9576,7 @@ const computeResultFromActivity = (drawnStrokes, textData, hasRealDigitalSignatu
   return 'offen';
 };
 const buildCanvasStatsFromDrawnStrokes = (drawnStrokes, textData = {}, extra = {}) => {
+  textData = sitTextWithChips(textData); // v55.89: Schnellauswahl zählt wie getippter Text
   const stats = {};
   const ensure = key => {
     if (!stats[key]) stats[key] = {
@@ -9915,6 +9948,121 @@ const SITUATION_ITEMS = [{
   label: 'Gesamtkosten',
   icon: ICONS.Calculator
 }];
+// ═══════════════════════════════════════════════════════════════════
+// v55.89 (Beta): Seite 1 = Schnellauswahl (Antwort-Chips) als Standard.
+// Antworten liegen als JSON in textData._sitChips → laufen automatisch durch
+// Speichern / Laden / Parken / Reset. "Dynamische Eingabe" = Original-Seite 1
+// (Stift/Tastatur). Im Druck/PDF erscheinen die Antworten als Tags in den
+// alten Kacheln.
+// ═══════════════════════════════════════════════════════════════════
+const SIT_CHIP_KEY = '_sitChips';
+const SIT_CHIP_BLOCKS = [{
+  title: 'Vertrag & Anbieter',
+  icon: ICONS.Globe,
+  groups: ['anb', 'end', 'kuend', 'kost']
+}, {
+  title: 'Gerät & Nutzung',
+  icon: ICONS.Smartphone,
+  groups: ['handy', 'alter', 'daten', 'wichtig']
+}, {
+  title: 'Zuhause & TV',
+  icon: ICONS.Home,
+  groups: ['pers', 'tv', 'wlan', 'geraete']
+}];
+// opts: [Anzeige, Druck-Text (optional)]
+const SIT_CHIP_GROUPS = [{
+  id: 'anb', item: 'Anbieter', label: 'Aktueller Anbieter', multi: false,
+  opts: [['o2', 'Aktuell bei o2'], ['Telekom'], ['Vodafone'], ['1&1'], ['Andere', 'Anderer Anbieter']]
+}, {
+  id: 'end', item: 'Anbieter', label: 'Vertrag endet in', multi: false,
+  opts: [['< 3 Mon.', 'Vertrag endet in < 3 Monaten'], ['3–6 Mon.', 'Vertrag endet in 3–6 Monaten'], ['6–12 Mon.', 'Vertrag endet in 6–12 Monaten'], ['> 12 Mon.', 'Vertrag endet in > 12 Monaten']]
+}, {
+  id: 'kuend', item: 'Anbieter', label: 'Schon gekündigt?', multi: false,
+  opts: [['Ja', 'Bereits gekündigt'], ['Nein', 'Noch nicht gekündigt']]
+}, {
+  id: 'kost', item: 'Gesamtkosten', label: 'Zahlt heute monatlich', multi: false,
+  opts: [['< 30 €', '< 30 € / Monat'], ['30–50 €', '30–50 € / Monat'], ['50–80 €', '50–80 € / Monat'], ['> 80 €', '> 80 € / Monat']]
+}, {
+  id: 'handy', item: 'Hardware', label: 'Handy', multi: false,
+  opts: [['iPhone'], ['Samsung'], ['Pixel'], ['Andere', 'Anderes Handy']]
+}, {
+  id: 'alter', item: 'Hardware', label: 'Alter des Geräts', multi: false,
+  opts: [['< 1 J.', 'Gerät jünger als 1 Jahr'], ['1–2 J.', 'Gerät 1–2 Jahre alt'], ['> 2 J.', 'Gerät älter als 2 Jahre']]
+}, {
+  id: 'daten', item: 'Nutzung', label: 'Datenvolumen', multi: false,
+  opts: [['< 10 GB'], ['10–50 GB'], ['50–100 GB'], ['Unlimited']]
+}, {
+  id: 'wichtig', item: 'Nutzung', label: 'Wichtig', multi: true,
+  opts: [['Streaming'], ['Ausland'], ['Kamera', 'Kamera wichtig'], ['Hotspot']]
+}, {
+  id: 'pers', item: 'Haushalt', label: 'Personen im Haushalt', multi: false,
+  opts: [['1', '1 Person'], ['2', '2 Personen'], ['3', '3 Personen'], ['4', '4 Personen'], ['5+', '5+ Personen']]
+}, {
+  id: 'tv', item: 'Fernsehen', label: 'Fernsehen über', multi: false,
+  opts: [['Kabel'], ['Sat', 'Satellit'], ['Streaming'], ['Kein TV']]
+}, {
+  id: 'wlan', item: 'WiFi', label: 'WLAN zufrieden?', multi: false,
+  opts: [['Ja', 'WLAN zufrieden'], ['Teilweise', 'WLAN teilweise zufrieden'], ['Nein', 'WLAN nicht zufrieden']]
+}, {
+  id: 'geraete', item: 'Weitere Produkte', label: 'Weitere Geräte', multi: true,
+  opts: [['Tablet'], ['Smartwatch'], ['Laptop'], ['Versicherung']]
+}];
+const sitChipsParse = td => {
+  try {
+    const o = JSON.parse(td && td[SIT_CHIP_KEY] || '{}');
+    return o && typeof o === 'object' ? o : {};
+  } catch (e) {
+    return {};
+  }
+};
+// Alle gewählten Antworten eines Themas als Druck-Texte
+const sitChipTags = (td, itemId) => {
+  const sel = sitChipsParse(td);
+  const out = [];
+  SIT_CHIP_GROUPS.forEach(g => {
+    if (g.item !== itemId) return;
+    (sel[g.id] || []).forEach(v => {
+      const o = g.opts.find(x => x[0] === v);
+      if (o) out.push(o[1] || o[0]);
+    });
+  });
+  return out;
+};
+// Für Auswertung/Statistik: Chips zählen wie getippter Text (nur wenn Feld sonst leer)
+const sitTextWithChips = td => {
+  const base = td || {};
+  if (!base[SIT_CHIP_KEY]) return base;
+  const out = { ...base };
+  SITUATION_ITEMS.forEach(it => {
+    if (String(out[it.id] || '').trim()) return;
+    const t = sitChipTags(base, it.id);
+    if (t.length) {
+      const s = t.join(', ');
+      out[it.id] = s.length < 3 ? s + ' ✓' : s;
+    }
+  });
+  return out;
+};
+function SitChipsPanel({ sel, onToggle, onDynamic, custom }) {
+  const h = React.createElement;
+  return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block' }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
+    const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
+    const cur = sel[g.id] || [];
+    const isFirst = SIT_CHIP_GROUPS.find(x => x.item === g.item).id === g.id;
+    const cu = isFirst ? custom(g.item) : '';
+    return h('div', { key: g.id }, h('div', { className: 'sit-chip-label' }, g.label), h('div', { className: 'sit-chip-row' }, g.opts.map(o => h('button', {
+      key: o[0],
+      type: 'button',
+      className: 'sit-chip' + (cur.includes(o[0]) ? ' on' : ''),
+      onClick: () => onToggle(g, o[0])
+    }, o[0])), h('button', {
+      key: '_dyn',
+      type: 'button',
+      className: 'sit-chip dyn' + (cu ? ' has' : ''),
+      onClick: () => onDynamic(g.item)
+    }, h(Icon, { d: ICONS.Pen, size: 14 }), cu || 'Dynamische Eingabe')));
+  }))));
+}
 const STATIC_LABELS = {
   'Offer1Title': '1. Hardware, Anbieter & Nutzung',
   'Offer2Title': '2. Haushalt und weitere Produkte',
@@ -26961,7 +27109,15 @@ function App() {
   // SCHRITT-MODUS — komplett neue, saubere Implementierung
   // Eigener Canvas-Ref → kein Ref-Sharing mit Grid-Kacheln
   // ═══════════════════════════════════════════════════════
-  const [sitLayoutMode, setSitLayoutMode] = useState('grid'); // v55.88: Themen-Reiter wieder aus (altes Layout)
+  // v55.89: Standard = Schnellauswahl (Chips); "Dynamische Eingabe" = Original-Seite 1 (grid). Wahl pro Gerät gemerkt.
+  const [sitLayoutMode, setSitLayoutMode] = useState(() => {
+    try {
+      return localStorage.getItem('ps_sit_pref') === 'grid' ? 'grid' : 'chips';
+    } catch (e) {
+      return 'chips';
+    }
+  });
+  const [sitFromChips, setSitFromChips] = useState(false);
   const [sitTab, setSitTab] = useState(1);
   const [currentSitStep, setCurrentSitStep] = useState(0);
   const stepCanvasRef = useRef(null); // Canvas NUR im Overlay
@@ -30423,6 +30579,46 @@ function App() {
   const getCurrentQuestion = () => questionsData[activeCategory || 'default'][questionIndex];
   // v47.3: Debounce-Timer für Auto-Übersetzung beim Tippen
   const autoTranslateTimerRef = useRef(null);
+  // ── v55.89: Seite 1 Schnellauswahl ──────────────────────────────────
+  const toggleSitChip = (g, label) => {
+    setTextData(prev => {
+      const cur = { ...sitChipsParse(prev) };
+      let arr = (cur[g.id] || []).slice();
+      const i = arr.indexOf(label);
+      if (i >= 0) arr.splice(i, 1);
+      else if (g.multi) arr.push(label);
+      else arr = [label];
+      if (arr.length) cur[g.id] = arr;
+      else delete cur[g.id];
+      const next = { ...prev };
+      if (Object.keys(cur).length) next[SIT_CHIP_KEY] = JSON.stringify(cur);
+      else delete next[SIT_CHIP_KEY];
+      return next;
+    });
+  };
+  // Kurzinfo am "Dynamische Eingabe"-Chip, wenn dort schon getippt/geschrieben wurde
+  const sitCustomSnippet = itemId => {
+    const t = String(textData[itemId] || '').trim();
+    if (t) return '✎ ' + (t.length > 16 ? t.slice(0, 15) + '…' : t);
+    const sk = 'sit_' + itemId.replace(/\s+/g, '');
+    const pen = (drawnStrokes[sk] || []).filter(s => s && s.tool !== 'eraser').length;
+    return pen > 0 ? '✎ Handschrift' : '';
+  };
+  const openSitDynamic = itemId => {
+    const idx = SITUATION_ITEMS.findIndex(x => x.id === itemId);
+    setSitFromChips(true);
+    setCurrentSitStep(Math.max(0, idx));
+    setSitLayoutMode('step');
+  };
+  const changeSitMode = m => {
+    setSitFromChips(false);
+    setSitLayoutMode(m);
+    try {
+      localStorage.setItem('ps_sit_pref', m);
+    } catch (e) {}
+    setTimeout(() => setRedrawCounter(r => r + 1), 80);
+    setTimeout(() => setRedrawCounter(r => r + 1), 350);
+  };
   const handleTextChange = (key, val) => {
     // Immer den deutschen Quelltext aktualisieren
     setTextData(prev => ({
@@ -32392,7 +32588,7 @@ function App() {
     // Namen, Rufnummern, Datum & reine Zahlen werden NICHT übersetzt.
     (async () => {
       try {
-        const EXCLUDE_KEYS = ['AgentName', 'DateValue', 'OfferValidUntil'];
+        const EXCLUDE_KEYS = ['AgentName', 'DateValue', 'OfferValidUntil', '_sitChips'];
         const cached = translatedTextLiveRef.current?.[targetCode] || {};
         const entries = Object.entries(textDataLiveRef.current || {}).filter(([k, v]) => !EXCLUDE_KEYS.includes(k) && !k.toLowerCase().includes('kundenname') && !k.toLowerCase().includes('rufnummer') && typeof v === 'string' && v.trim().length > 1 && /[A-Za-zÄÖÜäöüß]/.test(v) &&
         // nur Texte mit Buchstaben
@@ -33650,12 +33846,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         card.removeAttribute('data-sit-offtab');
       });
       cloneSituation.querySelectorAll('.sit-tab-bar').forEach(n => n.remove());
+      // v55.89: Schnellauswahl-Panel im PDF entfernen (Antworten stehen als Tags in den Kacheln)
+      cloneSituation.querySelectorAll('.sit-chips-panel').forEach(n => n.remove());
       // Canvas/Eingabe-Bereich jeder Kachel (letztes Kind = Zeichenfläche)
       cloneSituation.querySelectorAll('.sit-card-canvas').forEach(area => {
+        const _tags = area.previousElementSibling && area.previousElementSibling.classList.contains('sit-answer-tags');
         area.style.flex = 'none';
-        area.style.height = '70px';
+        area.style.height = _tags ? '50px' : '70px';
         area.style.minHeight = '0';
-        area.style.maxHeight = '70px';
+        area.style.maxHeight = _tags ? '50px' : '70px';
         area.style.overflow = 'hidden';
       });
       // Kachel-Header Button: etwas kompakter
@@ -33671,6 +33870,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         grid.style.gridTemplateRows = 'repeat(5, minmax(200px, 1fr))';
         grid.style.overflowY = 'auto';
         grid.removeAttribute('data-sit-tabs');
+        grid.removeAttribute('data-sit-chips');
       });
     } catch (e) {}
     cloneSituation.style.cssText = ['display:flex', 'flex-direction:row', 'width:100%', 'height:100%', 'max-height:100%', 'overflow:hidden', 'box-sizing:border-box', 'padding:0', 'margin:0', 'background:#eff6ff'].join(';') + ';';
@@ -38723,7 +38923,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.88")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.89")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -40414,7 +40614,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         cursor: 'pointer'
       }
     }, '▦ Alle Felder'));
-  })(), sitLayoutMode === 'grid' && (() => {
+  })(), (sitLayoutMode === 'grid' || sitLayoutMode === 'chips') && (() => {
     // v55.7: Fortschritt zaehlte bisher JEDEN Strich/jeden Buchstaben als
     // "ausgefuellt" - lief also schon bei einem einzelnen Tupfer weiter,
     // obwohl der gruene Punkt am Feld selbst noch nicht an war. Jetzt exakt
@@ -40428,7 +40628,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // v55.8: Nur "Anbieter" darf ab 2 Zeichen/Strichen gruen sein (wegen
       // "o2"). Alle anderen Felder bleiben bei 3 (auf Wunsch).
       const _min = item.id === 'Anbieter' ? 2 : 3;
-      return _text.length >= _min || Math.max(0, _pen - _era) >= _min;
+      return sitChipTags(textData, item.id).length > 0 || _text.length >= _min || Math.max(0, _pen - _era) >= _min;
     }).length;
     const pct = Math.round(filled / SITUATION_ITEMS.length * 100);
     return /*#__PURE__*/React.createElement("div", {
@@ -40440,6 +40640,16 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         flexShrink: 0
       }
     }, /*#__PURE__*/React.createElement("div", {
+      className: "sit-seg"
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: sitLayoutMode === 'chips' ? 'on' : '',
+      onClick: () => sitLayoutMode !== 'chips' && changeSitMode('chips')
+    }, "Schnellauswahl"), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: sitLayoutMode === 'grid' ? 'on' : '',
+      onClick: () => sitLayoutMode !== 'grid' && changeSitMode('grid')
+    }, "Dynamische Eingabe")), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1,
         height: '8px',
@@ -40467,6 +40677,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   })(), /*#__PURE__*/React.createElement("div", {
     className: "custom-scrollbar sit-card-grid",
     "data-sit-tabs": sitLayoutMode === 'tabs' ? String(sitTab) : undefined,
+    "data-sit-chips": sitLayoutMode === 'chips' ? '1' : undefined,
     style: {
       flex: 1,
       display: 'grid',
@@ -40503,10 +40714,14 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const _era = (drawnStrokes && drawnStrokes[sitKey] || []).filter(s => s && s.tool === 'eraser' && s.points && s.points.length >= 3).length;
     // v55.8: Nur "Anbieter" ab 2 (wegen "o2"), alle anderen Felder bei 3.
     const _minLen = item.id === 'Anbieter' ? 2 : 3;
-    const hasContent = _text.length >= _minLen || Math.max(0, _pen - _era) >= _minLen;
+    const _chipTags = sitChipTags(textData, item.id);
+    const hasContent = _chipTags.length > 0 || _text.length >= _minLen || Math.max(0, _pen - _era) >= _minLen;
     // v55.85: Themen-Reiter – Kacheln anderer Reiter bleiben gemountet (Canvas behaelt Groesse), nur ausserhalb
     const _tabsMode = sitLayoutMode === 'tabs';
-    const _hideTab = _tabsMode && SIT_TAB_OF[item.id] !== sitTab;
+    // v55.89: Schnellauswahl – nur Kundenname + Rufnummer bleiben sichtbar (Stift), die uebrigen Kacheln
+    // bleiben gemountet (fuer Druck/PDF/Dynamische Eingabe), nur ausserhalb des Bildschirms.
+    const _chipsMode = sitLayoutMode === 'chips';
+    const _hideTab = _tabsMode && SIT_TAB_OF[item.id] !== sitTab || _chipsMode && item.id !== 'Kundenname' && item.id !== 'Rufnummer';
     const _bigTab = _tabsMode && !_hideTab && !!SIT_TAB_BIG[item.id];
     return /*#__PURE__*/React.createElement("div", {
       key: item.id,
@@ -40612,7 +40827,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         boxShadow: hasContent ? '0 0 0 2px #fff,0 0 0 4px #4ade80' : 'none',
         transition: 'all 0.3s'
       }
-    })), /*#__PURE__*/React.createElement("div", {
+    })), _chipTags.length > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "sit-answer-tags"
+    }, _chipTags.map((t, ti) => /*#__PURE__*/React.createElement("span", {
+      key: ti,
+      className: "sit-answer-tag"
+    }, t))), /*#__PURE__*/React.createElement("div", {
       className: "sit-card-canvas",
       style: {
         flex: 1,
@@ -40699,7 +40919,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         zIndex: inputMode === 'pen' ? 30 : 0
       }
     })));
-  })), sitLayoutMode === 'step' && (() => {
+  })), sitLayoutMode === 'chips' && /*#__PURE__*/React.createElement(SitChipsPanel, {
+    sel: sitChipsParse(textData),
+    onToggle: toggleSitChip,
+    onDynamic: openSitDynamic,
+    custom: sitCustomSnippet
+  }), sitLayoutMode === 'step' && (() => {
     const item = SITUATION_ITEMS[currentSitStep];
     const sitKey = STEP_KEYS[currentSitStep];
     const questions = (questionsData[item.id] || questionsData['default'] || []).slice(0, 2);
@@ -40811,7 +41036,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const goBack = () => setCurrentSitStep(s => Math.max(0, s - 1));
     const goNext = () => {
       if (currentSitStep === SITUATION_ITEMS.length - 1) {
-        setSitLayoutMode('grid');
+        setSitLayoutMode(sitFromChips ? 'chips' : 'grid');
+        setSitFromChips(false);
         setTimeout(() => setRedrawCounter(r => r + 1), 80);
       } else {
         setCurrentSitStep(s => s + 1);
@@ -40836,7 +41062,23 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         gap: '5px',
         flexShrink: 0
       }
-    }, SITUATION_ITEMS.map((it, i) => {
+    }, sitFromChips && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => changeSitMode('chips'),
+      style: {
+        height: '36px',
+        padding: '0 14px',
+        borderRadius: '10px',
+        border: '1.5px solid #2563eb',
+        background: '#2563eb',
+        color: '#fff',
+        fontSize: '12px',
+        fontWeight: 800,
+        cursor: 'pointer',
+        flexShrink: 0,
+        marginRight: '6px'
+      }
+    }, "← Schnellauswahl"), SITUATION_ITEMS.map((it, i) => {
       const sk = STEP_KEYS[i];
       const filled = !!(getDisplayText(it.id) || drawnStrokes[sk] && drawnStrokes[sk].length);
       const act = i === currentSitStep;
