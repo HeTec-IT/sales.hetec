@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.58';
+        manifestLink.href = 'manifest.webmanifest?v=55.60';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.58').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.60').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.58';
+    window.APP_VERSION = '55.60';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33932,6 +33932,45 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         });
       } catch (e) {}
     };
+    // v55.59: Getippter Text = verkleinerte Kopie des Tablet-Layouts (nie vergroessert, kein anderer Umbruch).
+    const _psScaleTypedText = d => {
+      try {
+        d.querySelectorAll('div[data-pdf-textarea][data-ps-src-w]').forEach(el => {
+          try {
+            const srcW = parseFloat(el.getAttribute('data-ps-src-w'));
+            const W = el.clientWidth;
+            if (!(srcW > 0) || !(W > 0)) return;
+            // Breiteste Zeile messen (ohne Umbruch). Passt sie bei mindestens 62 % der Schrift in die Karte,
+            // wird so weit verkleinert, dass keine Zeile umbricht ("Samsung Galaxy S25 Ultra" in einer Zeile).
+            // Sonst (sehr lange Zeilen) wie auf dem Tablet umbrechen lassen: gleichmaessig an die Kartenbreite angepasst.
+            let s = Math.min(1, W / srcW);
+            try {
+              el.style.setProperty('white-space', 'pre', 'important'); // 'pre' (nicht nowrap): Zeilenumbrueche bleiben erhalten
+              const sw = el.scrollWidth;
+              el.style.setProperty('white-space', 'pre-wrap', 'important');
+              if (sw > W + 1) {
+                const sFit = (W - 1) / sw;
+                if (sFit >= 0.62) s = Math.min(s, sFit);
+              }
+            } catch (e) {}
+            if (s > 0.985) return;
+            const px = v => {
+              const n = parseFloat(v);
+              return isFinite(n) ? n : null;
+            };
+            const fs = px(el.style.getPropertyValue('font-size'));
+            if (fs) el.style.setProperty('font-size', Math.max(8, fs * s).toFixed(2) + 'px', 'important');
+            const lh = el.style.getPropertyValue('line-height');
+            if (lh && /px$/.test(lh) && px(lh)) el.style.setProperty('line-height', (px(lh) * s).toFixed(2) + 'px', 'important');
+            const pad = el.style.getPropertyValue('padding');
+            if (pad) {
+              const parts = pad.split(/\s+/).map(x => px(x));
+              if (parts.every(x => x !== null)) el.style.setProperty('padding', parts.map(x => (x * s).toFixed(2) + 'px').join(' '), 'important');
+            }
+          } catch (e) {}
+        });
+      } catch (e) {}
+    };
     const makeAllOffersPage = () => {
       // --- Canvas-Bitmaps einbrennen ---
       const tmpClone = sourceOffer.cloneNode(true);
@@ -34100,6 +34139,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
                 if (cs.padding) ta.style.padding = cs.padding;
                 // Ohne dieses Attribut ignoriert der PDF-Klon die eigene Schriftgroesse (→ Text im PDF zu klein).
                 ta.setAttribute('data-ps-pdf-font', '1');
+                // v55.59: Breite der Tablet-Karte merken → im PDF wird getippter Text bei schmaleren Karten (3 Angebote)
+                // gleichmaessig verkleinert, damit die Zeilen genauso umbrechen wie auf dem Tablet.
+                const _tw = srcTa.getBoundingClientRect().width;
+                if (_tw > 50) ta.setAttribute('data-ps-src-w', String(Math.round(_tw)));
               }
             } catch (e) {}
           }
@@ -34875,6 +34918,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             } catch (e) {}
             try {
               _psContainBakedImages(clonedDoc);
+            } catch (e) {}
+            try {
+              _psScaleTypedText(clonedDoc);
             } catch (e) {}
 
             // ---- Leere letzte Seite entfernen (falls irgendwo ein Spacer entsteht) ----
@@ -37999,7 +38045,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.58")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.60")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
