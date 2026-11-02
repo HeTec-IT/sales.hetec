@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.62';
+        manifestLink.href = 'manifest.webmanifest?v=55.63';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.62').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.63').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.62';
+    window.APP_VERSION = '55.63';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -33884,10 +33884,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       const fmtE = v => v > 0 ? v.toFixed(2).replace('.', ',') + ' €' : '–';
       const band = doc.createElement('div');
       band.setAttribute('data-ps-pdf-totals', '1');
-      band.style.cssText = 'flex:0 0 auto;background:#0f2d6b;color:#ffffff;border-radius:12px;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;';
+      band.style.cssText = 'flex:0 0 auto;background:#f8fafc;color:#0f172a;border:1px solid #d1d5db;border-radius:12px;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;';
       const lab = doc.createElement('div');
       lab.textContent = 'Ihre Gesamtkosten';
-      lab.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;opacity:0.75;';
+      lab.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#616161;';
       const side = doc.createElement('div');
       side.style.cssText = 'display:flex;align-items:center;';
       const grp = (labelTxt, valTxt, suffix) => {
@@ -33895,14 +33895,14 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         g.style.cssText = 'display:flex;align-items:baseline;gap:10px;';
         const l = doc.createElement('span');
         l.textContent = labelTxt;
-        l.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;opacity:0.75;';
+        l.style.cssText = 'font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#616161;';
         const v = doc.createElement('span');
-        v.style.cssText = 'font-size:34px;font-weight:700;letter-spacing:-0.01em;';
+        v.style.cssText = 'font-size:34px;font-weight:700;letter-spacing:-0.01em;color:#0f172a;';
         v.textContent = valTxt;
         if (suffix) {
           const s = doc.createElement('small');
           s.textContent = suffix;
-          s.style.cssText = 'font-size:14px;font-weight:400;opacity:0.8;margin-left:4px;';
+          s.style.cssText = 'font-size:14px;font-weight:400;color:#616161;margin-left:4px;';
           v.appendChild(s);
         }
         g.appendChild(l);
@@ -33913,7 +33913,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       const sumM = offerData.monatlich1 || 0;
       side.appendChild(grp('Einmalig', fmtE(sumE)));
       const sep = doc.createElement('div');
-      sep.style.cssText = 'width:1px;height:38px;background:rgba(255,255,255,0.25);margin:0 26px;';
+      sep.style.cssText = 'width:1px;height:38px;background:#d1d5db;margin:0 26px;';
       side.appendChild(sep);
       side.appendChild(grp('Monatlich', fmtE(sumM), sumM > 0 ? '/ Monat' : null));
       band.appendChild(lab);
@@ -34120,8 +34120,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
           col.querySelectorAll('[data-ps-price-strip],[data-ps-price-spacer]').forEach(n => n.remove());
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
-          // v55.62: im PDF immer neutraler Rahmen (keine Status-Farben grün/rot mehr) – nur das blaue Gesamtkosten-Band bleibt farbig.
-          const _bc = '#cbd5e1';
+          // Rahmenfarbe – gemerkt fuer den Preis-Fuss darunter (v55.61)
+          const _bc = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
           container.style.borderColor = _bc;
           _borderColorOf[i] = _bc;
           // Karte geht nahtlos in den Preis-Fuss darunter ueber: kein eigener unterer Rand/Rundung.
@@ -38108,7 +38108,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.62")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.63")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
