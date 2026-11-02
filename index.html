@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.93';
+        manifestLink.href = 'manifest.webmanifest?v=55.94';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.93').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.94').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.93';
+    window.APP_VERSION = '55.94';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10103,6 +10103,8 @@ const SIT_CHIP_GROUPS = [{
 // ── v55.90/91: Kosten-Schnellerfassung (Preisfelder direkt in den Kategorien) ───────────────
 // Ablage: textData._sitCost = JSON {p: Personen, v: Mobilfunk-Vertraege, r: {key:{n,p}}, t: {key: Summe}}
 // Mobil/Festnetz/TV spiegeln costState (Seitenleiste "Kosten (Ist)"), Hardware/Weitere liegen nur hier.
+// v55.94: Seitenleiste "Kosten (Ist)" in der Schnellauswahl ausgeblendet (Preise stehen direkt in den Kategorien). true = wieder einblenden.
+const SIT_KOSTEN_IST_SICHTBAR = false;
 const SIT_COST_KEY = '_sitCost';
 const SIT_COST_ROWS = [
   { k: 'mobile', label: 'Mobilfunk', pill: 'Mobilfunk', print: 'Mobilfunk', icon: ICONS.Phone, cs: true },
@@ -39427,7 +39429,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.93")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.94")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42417,7 +42419,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       color: '#1e293b',
       letterSpacing: '0.01em'
     }
-  }, "Technische Situation")), /*#__PURE__*/React.createElement("div", {
+  }, "Aktueller WLAN-Anbieter")), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '7px 10px',
       display: 'flex',
@@ -42842,10 +42844,60 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         transition: 'all 0.15s'
       }
     }, "✓ Übernehmen"));
-  })())), document.body), /*#__PURE__*/React.createElement("button", {
+  })())), document.body))), /*#__PURE__*/React.createElement("div", {
+    className: "print-hide-roaming",
+    style: {
+      background: '#ffffff',
+      borderRadius: '12px',
+      border: '1px solid #e8f0fe',
+      boxShadow: '0 1px 3px rgba(37,99,235,0.05)',
+      overflow: 'hidden'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '10px 14px',
+      borderBottom: '1px solid #f1f5f9',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '7px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '22px',
+      height: '22px',
+      borderRadius: '7px',
+      background: 'linear-gradient(135deg,#06b6d4,#3b82f6)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: ICONS.Wifi,
+    size: 11,
+    style: {
+      color: 'white'
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '12px',
+      fontWeight: 800,
+      color: '#1e293b',
+      letterSpacing: '0.01em'
+    }
+  }, "WLAN-Planer")), /*#__PURE__*/React.createElement("div", {
+    className: "ps-tools",
+    style: {
+      padding: '7px 10px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowWlanModal(true),
     style: {
       width: '100%',
+      gridColumn: '1 / -1',
       display: 'flex',
       alignItems: 'center',
       gap: '9px',
@@ -43116,6 +43168,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }, btn.label))))), /*#__PURE__*/React.createElement("div", {
     className: "print-hide-kosten",
     style: {
+      display: !SIT_KOSTEN_IST_SICHTBAR && sitLayoutMode === 'chips' ? 'none' : undefined,
       background: '#ffffff',
       borderRadius: '12px',
       border: '1px solid #e8f0fe',
