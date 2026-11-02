@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.75';
+        manifestLink.href = 'manifest.webmanifest?v=55.76';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.75').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.76').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.75';
+    window.APP_VERSION = '55.76';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -3161,6 +3161,12 @@ body.pdf-share-mode .share-page:last-child{
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
     box-shadow: none !important;
+}
+/* v55.76: alle drei verbunden = ein Blatt. Canvas nicht quadratisch aus der Breite wachsen lassen
+   (sonst 1200px hoch), sondern die Kartenhoehe wie bei drei Karten beibehalten. */
+.ps-off-card[data-ps-sheet="1"] .offer-canvas-container canvas.drawing-canvas{
+    position: absolute !important;
+    inset: 0 !important;
 }
 /* v55.66: Preisleiste haengt direkt an der Kachel (Fuehrungs-Kachel einer Gruppe) – kein eigener unterer Rand/Rundung mehr. */
 .ps-off-card[data-has-footer="1"] .offer-canvas-container{
@@ -21884,7 +21890,8 @@ const OfferCanvas = React.memo(({
   htmlOverlayProp,
   bundleInsertCount,
   viewOfferCount,
-  getStaticLabel
+  getStaticLabel,
+  bigTitle = false
 }) => {
   const SIZE_DIFFERENCE_THRESHOLD = 5;
 
@@ -22432,9 +22439,17 @@ const OfferCanvas = React.memo(({
     className: "flex items-center gap-3 text-lg font-bold text-slate-800"
   }, /*#__PURE__*/React.createElement(Icon, {
     d: icon,
-    size: 20,
+    size: bigTitle ? 28 : 20,
     className: "text-blue-600"
-  }), /*#__PURE__*/React.createElement("span", null, label)), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("span", {
+    "data-ps-offer-title": bigTitle ? 'big' : undefined,
+    style: bigTitle ? {
+      fontSize: '28px',
+      fontWeight: 800,
+      letterSpacing: '-0.01em',
+      lineHeight: 1.1
+    } : undefined
+  }, label)), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-2 offer-toolbar-icons"
   }, (statusKey === 'offer1' || statusKey === 'offer2' || statusKey === 'offer3') && typeof onOpenBundleModal === 'function' ? /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -34094,7 +34109,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         j12: false,
         j23: false
       };
-      const _jGroups = psJoinGroups(!!_jn.j12, !!_jn.j23);
+      // v55.76: alle drei verbunden = EIN Blatt (nur Angebot 1, volle Breite, keine Naehte)
+      const _jAll = !fusionMode && !!_jn.j12 && !!_jn.j23;
+      const _jGroups = _jAll ? [[0]] : psJoinGroups(!!_jn.j12, !!_jn.j23);
       const grid = tmpClone.querySelector('.offer-print-grid');
       const cols = grid ? Array.from(grid.children) : [];
 
@@ -34109,6 +34126,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       else if (fusionMode === '2+3') {
         hiddenIdx.add(2);
       } // offer3 (idx 2) ausgeblendet
+      if (_jAll) {
+        hiddenIdx.add(1);
+        hiddenIdx.add(2);
+        gridTemplate = '1fr';
+      }
 
       // v55.52: Leere Angebote (nichts geschrieben/gezeichnet, kein Bild/Bundle, kein Status, kein Preis) kommen
       // nicht ins PDF; die uebrigen Karten teilen sich die Seitenbreite. Verbundene Kacheln zaehlen als eine Gruppe.
@@ -38140,7 +38162,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.75")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.76")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42094,7 +42116,66 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const jHasPrev = jPos > 0;
     const jIsLeader = jPos === 0;
     const jBtnOn = idx === 0 ? jEff.j12 : jEff.j23;
-    const joinBtn = idx < 2 && psWide && offerLayoutMode !== 'step' ? /*#__PURE__*/React.createElement("button", {
+    // v55.76: alle drei verbunden → EIN grosses Blatt ("Angebot"), ein Status, eine Schreibflaeche (Daten von Angebot 1).
+    const jAll = !!(jEff.j12 && jEff.j23);
+    const mkJoinBtn = (which, posStyle) => {
+      const on = which === '12' ? jEff.j12 : jEff.j23;
+      return /*#__PURE__*/React.createElement("button", {
+        key: 'joinbtn' + which,
+        type: 'button',
+        "data-ps-join-btn": which,
+        title: on ? 'Verbindung aufheben' : 'Kacheln verbinden',
+        "aria-label": on ? 'Verbindung aufheben' : 'Kacheln verbinden',
+        onClick: () => toggleJoin(which === '12' ? 'joined12' : 'joined23'),
+        style: {
+          position: 'absolute',
+          top: '14px',
+          ...posStyle,
+          zIndex: 80,
+          width: '26px',
+          height: '26px',
+          borderRadius: '50%',
+          padding: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          border: on ? '1px solid #0067c0' : '1px solid #d1d1d1',
+          background: on ? '#0067c0' : '#ffffff',
+          color: on ? '#ffffff' : '#616161',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.25)'
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2.2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+      })));
+    };
+    if (jAll && idx > 0) {
+      // Angebot 2/3 im Blatt-Modus ausgeblendet (Inhalte bleiben gespeichert, kommen beim Trennen zurueck)
+      return /*#__PURE__*/React.createElement("div", {
+        key: key,
+        className: `ps-off-card ${orderClass}`,
+        "data-ps-sheet-hidden": "1",
+        style: {
+          display: 'none'
+        }
+      });
+    }
+    const joinBtn = jAll ? /*#__PURE__*/React.createElement(React.Fragment, null, mkJoinBtn('12', {
+      left: 'calc(33.333% - 13px)'
+    }), mkJoinBtn('23', {
+      left: 'calc(66.666% - 13px)'
+    })) : idx < 2 && psWide && offerLayoutMode !== 'step' ? /*#__PURE__*/React.createElement("button", {
       key: 'joinbtn',
       type: 'button',
       "data-ps-join-btn": idx === 0 ? '12' : '23',
@@ -42137,16 +42218,20 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const _psBorderColor = _psStatus === 'open' ? '#ef4444' : _psStatus === 'closed' ? '#22c55e' : '#cbd5e1';
     return /*#__PURE__*/React.createElement("div", {
       className: `ps-off-card ${orderClass}`,
-      "data-join": (jHasPrev ? 'l' : '') + (jHasNext ? 'r' : ''),
+      "data-join": jAll ? '' : (jHasPrev ? 'l' : '') + (jHasNext ? 'r' : ''),
       "data-has-footer": jIsLeader ? '1' : '0',
+      "data-ps-sheet": jAll ? '1' : undefined,
       style: {
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        ...(jN > 1 ? {
+        ...(jAll ? {
+          gridColumn: '1 / -1'
+        } : {}),
+        ...(!jAll && jN > 1 ? {
           zIndex: 10 - jPos
         } : {}),
-        ...(jHasNext ? {
+        ...(!jAll && jHasNext ? {
           marginRight: '-1.5rem'
         } : {}),
         ...(hidden ? {
@@ -42159,7 +42244,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       key: key,
       canvasRef: ref,
       icon: icon,
-      label: getStaticLabel(labelKey),
+      label: jAll ? 'Angebot' : getStaticLabel(labelKey),
+      bigTitle: jAll,
       getStaticLabel: getStaticLabel,
       statusKey: key,
       status: canvasStatus[key],
@@ -42190,7 +42276,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onOpenBundleModal: openBundleModal,
       packagePriceData: packagePrices[key],
       triggerToast: triggerToast
-    }), jIsLeader ? renderPriceStrip(key, jN, _psBorderColor) : /*#__PURE__*/React.createElement("div", {
+    }), jIsLeader ? renderPriceStrip(key, jAll ? 1 : jN, _psBorderColor) : /*#__PURE__*/React.createElement("div", {
       "data-ps-price-spacer": "1",
       style: {
         height: '64px',
