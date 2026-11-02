@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.101';
+        manifestLink.href = 'manifest.webmanifest?v=55.102';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.101').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.102').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.101';
+    window.APP_VERSION = '55.102';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -34319,11 +34319,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
            flex:none !important;
            width:96px !important;
            height:96px !important;
-           padding:6px !important;
+           padding:0 !important;
            margin:6px auto 4px auto !important;
            overflow:hidden !important;
          }
-         .pdf-share-mode .share-outro-qr img{width:84px !important;height:84px !important;object-fit:contain !important;display:block !important;}
+         .pdf-share-mode .share-outro-qr img{width:84px !important;height:84px !important;margin:6px !important;object-fit:fill !important;display:block !important;}
          .pdf-share-mode .share-outro-amount{
            font-size:34px !important;
            margin-top:2px !important;
@@ -40176,7 +40176,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.101")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.102")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
