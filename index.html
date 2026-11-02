@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.84';
+        manifestLink.href = 'manifest.webmanifest?v=55.85';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.84').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.85').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.84';
+    window.APP_VERSION = '55.85';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4138,6 +4138,11 @@ body.pdf-share-mode .sit-card-grid > div > button > div:first-child {
 }
 
 .sit-card-grid>div { min-height:200px!important; overflow:hidden!important; }
+/* v55.85: Themen-Reiter – nur die Kacheln des aktiven Reiters, gross und seitenfuellend */
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-tabs]{ grid-template-rows:repeat(2,minmax(0,1fr))!important; grid-auto-rows:minmax(0,1fr)!important; align-content:stretch!important; height:100%!important; min-height:0!important; overflow-y:hidden!important; }
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-tabs] > div{ min-height:0!important; }
+/* v55.85: wie bei den Angeboten – Kacheln vom linken Bildschirmrand weg (Stift am Rand = Android-Zurueck-Geste) */
+@media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid{ padding-left:24px!important; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-tab-bar{ padding-left:24px; } }
 </style>
 
 <style id="print-page-fix">
@@ -9835,6 +9840,28 @@ const ALL_LANGUAGES = [{
   languageCode: 'uk'
 }];
 const SORTED_LANGUAGES = [ALL_LANGUAGES.find(l => l.code === 'de'), ...ALL_LANGUAGES.filter(l => l.code !== 'de').sort((a, b) => a.name.localeCompare(b.name))];
+// v55.85 (Beta): Seite 1 als Themen-Reiter (Entwurf 4). Gruppen + grosse Kachel bei 3er-Gruppen.
+const SIT_TABS = [{
+  id: 1,
+  label: 'Person & Vertrag',
+  items: ['Kundenname', 'Rufnummer', 'Anbieter', 'Gesamtkosten']
+}, {
+  id: 2,
+  label: 'Geräte & Nutzung',
+  items: ['Hardware', 'Nutzung', 'Weitere Produkte']
+}, {
+  id: 3,
+  label: 'Zuhause & TV',
+  items: ['Haushalt', 'Fernsehen', 'WiFi']
+}];
+const SIT_TAB_OF = {};
+SIT_TABS.forEach(t => t.items.forEach(i => {
+  SIT_TAB_OF[i] = t.id;
+}));
+const SIT_TAB_BIG = {
+  Hardware: true,
+  Haushalt: true
+};
 const SITUATION_ITEMS = [{
   id: 'Kundenname',
   label: 'Kundenname',
@@ -26922,7 +26949,8 @@ function App() {
   // SCHRITT-MODUS — komplett neue, saubere Implementierung
   // Eigener Canvas-Ref → kein Ref-Sharing mit Grid-Kacheln
   // ═══════════════════════════════════════════════════════
-  const [sitLayoutMode, setSitLayoutMode] = useState('grid');
+  const [sitLayoutMode, setSitLayoutMode] = useState('tabs'); // v55.85 Beta: Themen-Reiter als Standard
+  const [sitTab, setSitTab] = useState(1);
   const [currentSitStep, setCurrentSitStep] = useState(0);
   const stepCanvasRef = useRef(null); // Canvas NUR im Overlay
   const stepDrawingRef = useRef(false); // Läuft gerade ein Strich?
@@ -30850,6 +30878,12 @@ function App() {
     // Nach 2 rAF sicher nochmal: Grid-Canvases brauchen 1-2 Frames bis sie Größe haben
     requestAnimationFrame(() => requestAnimationFrame(doRedraw));
   }, [view, drawnStrokes, redrawCounter, sitLayoutMode]);
+  // v55.85: nach Reiterwechsel neu zeichnen, sobald die Kacheln ihre Groesse haben
+  useEffect(() => {
+    if (sitLayoutMode !== 'tabs') return;
+    const ts = [60, 300].map(ms => setTimeout(() => setRedrawCounter(c => c + 1), ms));
+    return () => ts.forEach(clearTimeout);
+  }, [sitTab, sitLayoutMode]);
 
   // ── Step-Overlay Canvas neu zeichnen wenn Step wechselt / Overlay öffnet ──
   useEffect(() => {
@@ -33593,7 +33627,17 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         card.style.minHeight = '0';
         card.style.height = 'auto';
         card.style.overflow = 'hidden';
+        // v55.85: Themen-Reiter – im PDF wieder alle 10 Felder im normalen Raster
+        card.style.position = '';
+        card.style.left = '';
+        card.style.top = '';
+        card.style.width = '';
+        card.style.visibility = '';
+        card.style.pointerEvents = '';
+        card.style.gridRow = '';
+        card.removeAttribute('data-sit-offtab');
       });
+      cloneSituation.querySelectorAll('.sit-tab-bar').forEach(n => n.remove());
       // Canvas/Eingabe-Bereich jeder Kachel (letztes Kind = Zeichenfläche)
       cloneSituation.querySelectorAll('.sit-card-canvas').forEach(area => {
         area.style.flex = 'none';
@@ -33612,6 +33656,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       cloneSituation.querySelectorAll('.sit-card-grid').forEach(grid => {
         grid.style.gap = '5px';
         grid.style.alignContent = 'start';
+        grid.style.gridTemplateRows = 'repeat(5, minmax(200px, 1fr))';
+        grid.style.overflowY = 'auto';
+        grid.removeAttribute('data-sit-tabs');
       });
     } catch (e) {}
     cloneSituation.style.cssText = ['display:flex', 'flex-direction:row', 'width:100%', 'height:100%', 'max-height:100%', 'overflow:hidden', 'box-sizing:border-box', 'padding:0', 'margin:0', 'background:#eff6ff'].join(';') + ';';
@@ -38664,7 +38711,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.84")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.85")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -40268,7 +40315,94 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       flexDirection: 'column',
       position: 'relative'
     }
-  }, sitLayoutMode === 'grid' && (() => {
+  }, sitLayoutMode === 'tabs' && (() => {
+    // v55.85: Reiterleiste mit Zaehler je Gruppe (gleiche Gruen-Schwelle wie die Kachel)
+    const isFilled = id => {
+      const sk = `sit_${id.replace(/\s+/g, '')}`;
+      const _text = String(getDisplayText(id) || '').trim();
+      const _pen = (drawnStrokes && drawnStrokes[sk] || []).filter(s => s && s.tool !== 'eraser' && s.points && s.points.length >= 3).length;
+      const _era = (drawnStrokes && drawnStrokes[sk] || []).filter(s => s && s.tool === 'eraser' && s.points && s.points.length >= 3).length;
+      const _min = id === 'Anbieter' ? 2 : 3;
+      return _text.length >= _min || Math.max(0, _pen - _era) >= _min;
+    };
+    const total = SITUATION_ITEMS.filter(it => isFilled(it.id)).length;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "sit-tab-bar",
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: '4px',
+        background: '#e9eff8',
+        padding: '4px',
+        borderRadius: '14px'
+      }
+    }, SIT_TABS.map(t => {
+      const on = sitTab === t.id;
+      const done = t.items.filter(isFilled).length;
+      const full = done === t.items.length;
+      return /*#__PURE__*/React.createElement("button", {
+        key: t.id,
+        type: 'button',
+        "data-ps-sit-tab": t.id,
+        onClick: () => setSitTab(t.id),
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '9px 16px',
+          borderRadius: '11px',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 700,
+          background: on ? '#ffffff' : 'transparent',
+          color: on ? '#1d4ed8' : '#64748b',
+          boxShadow: on ? '0 2px 8px rgba(15,45,107,0.10)' : 'none',
+          transition: 'all 0.15s'
+        }
+      }, t.label, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: '11px',
+          fontWeight: 800,
+          padding: '2px 7px',
+          borderRadius: '999px',
+          background: full ? '#dcfce7' : done ? '#dbeafe' : '#e2e8f0',
+          color: full ? '#15803d' : done ? '#1d4ed8' : '#64748b'
+        }
+      }, done + '/' + t.items.length));
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '11px',
+        fontWeight: 800,
+        color: total === SITUATION_ITEMS.length ? '#16a34a' : '#94a3b8'
+      }
+    }, total === SITUATION_ITEMS.length ? '✓ Vollständig' : total + '/' + SITUATION_ITEMS.length + ' Felder'), /*#__PURE__*/React.createElement("button", {
+      type: 'button',
+      "data-ps-sit-allfields": "1",
+      onClick: () => setSitLayoutMode('grid'),
+      title: 'Alle 10 Felder untereinander anzeigen',
+      style: {
+        fontSize: '11px',
+        fontWeight: 700,
+        color: '#2563eb',
+        background: '#ffffff',
+        border: '1px solid #dbeafe',
+        borderRadius: '9px',
+        padding: '6px 10px',
+        cursor: 'pointer'
+      }
+    }, '▦ Alle Felder'));
+  })(), sitLayoutMode === 'grid' && (() => {
     // v55.7: Fortschritt zaehlte bisher JEDEN Strich/jeden Buchstaben als
     // "ausgefuellt" - lief also schon bei einem einzelnen Tupfer weiter,
     // obwohl der gruene Punkt am Feld selbst noch nicht an war. Jetzt exakt
@@ -40317,17 +40451,35 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         color: pct === 100 ? '#16a34a' : '#94a3b8',
         flexShrink: 0
       }
-    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'));
+    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'), /*#__PURE__*/React.createElement("button", {
+      type: 'button',
+      "data-ps-sit-tabsmode": "1",
+      onClick: () => setSitLayoutMode('tabs'),
+      title: 'Themen-Reiter',
+      style: {
+        fontSize: '11px',
+        fontWeight: 700,
+        color: '#2563eb',
+        background: '#ffffff',
+        border: '1px solid #dbeafe',
+        borderRadius: '9px',
+        padding: '5px 10px',
+        cursor: 'pointer',
+        flexShrink: 0
+      }
+    }, 'Themen-Ansicht'));
   })(), /*#__PURE__*/React.createElement("div", {
     className: "custom-scrollbar sit-card-grid",
+    "data-sit-tabs": sitLayoutMode === 'tabs' ? String(sitTab) : undefined,
     style: {
       flex: 1,
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: '8px',
       alignContent: 'start',
-      gridTemplateRows: 'repeat(5, minmax(200px, 1fr))',
-      overflowY: 'auto',
+      gridTemplateRows: sitLayoutMode === 'tabs' ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(200px, 1fr))',
+      overflowY: sitLayoutMode === 'tabs' ? 'hidden' : 'auto',
+      position: 'relative',
       visibility: sitLayoutMode === 'step' ? 'hidden' : 'visible',
       pointerEvents: sitLayoutMode === 'step' ? 'none' : 'auto',
       paddingBottom: '64px',
@@ -40356,8 +40508,14 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // v55.8: Nur "Anbieter" ab 2 (wegen "o2"), alle anderen Felder bei 3.
     const _minLen = item.id === 'Anbieter' ? 2 : 3;
     const hasContent = _text.length >= _minLen || Math.max(0, _pen - _era) >= _minLen;
+    // v55.85: Themen-Reiter – Kacheln anderer Reiter bleiben gemountet (Canvas behaelt Groesse), nur ausserhalb
+    const _tabsMode = sitLayoutMode === 'tabs';
+    const _hideTab = _tabsMode && SIT_TAB_OF[item.id] !== sitTab;
+    const _bigTab = _tabsMode && !_hideTab && !!SIT_TAB_BIG[item.id];
     return /*#__PURE__*/React.createElement("div", {
       key: item.id,
+      "data-sit-group": SIT_TAB_OF[item.id],
+      "data-sit-offtab": _hideTab ? '1' : undefined,
       style: {
         display: 'flex',
         flexDirection: 'column',
@@ -40368,7 +40526,19 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         background: '#ffffff',
         minHeight: '0',
         height: '100%',
-        transition: 'all 0.18s ease'
+        transition: 'all 0.18s ease',
+        ...(_hideTab ? {
+          position: 'absolute',
+          left: '-10000px',
+          top: 0,
+          width: '45%',
+          height: '320px',
+          visibility: 'hidden',
+          pointerEvents: 'none'
+        } : {}),
+        ...(_bigTab ? {
+          gridRow: 'span 2'
+        } : {})
       }
     }, /*#__PURE__*/React.createElement("button", {
       "data-print-keep": "1",
