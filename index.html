@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.89';
+        manifestLink.href = 'manifest.webmanifest?v=55.90';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.89').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.90').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.89';
+    window.APP_VERSION = '55.90';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4159,7 +4159,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-tabs] > div{ min-height:0!impo
 .sit-seg button.on{ background:#fff; color:#1d4ed8; box-shadow:0 1px 4px rgba(15,45,107,.12); }
 .sit-answer-tags{ display:flex; flex-wrap:wrap; gap:4px; padding:6px 12px 0 12px; flex-shrink:0; }
 .sit-answer-tag{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; background:#eaf2ff; border:1px solid #c3d6f5; color:#1e40af; white-space:nowrap; }
-.sit-chips-panel{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; align-content:start; padding:2px 2px 90px 2px; touch-action:pan-y; }
+.sit-chips-panel{ flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; align-content:start; padding:2px 2px 8px 2px; touch-action:pan-y; }
 .sit-chip-block{ background:#fff; border:1.5px solid #e2e8f0; border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:12px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
 .sit-chip-title{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; color:#1e293b; }
 .sit-chip-title i{ width:26px; height:26px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-style:normal; }
@@ -4175,15 +4175,72 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] > div:not([data-sit-off
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-card-canvas{ flex:none!important; height:68px!important; min-height:68px!important; }
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-question-chips{ display:none!important; }
 }
-@media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ padding-left:24px; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-seg{ margin-left:24px; } }
+@media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ padding-left:24px; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-seg{ margin-left:24px; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-cost-strip{ margin-left:24px; } }
+/* v55.90: Seite 1 – Stift-Leisten, Kosten-Leiste unten, Eingabefenster (Entwurf F2) */
+.sit-note-bar{ margin-top:10px; width:100%; min-height:44px; border-radius:12px; border:1.5px dashed #ea580c; background:#fff7ed; display:flex; align-items:center; gap:10px; padding:0 6px; text-align:left; color:#9a3412; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; touch-action:manipulation; }
+.sit-note-dp{ width:32px; height:32px; border-radius:10px; background:#c2410c; color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.sit-note-tx{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sit-note-hint{ margin-left:auto; display:flex; gap:4px; color:#9a3412; }
+.sit-note-hint span{ width:32px; height:32px; border-radius:9px; background:#fff; border:1px solid #fdba74; display:flex; align-items:center; justify-content:center; }
+.sit-note-bar.has{ border-style:solid; background:#fff; color:#1e293b; }
+.sit-note-bar.has .sit-note-dp{ background:#15803d; }
+.sit-note-bar.has .sit-note-tx{ font-family:'Segoe Print','Bradley Hand',cursive; font-size:15px; font-weight:400; }
+.sit-cost-strip{ flex-shrink:0; margin-bottom:60px; border-radius:20px; background:#0f172a; padding:10px 14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; color:#fff; }
+.sit-cs-steppers{ display:flex; gap:8px; }
+.sit-stp{ display:flex; flex-direction:column; background:#1e293b; border:1.5px solid #334155; border-radius:14px; padding:5px; }
+.sit-stp-l{ font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#cbd5e1; text-align:center; padding-bottom:3px; }
+.sit-stp-r{ display:flex; align-items:center; justify-content:center; gap:2px; }
+.sit-stp-r button{ width:44px; height:44px; border-radius:11px; border:0; background:#334155; color:#fff; font-size:22px; font-weight:700; line-height:1; cursor:pointer; font-family:inherit; }
+.sit-stp-r b{ min-width:32px; text-align:center; font-size:19px; font-weight:800; }
+.sit-cs-pills{ flex:1 1 360px; min-width:0; display:flex; gap:6px; }
+.sit-cs-pill{ flex:1; min-width:0; height:70px; border-radius:14px; background:#1e293b; border:2px solid #334155; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; font-family:inherit; padding:0 4px; }
+.sit-cs-pill .l{ font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.sit-cs-pill .v{ font-size:17px; font-weight:800; color:#fdba74; }
+.sit-cs-pill.has .v{ color:#fff; }
+.sit-cs-pill.act{ border-color:#ea580c; box-shadow:0 0 0 4px rgba(234,88,12,.3); }
+.sit-cs-sum{ display:flex; flex-direction:column; align-items:flex-end; min-width:130px; }
+.sit-cs-sum .l{ font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#cbd5e1; }
+.sit-cs-sum .v{ font-size:26px; font-weight:800; color:#4ade80; line-height:1.1; }
+.sit-cs-sum .s{ font-size:11px; font-weight:600; color:#cbd5e1; }
+.sit-pop-back{ position:fixed; inset:0; z-index:9990; background:rgba(15,23,42,.30); }
+.sit-pop{ position:fixed; width:540px; max-width:calc(100vw - 16px); max-height:calc(100vh - 16px); overflow:auto; border-radius:24px; background:#fff; border:1px solid #e2e8f0; box-shadow:0 24px 60px rgba(15,23,42,.35); padding:16px; display:flex; flex-direction:column; gap:12px; font-family:inherit; }
+.sit-note-sheet{ left:50%; top:50%; transform:translate(-50%,-50%); width:560px; }
+.sit-pop-hd{ display:flex; align-items:center; gap:10px; }
+.sit-pop-hd .ic{ width:36px; height:36px; border-radius:12px; background:#c2410c; color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.sit-pop-hd .t{ font-size:17px; font-weight:800; color:#0f172a; }
+.sit-pop-hd .s{ font-size:12px; font-weight:600; color:#475569; }
+.sit-x{ margin-left:auto; width:44px; height:44px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; color:#475569; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+.sit-seg2{ margin-left:auto; display:flex; background:#f1f5f9; border-radius:12px; padding:3px; gap:3px; }
+.sit-seg2 button{ border:0; background:transparent; height:40px; padding:0 14px; border-radius:9px; font-size:13px; font-weight:800; color:#475569; cursor:pointer; font-family:inherit; }
+.sit-seg2 button.on{ background:#fff; color:#9a3412; box-shadow:0 1px 4px rgba(15,45,107,.15); }
+.sit-pop-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.sit-pop-ms{ display:flex; align-items:center; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:3px; }
+.sit-pop-ms button{ width:44px; height:44px; border-radius:11px; border:0; background:#f1f5f9; font-size:22px; font-weight:700; color:#0f172a; line-height:1; cursor:pointer; font-family:inherit; }
+.sit-pop-ms b{ min-width:34px; text-align:center; font-size:19px; font-weight:800; }
+.sit-pop-lbl{ font-size:13px; font-weight:700; color:#475569; }
+.sit-pop-inp{ width:132px; height:48px; border-radius:12px; border:1.5px solid #c2410c; box-shadow:0 0 0 4px #ffedd5; text-align:right; padding:0 12px; font-size:22px; font-weight:800; color:#0f172a; font-family:inherit; outline:none; background:#fff; }
+.sit-pop-tot{ font-size:20px; font-weight:800; color:#15803d; }
+.sit-pop-body{ display:flex; gap:12px; }
+.sit-pop-keys{ width:230px; display:grid; grid-template-columns:repeat(3,1fr); gap:6px; flex-shrink:0; }
+.sit-pop-keys button{ height:50px; border-radius:14px; border:1px solid #e2e8f0; background:#fff; font-size:22px; font-weight:700; color:#0f172a; cursor:pointer; font-family:inherit; }
+.sit-pop-hint{ flex:1; border-radius:14px; background:#fff7ed; border:1px solid #fdba74; padding:12px; font-size:13px; font-weight:600; color:#9a3412; display:flex; flex-direction:column; gap:8px; justify-content:center; }
+.sit-pop-ok{ height:52px; border-radius:14px; border:0; background:#c2410c; color:#fff; font-size:15px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; font-family:inherit; }
+.sit-pop-ghost{ height:44px; padding:0 14px; border-radius:12px; border:1.5px solid #e2e8f0; background:#fff; color:#334155; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+.sit-pop-ghost:disabled{ opacity:.45; cursor:default; }
+.sit-pad-wrap{ width:min(100%,480px); margin:0 auto; height:130px; border-radius:12px; border:1.5px dashed #cbd5e1; background-color:#fffdf9; background-image:repeating-linear-gradient(transparent 0,transparent 42px,#e2e8f0 42px,#e2e8f0 43px); position:relative; overflow:hidden; flex-shrink:0; }
+.sit-pad-canvas{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; background:transparent; }
+.sit-note-ta{ width:100%; min-height:130px; border-radius:12px; border:1.5px solid #cbd5e1; padding:12px; font-size:16px; font-family:inherit; resize:none; box-sizing:border-box; }
+.sit-dot{ width:44px; height:44px; border-radius:12px; border:1.5px solid #e2e8f0; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.sit-dot i{ display:block; width:20px; height:20px; border-radius:99px; }
+.sit-dot.on{ border-color:#c2410c; box-shadow:0 0 0 3px #ffedd5; }
 /* Druck + PDF: Schnellauswahl-Panel/Umschalter weg, alle 10 Kacheln wie frueher (mit Antwort-Tags) */
 @media print{
-.sit-chips-panel,.sit-seg{ display:none!important; }
+.sit-chips-panel,.sit-seg,.sit-cost-strip{ display:none!important; }
 .sit-card-grid[data-sit-chips] > div[data-sit-offtab]{ position:static!important; left:auto!important; top:auto!important; width:auto!important; height:auto!important; visibility:visible!important; pointer-events:auto!important; }
 .sit-answer-tags{ padding:3px 8px 0 8px!important; }
 .sit-answer-tag{ font-size:10px!important; padding:2px 7px!important; }
 }
-body.pdf-share-mode .sit-chips-panel, body.pdf-share-mode .sit-seg{ display:none!important; }
+body.pdf-share-mode .sit-chips-panel, body.pdf-share-mode .sit-seg, body.pdf-share-mode .sit-cost-strip{ display:none!important; }
 /* v55.85: wie bei den Angeboten – Kacheln vom linken Bildschirmrand weg (Stift am Rand = Android-Zurueck-Geste) */
 @media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid{ padding-left:24px!important; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-tab-bar{ padding-left:24px; } }
 </style>
@@ -9959,16 +10016,28 @@ const SIT_CHIP_KEY = '_sitChips';
 const SIT_CHIP_BLOCKS = [{
   title: 'Vertrag & Anbieter',
   icon: ICONS.Globe,
-  groups: ['anb', 'end', 'kuend', 'kost']
+  groups: ['anb', 'end', 'kuend'],
+  bars: { kuend: 'Anbieter' }
 }, {
   title: 'Gerät & Nutzung',
   icon: ICONS.Smartphone,
-  groups: ['handy', 'alter', 'daten', 'wichtig']
+  groups: ['handy', 'alter', 'daten', 'wichtig'],
+  bars: { alter: 'Hardware', wichtig: 'Nutzung' }
 }, {
   title: 'Zuhause & TV',
   icon: ICONS.Home,
-  groups: ['pers', 'tv', 'wlan', 'geraete']
+  groups: ['tv', 'wlan', 'geraete'],
+  bars: { tv: 'Fernsehen', wlan: 'WiFi', geraete: 'Weitere Produkte' }
 }];
+// Text in der Stift-Leiste je Thema (v55.90)
+const SIT_NOTE_LABELS = {
+  'Anbieter': 'Anderer Anbieter / Notiz …',
+  'Hardware': 'Modell / Schaden …',
+  'Nutzung': 'Genauer Verbrauch …',
+  'Fernsehen': 'Sender / Pakete …',
+  'WiFi': 'Problem beschreiben …',
+  'Weitere Produkte': 'Anderes Gerät / Produkt …'
+};
 // opts: [Anzeige, Druck-Text (optional)]
 const SIT_CHIP_GROUPS = [{
   id: 'anb', item: 'Anbieter', label: 'Aktueller Anbieter', multi: false,
@@ -10007,6 +10076,69 @@ const SIT_CHIP_GROUPS = [{
   id: 'geraete', item: 'Weitere Produkte', label: 'Weitere Geräte', multi: true,
   opts: [['Tablet'], ['Smartwatch'], ['Laptop'], ['Versicherung']]
 }];
+// ── v55.90: Kosten-Schnellerfassung (Kosten-Leiste unten) ───────────────
+// Ablage: textData._sitCost = JSON {p: Personen, v: Mobilfunk-Vertraege, r: {key:{n,p}}, t: {key: Summe}}
+// Mobil/Festnetz/TV spiegeln costState (Seitenleiste "Kosten (Ist)"), Hardware/Weitere liegen nur hier.
+const SIT_COST_KEY = '_sitCost';
+const SIT_COST_ROWS = [
+  { k: 'mobile', label: 'Mobilfunk', pill: 'Mobilfunk', print: 'Mobilfunk', icon: ICONS.Phone, cs: true },
+  { k: 'landline', label: 'DSL / Internet', pill: 'DSL / Internet', print: 'DSL / Internet', icon: ICONS.Wifi, cs: true },
+  { k: 'tv', label: 'Fernsehen', pill: 'Fernsehen', print: 'Fernsehen', icon: ICONS.Tv, cs: true },
+  { k: 'hw', label: 'Hardware (Rate)', pill: 'Hardware', print: 'Hardware-Rate', icon: ICONS.Smartphone, cs: false },
+  { k: 'wp', label: 'Weitere Produkte', pill: 'Weitere', print: 'Weitere Produkte', icon: ICONS.Layers, cs: false }
+];
+const sitCostNum = v => {
+  if (v == null || v === '') return 0;
+  const n = parseFloat(String(v).replace(',', '.'));
+  return isFinite(n) ? n : 0;
+};
+const sitCostFmt = n => (Math.round((n || 0) * 100) / 100).toFixed(2).replace('.', ',');
+const sitCostGet = td => {
+  try {
+    const o = JSON.parse(td && td[SIT_COST_KEY] || '{}');
+    return o && typeof o === 'object' ? o : {};
+  } catch (e) {
+    return {};
+  }
+};
+// Zeilen mit Anzahl / Einzelpreis / Summe (costState ist fuer Mobil/Festnetz/TV die Wahrheit)
+const sitCostRows = (td, cs) => {
+  const o = sitCostGet(td);
+  return SIT_COST_ROWS.map(r => {
+    const rec = o.r && o.r[r.k] || {};
+    const total = r.cs ? sitCostNum(cs && cs[r.k]) : sitCostNum(o.t && o.t[r.k]);
+    const n = r.k === 'mobile' && o.v > 0 ? o.v : rec.n > 0 ? rec.n : 1;
+    let price = rec.p || '';
+    if (!(total > 0)) price = '';
+    else if (sitCostFmt(sitCostNum(price) * n) !== sitCostFmt(total)) price = sitCostFmt(total / n);
+    return { ...r, n, price, total };
+  });
+};
+// Druck-/Auswertungstexte fuer die Karten "Gesamtkosten" und "Haushalt"
+const sitCostTags = (td, itemId) => {
+  const o = sitCostGet(td);
+  const out = [];
+  if (itemId === 'Haushalt') {
+    if (o.p > 0) out.push(o.p + (o.p === 1 ? ' Person' : ' Personen'));
+    if (o.v > 0) out.push(o.v + (o.v === 1 ? ' Mobilfunkvertrag' : ' Mobilfunkverträge'));
+    return out;
+  }
+  const t = o.t || {};
+  let sum = 0;
+  SIT_COST_ROWS.forEach(r => {
+    const tot = sitCostNum(t[r.k]);
+    if (!(tot > 0)) return;
+    sum += tot;
+    const rec = o.r && o.r[r.k] || {};
+    const n = r.k === 'mobile' && o.v > 0 ? o.v : rec.n > 0 ? rec.n : 1;
+    out.push(r.print + ' ' + (n > 1 ? n + ' × ' + sitCostFmt(tot / n) + ' € = ' : '') + sitCostFmt(tot) + ' €');
+  });
+  if (sum > 0) {
+    out.push('Summe ' + sitCostFmt(sum) + ' € / Monat');
+    if (o.p > 0) out.push(sitCostFmt(sum / o.p) + ' € pro Person');
+  }
+  return out;
+};
 const sitChipsParse = td => {
   try {
     const o = JSON.parse(td && td[SIT_CHIP_KEY] || '{}');
@@ -10026,12 +10158,13 @@ const sitChipTags = (td, itemId) => {
       if (o) out.push(o[1] || o[0]);
     });
   });
+  if (itemId === 'Gesamtkosten' || itemId === 'Haushalt') sitCostTags(td, itemId).forEach(t => out.push(t));
   return out;
 };
 // Für Auswertung/Statistik: Chips zählen wie getippter Text (nur wenn Feld sonst leer)
 const sitTextWithChips = td => {
   const base = td || {};
-  if (!base[SIT_CHIP_KEY]) return base;
+  if (!base[SIT_CHIP_KEY] && !base[SIT_COST_KEY]) return base;
   const out = { ...base };
   SITUATION_ITEMS.forEach(it => {
     if (String(out[it.id] || '').trim()) return;
@@ -10043,25 +10176,203 @@ const sitTextWithChips = td => {
   });
   return out;
 };
-function SitChipsPanel({ sel, onToggle, onDynamic, custom }) {
+const SIT_ICO_CHECK = '<polyline points="20 6 9 17 4 12"/>';
+const SIT_ICO_CLOSE = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+function SitChipsPanel({ sel, onToggle, onNote, custom }) {
   const h = React.createElement;
+  const bar = itemId => {
+    const cu = custom(itemId);
+    return h('button', {
+      key: 'bar_' + itemId,
+      type: 'button',
+      className: 'sit-note-bar' + (cu ? ' has' : ''),
+      onClick: () => onNote(itemId)
+    }, h('span', { className: 'sit-note-dp' }, h(Icon, { d: cu ? SIT_ICO_CHECK : ICONS.Pen, size: 15 })), h('span', { className: 'sit-note-tx' }, cu || SIT_NOTE_LABELS[itemId]), h('span', { className: 'sit-note-hint', 'aria-hidden': 'true' }, h('span', null, h(Icon, { d: ICONS.Pen, size: 15 })), h('span', null, h(Icon, { d: ICONS.Keyboard, size: 15 }))));
+  };
   return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block' }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
     const cur = sel[g.id] || [];
-    const isFirst = SIT_CHIP_GROUPS.find(x => x.item === g.item).id === g.id;
-    const cu = isFirst ? custom(g.item) : '';
     return h('div', { key: g.id }, h('div', { className: 'sit-chip-label' }, g.label), h('div', { className: 'sit-chip-row' }, g.opts.map(o => h('button', {
       key: o[0],
       type: 'button',
       className: 'sit-chip' + (cur.includes(o[0]) ? ' on' : ''),
       onClick: () => onToggle(g, o[0])
-    }, o[0])), h('button', {
-      key: '_dyn',
-      type: 'button',
-      className: 'sit-chip dyn' + (cu ? ' has' : ''),
-      onClick: () => onDynamic(g.item)
-    }, h(Icon, { d: ICONS.Pen, size: 14 }), cu || 'Dynamische Eingabe')));
+    }, o[0]))), b.bars[gid] ? bar(b.bars[gid]) : null);
   }))));
+}
+// Kosten-Leiste: Personen, Vertraege, Sparten mit Preis, Summe
+function SitCostStrip({ rows, pers, vert, onPers, onVert, onOpen, openKey, stripRef }) {
+  const h = React.createElement;
+  const sum = rows.reduce((a, r) => a + r.total, 0);
+  const stp = (label, val, fn) => h('div', { className: 'sit-stp' }, h('span', { className: 'sit-stp-l' }, label), h('div', { className: 'sit-stp-r' }, h('button', { type: 'button', 'aria-label': label + ' weniger', onClick: () => fn(-1) }, '−'), h('b', null, val || 0), h('button', { type: 'button', 'aria-label': label + ' mehr', onClick: () => fn(1) }, '+')));
+  return h('section', { className: 'sit-cost-strip', ref: stripRef }, h('div', { className: 'sit-cs-steppers' }, stp('Personen', pers, onPers), stp('Verträge', vert, onVert)), h('div', { className: 'sit-cs-pills' }, rows.map(r => h('button', {
+    key: r.k,
+    type: 'button',
+    className: 'sit-cs-pill' + (openKey === r.k ? ' act' : '') + (r.total > 0 ? ' has' : ''),
+    onClick: () => onOpen(r.k)
+  }, h('span', { className: 'l' }, r.pill), h('span', { className: 'v' }, r.total > 0 ? sitCostFmt(r.total) + ' €' : '+')))), h('div', { className: 'sit-cs-sum' }, h('span', { className: 'l' }, 'Summe / Monat'), h('span', { className: 'v' }, sitCostFmt(sum) + ' €'), h('span', { className: 's' }, pers > 0 && sum > 0 ? sitCostFmt(sum / pers) + ' € pro Person' : 'inkl. Hardware & Weitere')));
+}
+// Eingabefenster fuer eine Sparte: Anzahl x Preis, Ziffernblock; Stift schreibt direkt ins Feld (Scribble)
+function SitCostPopover({ row, anchor, onClose, onApply }) {
+  const h = React.createElement;
+  const [n, setN] = React.useState(row.n || 1);
+  const [inp, setInp] = React.useState(row.price || '');
+  const clean = s => {
+    let t = String(s).replace('.', ',').replace(/[^0-9,]/g, '');
+    const i = t.indexOf(',');
+    if (i >= 0) t = t.slice(0, i + 1) + t.slice(i + 1).replace(/,/g, '').slice(0, 2);
+    return t.slice(0, 8);
+  };
+  const press = k => setInp(prev => {
+    if (k === '⌫') return prev.slice(0, -1);
+    if (k === ',') return prev.includes(',') ? prev : prev === '' ? '0,' : prev + ',';
+    return clean(prev + k);
+  });
+  const price = sitCostNum(inp);
+  const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'];
+  return h('div', { className: 'sit-pop-back', onClick: e => { if (e.target === e.currentTarget) onClose(); } }, h('div', { className: 'sit-pop', style: anchor }, h('div', { className: 'sit-pop-hd' }, h('span', { className: 'ic' }, h(Icon, { d: row.icon, size: 18 })), h('div', null, h('div', { className: 't' }, row.label), h('div', { className: 's' }, 'Was zahlt der Kunde heute pro Monat?')), h('button', { type: 'button', className: 'sit-x', 'aria-label': 'Schließen', onClick: onClose }, h(Icon, { d: SIT_ICO_CLOSE, size: 18 }))), h('div', { className: 'sit-pop-row' }, h('div', { className: 'sit-pop-ms' }, h('button', { type: 'button', 'aria-label': 'Weniger', onClick: () => setN(v => Math.max(1, v - 1)) }, '−'), h('b', null, n), h('button', { type: 'button', 'aria-label': 'Mehr', onClick: () => setN(v => Math.min(20, v + 1)) }, '+')), h('span', { className: 'sit-pop-lbl' }, n === 1 ? 'Vertrag ×' : 'Verträge ×'), h('input', {
+    className: 'sit-pop-inp',
+    inputMode: 'decimal',
+    value: inp,
+    placeholder: '0,00',
+    'aria-label': 'Preis pro Vertrag in Euro',
+    onChange: e => setInp(clean(e.target.value))
+  }), h('span', { className: 'sit-pop-lbl' }, '€ ='), h('span', { className: 'sit-pop-tot' }, sitCostFmt(price * n) + ' €')), h('div', { className: 'sit-pop-body' }, h('div', { className: 'sit-pop-keys' }, KEYS.map(k => h('button', { key: k, type: 'button', onClick: () => press(k) }, k))), h('div', { className: 'sit-pop-hint' }, h('b', null, 'Mit dem Stift'), h('span', null, 'Direkt in das Preisfeld schreiben – die Handschrift wird zur Zahl. Oder den Ziffernblock links nutzen.'))), h('div', { style: { display: 'flex', gap: 8 } }, price > 0 ? h('button', { type: 'button', className: 'sit-pop-ghost', onClick: () => onApply(row.k, n, '') }, 'Leeren') : null, h('button', { type: 'button', className: 'sit-pop-ok', style: { flex: 1 }, onClick: () => onApply(row.k, n, inp) }, h(Icon, { d: SIT_ICO_CHECK, size: 18 }), 'Übernehmen'))));
+}
+// Schreibfeld mit festem Seitenverhaeltnis (Breite 480 → Striche passen 1:1 in die Druck-Kachel)
+function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
+  const h = React.createElement;
+  const ref = React.useRef(null);
+  const drawRef = React.useRef(null);
+  const strokesRef = React.useRef(strokes);
+  strokesRef.current = strokes;
+  const sync = React.useCallback(() => {
+    const c = ref.current;
+    if (!c || drawRef.current) return;
+    const r = c.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    const d = window.devicePixelRatio || 1;
+    const w = Math.round(r.width * d), hh = Math.round(r.height * d);
+    if (c.width !== w || c.height !== hh) {
+      c.width = w;
+      c.height = hh;
+    }
+    const ctx = c.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    redrawCanvas(c, strokesRef.current || [], 1, sitKey);
+  }, [sitKey]);
+  React.useEffect(() => {
+    sync();
+    const c = ref.current;
+    let ro = null;
+    if (c && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => sync());
+      ro.observe(c);
+    }
+    const t = setTimeout(sync, 60);
+    return () => {
+      clearTimeout(t);
+      if (ro) ro.disconnect();
+    };
+  }, [sync]);
+  React.useEffect(() => {
+    sync();
+  }, [strokes, sync]);
+  const onDown = e => {
+    const c = ref.current;
+    if (!c) return;
+    e.preventDefault();
+    const r0 = c.getBoundingClientRect();
+    const d0 = window.devicePixelRatio || 1;
+    if (c.width !== Math.round(r0.width * d0) || c.height !== Math.round(r0.height * d0)) sync();
+    const r = c.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const t = getTool();
+    const ctx = c.getContext('2d');
+    const d = window.devicePixelRatio || 1;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const vw = Math.max(1, Math.min(12, t.width));
+    if (t.tool === 'eraser') {
+      ctx.lineWidth = vw * 4;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.globalAlpha = 1;
+    } else if (t.tool === 'highlighter') {
+      ctx.lineWidth = vw * 3;
+      ctx.strokeStyle = t.color;
+      ctx.globalAlpha = t.opacity * 0.4;
+      ctx.globalCompositeOperation = 'destination-over';
+    } else {
+      ctx.lineWidth = vw;
+      ctx.strokeStyle = t.color;
+      ctx.globalAlpha = t.opacity;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    drawRef.current = { tool: t.tool, color: t.color, width: t.width, opacity: t.opacity, points: [p], baseWidth: r.width, baseHeight: r.height };
+    try { c.setPointerCapture(e.pointerId); } catch (_) {}
+  };
+  const onMove = e => {
+    const s = drawRef.current;
+    const c = ref.current;
+    if (!s || !c) return;
+    e.preventDefault();
+    const ctx = c.getContext('2d');
+    const r = c.getBoundingClientRect();
+    const ne = e.nativeEvent;
+    const evs = ne && ne.getCoalescedEvents ? ne.getCoalescedEvents() : null;
+    (evs && evs.length ? evs : [ne || e]).forEach(ev => {
+      const p = { x: ev.clientX - r.left, y: ev.clientY - r.top };
+      s.points.push(p);
+      ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+  };
+  const onUp = e => {
+    const s = drawRef.current;
+    if (!s) return;
+    drawRef.current = null;
+    const c = ref.current;
+    if (c) {
+      try { c.getContext('2d').restore(); } catch (_) {}
+      try { c.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    if (s.points.length === 1) s.points.push({ x: s.points[0].x + 0.01, y: s.points[0].y });
+    onStroke(s);
+  };
+  return h('div', { className: 'sit-pad-wrap' }, h('canvas', {
+    ref,
+    className: 'sit-pad-canvas',
+    onPointerDown: onDown,
+    onPointerMove: onMove,
+    onPointerUp: onUp,
+    onPointerCancel: onUp
+  }));
+}
+// Notiz-Fenster zu einem Thema: Stift oder Tippen (landet in der Kachel des Themas)
+function SitNoteSheet({ item, text, strokes, sitKey, getTool, onText, onStroke, onUndo, onClear, onColor, color, startMode, onClose }) {
+  const h = React.createElement;
+  const [mode, setMode] = React.useState(startMode || 'pen');
+  const COLORS = [['#0f172a', 'Schwarz'], ['#0044ff', 'Blau'], ['#ff0000', 'Rot']];
+  const hasInk = (strokes || []).some(s => s && s.tool !== 'eraser');
+  return h('div', { className: 'sit-pop-back', onClick: e => { if (e.target === e.currentTarget) onClose(); } }, h('div', { className: 'sit-pop sit-note-sheet' }, h('div', { className: 'sit-pop-hd' }, h('span', { className: 'ic' }, h(Icon, { d: item.icon, size: 18 })), h('div', null, h('div', { className: 't' }, item.label), h('div', { className: 's' }, SIT_NOTE_LABELS[item.id])), h('div', { className: 'sit-seg2' }, h('button', { type: 'button', className: mode === 'pen' ? 'on' : '', onClick: () => setMode('pen') }, 'Stift'), h('button', { type: 'button', className: mode === 'keyboard' ? 'on' : '', onClick: () => setMode('keyboard') }, 'Tippen')), h('button', { type: 'button', className: 'sit-x', style: { marginLeft: 0 }, 'aria-label': 'Schließen', onClick: onClose }, h(Icon, { d: SIT_ICO_CLOSE, size: 18 }))), mode === 'pen' ? h(React.Fragment, null, h(SitPenPad, { sitKey, strokes, getTool, onStroke }), h('div', { className: 'sit-pop-row' }, COLORS.map(([c, n]) => h('button', {
+    key: c,
+    type: 'button',
+    'aria-label': n,
+    className: 'sit-dot' + (String(color).toLowerCase() === c ? ' on' : ''),
+    onClick: () => onColor(c)
+  }, h('i', { style: { background: c } }))), h('button', { type: 'button', className: 'sit-pop-ghost', style: { marginLeft: 'auto' }, disabled: !hasInk, onClick: onUndo }, 'Rückgängig'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onClear }, 'Löschen'))) : h('textarea', {
+    className: 'sit-note-ta',
+    value: text || '',
+    autoFocus: true,
+    placeholder: SIT_NOTE_LABELS[item.id],
+    onChange: e => onText(e.target.value)
+  }), h('button', { type: 'button', className: 'sit-pop-ok', onClick: onClose }, h(Icon, { d: SIT_ICO_CHECK, size: 18 }), 'Fertig')));
 }
 const STATIC_LABELS = {
   'Offer1Title': '1. Hardware, Anbieter & Nutzung',
@@ -27118,6 +27429,9 @@ function App() {
     }
   });
   const [sitFromChips, setSitFromChips] = useState(false);
+  const [sitNoteItem, setSitNoteItem] = useState(null);
+  const [sitCostOpen, setSitCostOpen] = useState(null);
+  const sitStripRef = useRef(null);
   const [sitTab, setSitTab] = useState(1);
   const [currentSitStep, setCurrentSitStep] = useState(0);
   const stepCanvasRef = useRef(null); // Canvas NUR im Overlay
@@ -30596,14 +30910,91 @@ function App() {
       return next;
     });
   };
-  // Kurzinfo am "Dynamische Eingabe"-Chip, wenn dort schon getippt/geschrieben wurde
+  // ── v55.90: Stift-Leisten (Notiz-Fenster) + Kosten-Leiste ───────────────
+  // Kurzinfo in der Stift-Leiste, wenn zum Thema schon getippt/geschrieben wurde
   const sitCustomSnippet = itemId => {
     const t = String(textData[itemId] || '').trim();
-    if (t) return '✎ ' + (t.length > 16 ? t.slice(0, 15) + '…' : t);
+    if (t) return t.length > 26 ? t.slice(0, 25) + '…' : t;
     const sk = 'sit_' + itemId.replace(/\s+/g, '');
     const pen = (drawnStrokes[sk] || []).filter(s => s && s.tool !== 'eraser').length;
-    return pen > 0 ? '✎ Handschrift' : '';
+    return pen > 0 ? 'Handschrift' : '';
   };
+  const openSitNote = itemId => setSitNoteItem(itemId);
+  const getSitTool = () => ({
+    tool: toolRef.current,
+    color: colorRef.current,
+    width: strokeWidthRef.current,
+    opacity: opacityRef.current
+  });
+  const sitNoteStroke = (key, stroke) => {
+    setDrawnStrokes(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), stroke]
+    }));
+    setRedrawCounter(r => r + 1);
+  };
+  const sitNoteUndo = key => {
+    setDrawnStrokes(prev => ({
+      ...prev,
+      [key]: (prev[key] || []).slice(0, -1)
+    }));
+    setRedrawCounter(r => r + 1);
+  };
+  const sitNoteClear = key => {
+    setDrawnStrokes(prev => ({
+      ...prev,
+      [key]: []
+    }));
+    setRedrawCounter(r => r + 1);
+  };
+  const sitNoteColor = c => {
+    setColor(c);
+    colorRef.current = c;
+  };
+  // Personen / Mobilfunk-Vertraege per Plus/Minus. Aendert die Vertragszahl, rechnet Mobilfunk neu.
+  const stepSitCost = (field, d) => {
+    const o = sitCostGet(textData);
+    const val = Math.max(0, Math.min(20, (o[field] || 0) + d));
+    const next = { ...o, [field]: val };
+    if (field === 'v') {
+      const rec = o.r && o.r.mobile;
+      const price = sitCostNum(rec && rec.p);
+      if (val > 0 && price > 0) {
+        const total = sitCostFmt(price * val);
+        next.r = { ...(o.r || {}), mobile: { n: val, p: rec.p } };
+        next.t = { ...(o.t || {}), mobile: total };
+        setCostState(prev => ({ ...prev, mobile: total }));
+      }
+    }
+    setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify(next) }));
+  };
+  const applySitCost = (k, n, priceStr) => {
+    const price = sitCostNum(priceStr);
+    const total = price > 0 ? sitCostFmt(price * n) : '';
+    if (k === 'mobile' || k === 'landline' || k === 'tv') setCostState(prev => ({ ...prev, [k]: total }));
+    const o = sitCostGet(textData);
+    const next = { ...o, r: { ...(o.r || {}), [k]: { n, p: price > 0 ? sitCostFmt(price) : '' } }, t: { ...(o.t || {}), [k]: total } };
+    if (k === 'mobile') next.v = n;
+    setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify(next) }));
+    setSitCostOpen(null);
+  };
+  // Seitenleiste "Kosten (Ist)" und Kosten-Leiste bleiben deckungsgleich (Druck/Auswertung lesen _sitCost)
+  useEffect(() => {
+    setTextData(prev => {
+      const o = sitCostGet(prev);
+      const t = { ...(o.t || {}) };
+      let ch = false;
+      ['mobile', 'landline', 'tv'].forEach(k => {
+        const v = costState[k] || '';
+        if ((t[k] || '') !== v) {
+          t[k] = v;
+          ch = true;
+        }
+      });
+      if (!ch) return prev;
+      return { ...prev, [SIT_COST_KEY]: JSON.stringify({ ...o, t }) };
+    });
+  }, [costState]);
   const openSitDynamic = itemId => {
     const idx = SITUATION_ITEMS.findIndex(x => x.id === itemId);
     setSitFromChips(true);
@@ -30652,7 +31043,7 @@ function App() {
     if (displayLanguage !== 'de') {
       clearTimeout(autoTranslateTimerRef.current);
       autoTranslateTimerRef.current = setTimeout(async () => {
-        const EXCLUDE_KEYS = ['AgentName', 'DateValue', 'OfferValidUntil'];
+        const EXCLUDE_KEYS = ['AgentName', 'DateValue', 'OfferValidUntil', '_sitChips', '_sitCost'];
         if (EXCLUDE_KEYS.includes(key)) return;
         if (key.toLowerCase().includes('kundenname') || key.toLowerCase().includes('rufnummer')) return;
         if (!val || val.trim().length < 2 || !/[A-Za-zÄÖÜäöüß]/.test(val) || /^[\d.,:\s€%+-]+$/.test(val.trim())) return;
@@ -31092,6 +31483,23 @@ function App() {
     const ts = [60, 300].map(ms => setTimeout(() => setRedrawCounter(c => c + 1), ms));
     return () => ts.forEach(clearTimeout);
   }, [sitTab, sitLayoutMode]);
+  // v55.90: Groessenaenderung der Seite-1-Canvas (Moduswechsel, Drehen, Layout-Umbau) sofort nachziehen,
+  // damit Stift und Anzeige deckungsgleich bleiben.
+  useEffect(() => {
+    if (view !== 'situation' || typeof ResizeObserver === 'undefined') return;
+    const root = document.querySelector('.situation-view-wrapper');
+    if (!root) return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setRedrawCounter(c => c + 1));
+    });
+    root.querySelectorAll('canvas').forEach(c => ro.observe(c));
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [view, sitLayoutMode, currentSitStep]);
 
   // ── Step-Overlay Canvas neu zeichnen wenn Step wechselt / Overlay öffnet ──
   useEffect(() => {
@@ -31438,6 +31846,25 @@ function App() {
       y: cssY
     } = getRelativeCoords(e, canvas) || {};
     if (cssX == null || cssY == null) return;
+    // v55.90: Puffer-Selbstheilung beim Aufsetzen. Stimmt die Canvas-Pufferbreite nicht mit der
+    // aktuellen Anzeigegroesse ueberein (z. B. direkt nach Moduswechsel, Layout noch im Umbau),
+    // wird der Strich sonst versetzt dargestellt. Hier vor dem ersten Punkt abgleichen.
+    {
+      const __sr = canvas.getBoundingClientRect();
+      const __sd = window.devicePixelRatio || 1;
+      const __sw = Math.round(__sr.width * __sd), __sh = Math.round(__sr.height * __sd);
+      if (__sr.width > 0 && __sr.height > 0 && (canvas.width !== __sw || canvas.height !== __sh)) {
+        canvas.width = __sw;
+        canvas.height = __sh;
+        const __sc = canvas.getContext('2d');
+        __sc.setTransform(__sd, 0, 0, __sd, 0, 0);
+        __sc.lineCap = 'round';
+        __sc.lineJoin = 'round';
+        if (key) {
+          try { redrawCanvas(canvas, drawnStrokesRef.current[key] || [], 1, key); } catch (_) {}
+        }
+      }
+    }
     const ctx = canvas.getContext('2d');
     // DPR-Transform explizit setzen → Live-Stift zeichnet exakt "on point"
     // (redrawCanvas könnte den Transform-State zwischendurch verändert haben)
@@ -32588,7 +33015,7 @@ function App() {
     // Namen, Rufnummern, Datum & reine Zahlen werden NICHT übersetzt.
     (async () => {
       try {
-        const EXCLUDE_KEYS = ['AgentName', 'DateValue', 'OfferValidUntil', '_sitChips'];
+        const EXCLUDE_KEYS = ['AgentName', 'DateValue', 'OfferValidUntil', '_sitChips', '_sitCost'];
         const cached = translatedTextLiveRef.current?.[targetCode] || {};
         const entries = Object.entries(textDataLiveRef.current || {}).filter(([k, v]) => !EXCLUDE_KEYS.includes(k) && !k.toLowerCase().includes('kundenname') && !k.toLowerCase().includes('rufnummer') && typeof v === 'string' && v.trim().length > 1 && /[A-Za-zÄÖÜäöüß]/.test(v) &&
         // nur Texte mit Buchstaben
@@ -33847,7 +34274,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       });
       cloneSituation.querySelectorAll('.sit-tab-bar').forEach(n => n.remove());
       // v55.89: Schnellauswahl-Panel im PDF entfernen (Antworten stehen als Tags in den Kacheln)
-      cloneSituation.querySelectorAll('.sit-chips-panel').forEach(n => n.remove());
+      cloneSituation.querySelectorAll('.sit-chips-panel, .sit-cost-strip').forEach(n => n.remove());
       // Canvas/Eingabe-Bereich jeder Kachel (letztes Kind = Zeichenfläche)
       cloneSituation.querySelectorAll('.sit-card-canvas').forEach(area => {
         const _tags = area.previousElementSibling && area.previousElementSibling.classList.contains('sit-answer-tags');
@@ -38923,7 +39350,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.89")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.90")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -40737,7 +41164,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         background: '#ffffff',
         minHeight: '0',
         height: '100%',
-        transition: 'all 0.18s ease',
+        transition: 'border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease',
         ...(_hideTab ? {
           position: 'absolute',
           left: '-10000px',
@@ -40922,9 +41349,59 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   })), sitLayoutMode === 'chips' && /*#__PURE__*/React.createElement(SitChipsPanel, {
     sel: sitChipsParse(textData),
     onToggle: toggleSitChip,
-    onDynamic: openSitDynamic,
+    onNote: openSitNote,
     custom: sitCustomSnippet
-  }), sitLayoutMode === 'step' && (() => {
+  }), sitLayoutMode === 'chips' && (() => {
+    const co = sitCostGet(textData);
+    return /*#__PURE__*/React.createElement(SitCostStrip, {
+      rows: sitCostRows(textData, costState),
+      pers: co.p || 0,
+      vert: co.v || 0,
+      onPers: d => stepSitCost('p', d),
+      onVert: d => stepSitCost('v', d),
+      onOpen: setSitCostOpen,
+      openKey: sitCostOpen,
+      stripRef: sitStripRef
+    });
+  })(), sitLayoutMode === 'chips' && view === 'situation' && sitCostOpen && ReactDOM.createPortal((() => {
+    const row = sitCostRows(textData, costState).find(r => r.k === sitCostOpen);
+    if (!row) return null;
+    const sr = sitStripRef.current ? sitStripRef.current.getBoundingClientRect() : null;
+    const anchor = sr ? {
+      left: Math.max(8, Math.min(window.innerWidth - 556, sr.left + 8)),
+      bottom: Math.max(8, window.innerHeight - sr.top + 10)
+    } : {
+      left: 40,
+      bottom: 150
+    };
+    return /*#__PURE__*/React.createElement(SitCostPopover, {
+      key: sitCostOpen,
+      row,
+      anchor,
+      onClose: () => setSitCostOpen(null),
+      onApply: applySitCost
+    });
+  })(), document.body), sitLayoutMode === 'chips' && view === 'situation' && sitNoteItem && ReactDOM.createPortal((() => {
+    const item = SITUATION_ITEMS.find(x => x.id === sitNoteItem);
+    if (!item) return null;
+    const nkey = 'sit_' + item.id.replace(/\s+/g, '');
+    return /*#__PURE__*/React.createElement(SitNoteSheet, {
+      key: nkey,
+      item,
+      text: textData[item.id] || '',
+      strokes: drawnStrokes[nkey] || [],
+      sitKey: nkey,
+      getTool: getSitTool,
+      onText: v => handleTextChange(item.id, v),
+      onStroke: s => sitNoteStroke(nkey, s),
+      onUndo: () => sitNoteUndo(nkey),
+      onClear: () => sitNoteClear(nkey),
+      onColor: sitNoteColor,
+      color,
+      startMode: inputMode === 'keyboard' ? 'keyboard' : 'pen',
+      onClose: () => setSitNoteItem(null)
+    });
+  })(), document.body), sitLayoutMode === 'step' && (() => {
     const item = SITUATION_ITEMS[currentSitStep];
     const sitKey = STEP_KEYS[currentSitStep];
     const questions = (questionsData[item.id] || questionsData['default'] || []).slice(0, 2);
