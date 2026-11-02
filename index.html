@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.61';
+        manifestLink.href = 'manifest.webmanifest?v=55.62';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.61').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.62').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.61';
+    window.APP_VERSION = '55.62';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -34120,8 +34120,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           // v55.47: Preisleiste der Bildschirm-Karte entfernen (wird unten als PDF-Leiste neu gebaut)
           col.querySelectorAll('[data-ps-price-strip],[data-ps-price-spacer]').forEach(n => n.remove());
           container.style.cssText = ['width:100%', 'height:100%', 'flex:1 1 auto', 'display:flex', 'flex-direction:column', 'overflow:hidden', 'border-width:3px', 'border-style:solid', 'border-radius:14px', 'background:#ffffff', 'box-sizing:border-box'].join(';') + ';';
-          // Rahmenfarbe – gemerkt fuer den Preis-Fuss darunter (v55.61)
-          const _bc = container.classList.contains('border-green-500') ? '#22c55e' : container.classList.contains('border-red-500') ? '#ef4444' : '#cbd5e1';
+          // v55.62: im PDF immer neutraler Rahmen (keine Status-Farben grün/rot mehr) – nur das blaue Gesamtkosten-Band bleibt farbig.
+          const _bc = '#cbd5e1';
           container.style.borderColor = _bc;
           _borderColorOf[i] = _bc;
           // Karte geht nahtlos in den Preis-Fuss darunter ueber: kein eigener unterer Rand/Rundung.
@@ -38108,7 +38108,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.61")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.62")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
