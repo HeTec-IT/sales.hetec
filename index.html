@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.96';
+        manifestLink.href = 'manifest.webmanifest?v=55.97';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.96').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.97').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.96';
+    window.APP_VERSION = '55.97';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4217,6 +4217,17 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-ink{ position:absolute; inset:-7px 0; display:block; z-index:2; }
 .sit-ink-cv{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; background:transparent; border-radius:12px; cursor:text; }
 .sit-ink-msg{ position:absolute; inset:7px 0; display:flex; align-items:center; justify-content:center; text-align:center; padding:0 8px; background:rgba(255,255,255,.94); border-radius:12px; color:#1e40af; font-size:12px; font-weight:700; line-height:1.15; pointer-events:none; }
+.sit-qp{ display:flex; flex-wrap:wrap; gap:5px; }
+.sit-qp button{ height:36px; padding:0 11px; border-radius:999px; border:1.5px solid #e2e8f0; background:#fff; font-size:12.5px; font-weight:700; color:#334155; cursor:pointer; font-family:inherit; touch-action:manipulation; }
+.sit-qp button.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
+.sit-bxs{ display:flex; align-items:center; gap:5px; flex:1; min-width:0; }
+.sit-bx{ position:relative; flex:1 1 0; min-width:26px; max-width:48px; height:56px; border-radius:10px; border:1.5px solid #cbd5e1; background:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#0f172a; cursor:pointer; touch-action:none; -webkit-user-select:none; user-select:none; }
+.sit-bx.ct{ background:#f8fafc; }
+.sit-bx.on{ border-color:#93c5fd; background:#f5f9ff; }
+.sit-bx.bad{ border-color:#ef4444; color:#ef4444; }
+.sit-bx-cv{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+.sit-bx-c{ font-size:26px; font-weight:800; color:#64748b; line-height:1; }
+.sit-bx-e{ font-size:18px; font-weight:800; color:#64748b; margin-left:2px; }
 .sit-ink-sw{ border:1.5px solid #cbd5e1; background:#fff; color:#475569; font-size:11px; font-weight:800; padding:6px 10px; border-radius:9px; flex-shrink:0; cursor:pointer; font-family:inherit; }
 .sit-ink-sw b{ color:#1d4ed8; }
 .sit-ink-wrap{ position:relative; display:inline-block; }
@@ -10630,50 +10641,206 @@ function SitPersRow({ pers, onPers }) {
   const h = React.createElement;
   return h('div', { className: 'sit-price' + (pers > 0 ? ' has' : '') }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: ICONS.Users, size: 15 })), 'Personen', h('span', { className: 'sit-price-r' }, sitStp('', pers, onPers))));
 }
-function SitPriceRow({ row, vert, onVert, onApply, onPad, inkMode }) {
+// v55.97: Preis = Schnellpreise zum Antippen + Kaestchen je Ziffer (Stift: eine Ziffer pro Kaestchen, Komma steht fest)
+const SIT_QUICK = {
+  mobile: ['9,99', '14,99', '19,99', '29,99', '39,99'],
+  landline: ['29,99', '34,99', '39,99', '44,99', '49,99'],
+  tv: ['9,99', '12,99', '14,99', '19,99', '29,99'],
+  hw: ['9,99', '14,99', '19,99', '24,99', '29,99'],
+  wp: ['4,99', '9,99', '14,99', '19,99']
+};
+const sitBoxesFrom = price => {
+  const q = sitCostNum(price);
+  if (!(q > 0)) return ['', '', '', '', ''];
+  const parts = sitCostFmt(q).split(',');
+  const e = parts[0].slice(-3);
+  const ee = ['', '', ''];
+  for (let i = 0; i < e.length; i++) ee[3 - e.length + i] = e[i];
+  return [...ee, parts[1][0], parts[1][1]];
+};
+const sitBoxesTo = b => {
+  const e = b.slice(0, 3).join('');
+  const c = b.slice(3).join('');
+  if (!e && !c) return '';
+  return (e || '0') + ',' + (b[3] || '0') + (b[4] || '0');
+};
+function SitBoxPrice({ row, onSet, onPad }) {
   const h = React.createElement;
-  const [inp, setInp] = React.useState(row.price || '');
-  const foc = React.useRef(false);
-  const inpRef = React.useRef(null);
+  const [bx, setBx] = React.useState(() => sitBoxesFrom(row.price));
+  const bxRef = React.useRef(bx);
+  bxRef.current = bx;
+  const sent = React.useRef(row.price || '');
+  const [bad, setBad] = React.useState(-1);
+  const cvs = React.useRef([]);
+  const S = React.useRef({ i: -1, strokes: [], cur: null, timer: null, drew: false });
   React.useEffect(() => {
-    if (!foc.current) setInp(row.price || '');
+    if ((row.price || '') !== sent.current) {
+      sent.current = row.price || '';
+      setBx(sitBoxesFrom(row.price));
+    }
   }, [row.price]);
+  React.useEffect(() => () => clearTimeout(S.current.timer), []);
+  const commit = nb => {
+    setBx(nb);
+    bxRef.current = nb;
+    const v = sitBoxesTo(nb);
+    const q = sitCostNum(v);
+    sent.current = q > 0 ? sitCostFmt(q) : '';
+    onSet(v);
+  };
+  const paint = i => {
+    const c = cvs.current[i];
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    if (r.width < 2) return;
+    const d = window.devicePixelRatio || 1;
+    const w = Math.round(r.width * d), hh = Math.round(r.height * d);
+    if (c.width !== w || c.height !== hh) {
+      c.width = w;
+      c.height = hh;
+    }
+    const ctx = c.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.clearRect(0, 0, r.width, r.height);
+    const s = S.current;
+    if (s.i !== i) return;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.6;
+    (s.cur ? [...s.strokes, s.cur] : s.strokes).forEach(st => {
+      ctx.beginPath();
+      st.points.forEach((p, k) => {
+        if (k) ctx.lineTo(p.x, p.y);
+        else ctx.moveTo(p.x, p.y);
+      });
+      if (st.points.length === 1) ctx.lineTo(st.points[0].x + 0.1, st.points[0].y);
+      ctx.stroke();
+    });
+  };
+  const finish = () => {
+    const s = S.current;
+    clearTimeout(s.timer);
+    s.timer = null;
+    const i = s.i;
+    const st = s.strokes;
+    s.strokes = [];
+    s.i = -1;
+    paint(i);
+    if (!st.length || i < 0) return;
+    let r = null;
+    try {
+      r = sitDigitOf(st.map(x => x.points));
+    } catch (e) {
+      r = null;
+    }
+    if (r && r.p >= 0.6) {
+      const nb = [...bxRef.current];
+      nb[i] = String(r.d);
+      commit(nb);
+      setBad(-1);
+    } else {
+      setBad(i);
+      setTimeout(() => setBad(b => b === i ? -1 : b), 1500);
+    }
+  };
+  const down = (i, e) => {
+    if (e.pointerType !== 'pen') {
+      S.current.drew = false;
+      return;
+    }
+    e.preventDefault();
+    const s = S.current;
+    if (s.i !== i && s.strokes.length) finish();
+    clearTimeout(s.timer);
+    s.i = i;
+    s.drew = true;
+    const r = cvs.current[i].getBoundingClientRect();
+    s.cur = { points: [{ x: e.clientX - r.left, y: e.clientY - r.top }] };
+    try {
+      cvs.current[i].setPointerCapture(e.pointerId);
+    } catch (_) {}
+    setBad(-1);
+    paint(i);
+  };
+  const move = (i, e) => {
+    const s = S.current;
+    if (!s.cur || s.i !== i) return;
+    e.preventDefault();
+    const r = cvs.current[i].getBoundingClientRect();
+    const ne = e.nativeEvent;
+    const evs = ne && ne.getCoalescedEvents ? ne.getCoalescedEvents() : null;
+    (evs && evs.length ? evs : [ne || e]).forEach(ev => s.cur.points.push({ x: ev.clientX - r.left, y: ev.clientY - r.top }));
+    paint(i);
+  };
+  const up = i => {
+    const s = S.current;
+    if (!s.cur || s.i !== i) return;
+    const c = s.cur;
+    s.cur = null;
+    let len = 0;
+    for (let k = 1; k < c.points.length; k++) len += Math.hypot(c.points[k].x - c.points[k - 1].x, c.points[k].y - c.points[k - 1].y);
+    if (len < 5 && !s.strokes.length) {
+      // kurzer Stift-Tipp = Kaestchen leeren
+      s.i = -1;
+      paint(i);
+      if (bxRef.current[i]) {
+        const nb = [...bxRef.current];
+        nb[i] = '';
+        commit(nb);
+      }
+      return;
+    }
+    s.strokes.push(c);
+    paint(i);
+    clearTimeout(s.timer);
+    s.timer = setTimeout(finish, 650);
+  };
+  const box = i => h('div', {
+    key: i,
+    className: 'sit-bx' + (i >= 3 ? ' ct' : '') + (bx[i] ? ' on' : '') + (bad === i ? ' bad' : ''),
+    'data-bx': i,
+    onClick: e => {
+      if (S.current.drew) {
+        S.current.drew = false;
+        return;
+      }
+      onPad(row.k, e.currentTarget);
+    }
+  }, h('span', null, bad === i ? '?' : bx[i]), h('canvas', {
+    ref: el => {
+      cvs.current[i] = el;
+    },
+    className: 'sit-bx-cv',
+    onPointerDown: e => down(i, e),
+    onPointerMove: e => move(i, e),
+    onPointerUp: () => up(i),
+    onPointerCancel: () => up(i)
+  }));
+  return h('div', { className: 'sit-bxs', 'aria-label': row.label + ' – Preis, je Kästchen eine Ziffer' }, box(0), box(1), box(2), h('span', { className: 'sit-bx-c' }, ','), box(3), box(4), h('b', { className: 'sit-bx-e' }, '€'));
+}
+function SitPriceRow({ row, vert, onVert, onApply, onPad }) {
+  const h = React.createElement;
   const isM = row.k === 'mobile';
   const n = row.n || 1;
   const has = row.total > 0;
-  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), row.label, h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h('div', { className: 'sit-price-vl' }, h('span', null, 'Verträge'), sitStp('', vert, onVert)) : null, h('div', { className: 'sit-price-line' }, h('label', { className: 'sit-price-fld' }, h('span', { className: 'pn', 'aria-hidden': 'true' }, h(Icon, { d: ICONS.Pen, size: 16 })), h('input', {
-    ref: inpRef,
-    className: 'sit-price-inp',
-    inputMode: 'decimal',
-    autoComplete: 'off',
-    value: inp,
-    placeholder: 'Preis',
-    'aria-label': row.label + ' – Preis pro Monat in Euro',
-    onFocus: () => { foc.current = true; },
-    onBlur: () => {
-      foc.current = false;
-      const q = sitCostNum(inp);
-      setInp(q > 0 ? sitCostFmt(q) : '');
-    },
-    onChange: e => {
-      const v = sitPriceClean(e.target.value);
-      setInp(v);
-      onApply(row.k, n, v);
-    }
-  }), inkMode === 'sys' ? null : h(SitInkField, {
-    focusRef: inpRef,
-    onRead: txt => {
-      const v = sitPriceClean(txt);
-      const q = sitCostNum(v);
-      setInp(q > 0 ? sitCostFmt(q) : '');
-      onApply(row.k, n, v);
-    }
-  }), h('b', null, '€')), h('button', {
+  const quick = SIT_QUICK[row.k] || [];
+  const cur = has ? sitCostFmt(sitCostNum(row.price)) : '';
+  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), row.label, h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h('div', { className: 'sit-price-vl' }, h('span', null, 'Verträge'), sitStp('', vert, onVert)) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
+    key: q,
+    type: 'button',
+    className: cur === q ? 'on' : '',
+    onClick: () => onApply(row.k, n, cur === q ? '' : q)
+  }, q))) : null, h('div', { className: 'sit-price-line' }, h(SitBoxPrice, {
+    row,
+    onSet: v => onApply(row.k, n, v),
+    onPad
+  }), h('button', {
     type: 'button',
     className: 'sit-price-kb',
     'aria-label': row.label + ' – Ziffernblock',
     onClick: e => onPad(row.k, e.currentTarget)
-  }, h(Icon, { d: ICONS.Keyboard, size: 18 }))), n > 1 && has ? h('div', { className: 'sit-price-tot' }, n + ' × ' + sitCostFmt(sitCostNum(inp)) + ' € = ', h('b', null, sitCostFmt(row.total) + ' €')) : null);
+  }, h(Icon, { d: ICONS.Keyboard, size: 18 }))), n > 1 && has ? h('div', { className: 'sit-price-tot' }, n + ' × ' + cur + ' € = ', h('b', null, sitCostFmt(row.total) + ' €')) : null);
 }
 function SitSumBar({ rows, pers }) {
   const h = React.createElement;
@@ -10710,7 +10877,7 @@ function SitCostPopover({ row, anchor, onClose, onApply, inkMode }) {
   }), inkMode === 'sys' ? null : h(SitInkField, {
     focusRef: pInpRef,
     onRead: txt => setInp(clean(txt))
-  })), h('span', { className: 'sit-pop-lbl' }, '€ ='), h('span', { className: 'sit-pop-tot' }, sitCostFmt(price * n) + ' €')), h('div', { className: 'sit-pop-body' }, h('div', { className: 'sit-pop-keys' }, KEYS.map(k => h('button', { key: k, type: 'button', onClick: () => press(k) }, k))), h('div', { className: 'sit-pop-hint' }, h('b', null, 'Mit dem Stift'), h('span', null, inkMode === 'sys' ? 'Zahl direkt ins Preisfeld schreiben – Apple Scribble bzw. Samsung S Pen wandeln die Schrift um. Sonst den Ziffernblock links nutzen.' : 'Zahl direkt ins Preisfeld schreiben (z. B. 9,99) – sie wird erkannt. Ist die Schrift nicht lesbar, den Ziffernblock links nutzen.'))), h('div', { style: { display: 'flex', gap: 8 } }, price > 0 ? h('button', { type: 'button', className: 'sit-pop-ghost', onClick: () => onApply(row.k, n, '') }, 'Leeren') : null, h('button', { type: 'button', className: 'sit-pop-ok', style: { flex: 1 }, onClick: () => onApply(row.k, n, inp) }, h(Icon, { d: SIT_ICO_CHECK, size: 18 }), 'Übernehmen'))));
+  })), h('span', { className: 'sit-pop-lbl' }, '€ ='), h('span', { className: 'sit-pop-tot' }, sitCostFmt(price * n) + ' €')), h('div', { className: 'sit-pop-body' }, h('div', { className: 'sit-pop-keys' }, KEYS.map(k => h('button', { key: k, type: 'button', onClick: () => press(k) }, k))), h('div', { className: 'sit-pop-hint' }, h('b', null, 'Mit dem Stift'), h('span', null, inkMode === 'sys' ? 'Mit dem Stift schreibst du im Preisfeld je Kästchen eine Ziffer – das Komma steht schon. Hier geht es per Ziffernblock.' : 'Zahl direkt ins Preisfeld schreiben (z. B. 9,99) – sie wird erkannt. Ist die Schrift nicht lesbar, den Ziffernblock links nutzen.'))), h('div', { style: { display: 'flex', gap: 8 } }, price > 0 ? h('button', { type: 'button', className: 'sit-pop-ghost', onClick: () => onApply(row.k, n, '') }, 'Leeren') : null, h('button', { type: 'button', className: 'sit-pop-ok', style: { flex: 1 }, onClick: () => onApply(row.k, n, inp) }, h(Icon, { d: SIT_ICO_CHECK, size: 18 }), 'Übernehmen'))));
 }
 // Schreibfeld mit festem Seitenverhaeltnis (Breite 480 → Striche passen 1:1 in die Druck-Kachel)
 function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
@@ -39845,7 +40012,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.96")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.97")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41595,12 +41762,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         color: pct === 100 ? '#16a34a' : '#94a3b8',
         flexShrink: 0
       }
-    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'), sitLayoutMode === 'chips' && /*#__PURE__*/React.createElement("button", {
-      type: "button",
-      className: "sit-ink-sw",
-      title: "Eigene = Erkennung der App · System = Apple Scribble / Samsung S Pen",
-      onClick: toggleSitInkMode
-    }, "Preisschrift: ", /*#__PURE__*/React.createElement("b", null, sitInkMode === 'own' ? 'Eigene' : 'System')));
+    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'));
   })(), /*#__PURE__*/React.createElement("div", {
     className: "custom-scrollbar sit-card-grid",
     "data-sit-tabs": sitLayoutMode === 'tabs' ? String(sitTab) : undefined,
@@ -41884,7 +42046,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       key: sitCostOpen,
       row,
       anchor,
-      inkMode: sitInkMode,
+      inkMode: 'sys',
       onClose: () => setSitCostOpen(null),
       onApply: applySitCost
     });
