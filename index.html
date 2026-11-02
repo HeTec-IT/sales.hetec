@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.100';
+        manifestLink.href = 'manifest.webmanifest?v=55.101';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.100').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.101').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.100';
+    window.APP_VERSION = '55.101';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -3263,6 +3263,8 @@ body.pdf-share-mode .share-outro,
 .share-outro-small{font-size:10px;color:rgba(255,255,255,0.70);font-weight:700;}
 .share-outro-qr{margin:8px auto 6px auto;width:110px;height:110px;background:#fff;border-radius:14px;padding:8px;box-shadow:0 8px 20px rgba(0,0,0,0.25);}
 .share-outro-qr img{width:100%;height:100%;object-fit:contain;display:block;}
+.share-outro-qr{box-sizing:border-box;flex:none;}
+.share-outro-qr img{width:100%;height:100%;}
 .share-outro-link{font-size:9px;word-break:break-all;color:rgba(255,255,255,0.65);margin-top:6px;font-weight:800;}
 .share-outro-amount{margin-top:6px;font-size:44px;font-weight:1000;color:#ffffff;}
 .share-outro-voucher{margin-top:10px;padding:12px 10px;border:2px dashed rgba(255,255,255,0.35);border-radius:18px;font-family:monospace;font-size:16px;font-weight:1000;background:rgba(0,0,0,0.18);letter-spacing:0.12em;}
@@ -34313,10 +34315,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
            justify-content:center !important;
          }
          .pdf-share-mode .share-outro-qr{
-           width:80px !important;
-           height:80px !important;
-           margin:4px auto !important;
+           box-sizing:border-box !important;
+           flex:none !important;
+           width:96px !important;
+           height:96px !important;
+           padding:6px !important;
+           margin:6px auto 4px auto !important;
+           overflow:hidden !important;
          }
+         .pdf-share-mode .share-outro-qr img{width:84px !important;height:84px !important;object-fit:contain !important;display:block !important;}
          .pdf-share-mode .share-outro-amount{
            font-size:34px !important;
            margin-top:2px !important;
@@ -40169,7 +40176,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.100")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.101")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
