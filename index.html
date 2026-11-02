@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.80';
+        manifestLink.href = 'manifest.webmanifest?v=55.81';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.80').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.81').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.80';
+    window.APP_VERSION = '55.81';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -27962,6 +27962,33 @@ function App() {
       sheetStash: current
     }));
   }, [jKey, offerData.sheetActive]);
+  // v55.81: Aendert sich die Groesse einer Angebots-Schreibflaeche (Preisleiste, Drehen, Tastatur …), Bitmap neu
+  // zeichnen – sonst bleibt es in der alten Groesse und wird gestreckt angezeigt (im PDF dann verzerrt).
+  useEffect(() => {
+    let t = null;
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        try {
+          const bad = Array.from(document.querySelectorAll('.offer-canvas-container canvas.drawing-canvas')).some(cv => {
+            const r = cv.getBoundingClientRect();
+            if (!(r.width > 20) || !(r.height > 20) || !cv.width || !cv.height) return false;
+            return Math.abs(cv.width / r.width / (cv.height / r.height) - 1) > 0.015;
+          });
+          if (bad && !window.__activeDrawingCanvas) setRedrawCounter(c => c + 1);
+        } catch (e) {}
+      }, 200);
+    }) : null;
+    try {
+      if (ro) document.querySelectorAll('.offer-canvas-container canvas.drawing-canvas').forEach(cv => ro.observe(cv));
+    } catch (e) {}
+    return () => {
+      clearTimeout(t);
+      try {
+        ro && ro.disconnect();
+      } catch (e) {}
+    };
+  }, [jKey, offerLayoutMode, redrawCounter]);
   // v55.77: nach Verbinden/Trennen die Karten neu zeichnen, sobald das Layout steht
   // (sonst bleibt die Bitmap in der alten Groesse → Schrift verzerrt).
   useEffect(() => {
@@ -33405,9 +33432,27 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         const dst = Array.from(cloneRoot.querySelectorAll('canvas:not([data-cost-key])'));
         const n = Math.min(src.length, dst.length);
         for (let i = 0; i < n; i++) {
-          const sc = src[i];
+          const scOrig = src[i];
+          let sc = scOrig;
           const dc = dst[i];
           if (!sc || !dc) continue;
+          // v55.81 VERZERRUNG IM PDF: Stimmt das Bitmap-Seitenverhaeltnis nicht mit der angezeigten Groesse ueberein
+          // (Karte hat Hoehe/Breite geaendert, Bitmap noch alt), zeigt das Tablet die Schrift korrekt (per CSS
+          // gestreckt), das rohe Bitmap waere aber gestaucht. → Bitmap auf das angezeigte Seitenverhaeltnis bringen.
+          try {
+            const _cr0 = scOrig.getBoundingClientRect();
+            if (_cr0.width > 20 && _cr0.height > 20 && scOrig.width > 0 && scOrig.height > 0) {
+              const _ax = scOrig.width / _cr0.width,
+                _ay = scOrig.height / _cr0.height;
+              if (Math.abs(_ax / _ay - 1) > 0.015) {
+                const _c2 = document.createElement('canvas');
+                _c2.width = scOrig.width;
+                _c2.height = Math.max(1, Math.round(_cr0.height * _ax));
+                _c2.getContext('2d').drawImage(scOrig, 0, 0, scOrig.width, scOrig.height, 0, 0, _c2.width, _c2.height);
+                sc = _c2;
+              }
+            }
+          } catch (e) {}
           let dataUrl = null;
           try {
             dataUrl = sc.toDataURL('image/png');
@@ -33422,7 +33467,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           img.setAttribute('data-ps-nh', String(sc.height));
           // v55.79: Angebots-Handschrift darf im PDF umbrechen (Quelle merken, Umbruch erst wenn Kartengroesse feststeht)
           try {
-            if (sc.classList && sc.classList.contains('drawing-canvas') && sc.closest && sc.closest('.offer-canvas-container')) {
+            if (scOrig.classList && scOrig.classList.contains('drawing-canvas') && scOrig.closest && scOrig.closest('.offer-canvas-container')) {
               window.__psReflowSrc = window.__psReflowSrc || new Map();
               const _rid = 'r' + (window.__psReflowSrc.size + 1) + '_' + Date.now();
               window.__psReflowSrc.set(_rid, sc);
@@ -33433,8 +33478,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             const _ib = _psInkBox(sc);
             if (_ib) {
               img.setAttribute('data-ps-ink', [_ib.x, _ib.y, _ib.w, _ib.h].join(','));
-              const _cr = sc.getBoundingClientRect();
-              img.setAttribute('data-ps-dpr', String(_cr.width > 20 ? Math.max(1, sc.width / _cr.width) : 1));
+              const _cr = scOrig.getBoundingClientRect();
+              img.setAttribute('data-ps-dpr', String(_cr.width > 20 ? Math.max(1, scOrig.width / _cr.width) : 1));
             }
           } catch (e) {}
           // v55.54 URSACHE DER VERZERRTEN HANDSCHRIFT: Das Bild erbte die Canvas-Klassen (drawing-canvas,
@@ -38607,7 +38652,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.80")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.81")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
