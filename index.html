@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.97';
+        manifestLink.href = 'manifest.webmanifest?v=55.98';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.97').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.98').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.97';
+    window.APP_VERSION = '55.98';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4217,6 +4217,14 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-ink{ position:absolute; inset:-7px 0; display:block; z-index:2; }
 .sit-ink-cv{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; background:transparent; border-radius:12px; cursor:text; }
 .sit-ink-msg{ position:absolute; inset:7px 0; display:flex; align-items:center; justify-content:center; text-align:center; padding:0 8px; background:rgba(255,255,255,.94); border-radius:12px; color:#1e40af; font-size:12px; font-weight:700; line-height:1.15; pointer-events:none; }
+.sit-price-c{ margin-top:8px; width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:0 8px 0 6px; border-radius:12px; border:1.5px solid #e2e8f0; background:#f8fafc; font-family:inherit; cursor:pointer; text-align:left; touch-action:manipulation; }
+.sit-price-c i{ width:28px; height:28px; border-radius:9px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-style:normal; flex-shrink:0; }
+.sit-price-c .l{ font-size:13px; font-weight:800; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.sit-price-c .v{ margin-left:auto; font-size:16px; font-weight:800; color:#94a3b8; white-space:nowrap; }
+.sit-price-c.has{ border-color:#93c5fd; background:#f5f9ff; }
+.sit-price-c.has .v{ color:#1d4ed8; }
+.sit-price-c .pn{ color:#94a3b8; display:flex; }
+.sit-price-sheet .sit-price{ margin-top:0; border:0; background:transparent; padding:0; }
 .sit-qp{ display:flex; flex-wrap:wrap; gap:5px; }
 .sit-qp button{ height:36px; padding:0 11px; border-radius:999px; border:1.5px solid #e2e8f0; background:#fff; font-size:12.5px; font-weight:700; color:#334155; cursor:pointer; font-family:inherit; touch-action:manipulation; }
 .sit-qp button.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
@@ -4275,14 +4283,50 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 @media screen and (min-width: 1100px){
   .sit-chips-panel{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 }
+/* v55.98: Querformat ohne Scrollen – Schnellauswahl kompakt (Preise als Zeile → Preisfenster, Summe oben) */
+.sit-sum-pill{ display:inline-flex; align-items:baseline; gap:6px; padding:5px 12px; border-radius:10px; background:#f8fafc; border:1.5px solid #e2e8f0; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; white-space:nowrap; flex-shrink:0; }
+.sit-sum-pill b{ font-size:17px; letter-spacing:0; color:#94a3b8; }
+.sit-sum-pill.has{ background:#eff6ff; border-color:#93c5fd; }
+.sit-sum-pill.has b{ color:#1d4ed8; }
+.sit-sum-pill em{ font-style:normal; font-size:11px; letter-spacing:0; text-transform:none; color:#475569; }
+@media screen and (orientation: landscape) and (min-width: 1100px){
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ overflow-y:auto; overscroll-behavior:contain; gap:10px; padding-bottom:0; margin-bottom:56px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block{ padding:7px 10px; gap:5px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title{ font-size:12.5px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title i{ width:22px; height:22px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-label{ margin-bottom:3px; font-size:10px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-row{ gap:5px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip{ min-height:32px; padding:0 10px; font-size:12.5px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar{ margin-top:5px; min-height:34px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-dp{ width:28px; height:28px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-hint span{ width:26px; height:26px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar.ink{ min-height:40px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar.ink .sit-note-tx, body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-ink{ height:34px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block > div > .sit-price{ margin-top:6px; padding:5px 8px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-price-hd{ min-height:30px; font-size:12.5px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-stp-r button{ width:34px; height:34px; font-size:19px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-c{ margin-top:5px; min-height:36px; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] .sit-card-canvas{ height:44px!important; min-height:44px!important; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] > div:not([data-sit-offtab]) > button{ padding-top:6px!important; padding-bottom:4px!important; min-height:0!important; }
+}
 /* Druck + PDF: Schnellauswahl-Panel/Umschalter weg, alle 10 Kacheln wie frueher (mit Antwort-Tags) */
 @media print{
 .sit-chips-panel,.sit-seg{ display:none!important; }
 .sit-card-grid[data-sit-chips] > div[data-sit-offtab]{ position:static!important; left:auto!important; top:auto!important; width:auto!important; height:auto!important; visibility:visible!important; pointer-events:auto!important; }
 .sit-answer-tags{ padding:3px 8px 0 8px!important; }
 .sit-answer-tag{ font-size:10px!important; padding:2px 7px!important; }
+.sit-answer-tags:has(.sit-answer-sent) .sit-answer-tag{ display:none!important; }
+.sit-answer-sent{ display:block!important; }
 }
 body.pdf-share-mode .sit-chips-panel, body.pdf-share-mode .sit-seg{ display:none!important; }
+/* v55.98: Saetze statt Stichworte (Druck + Kunden-PDF) */
+.sit-answer-sent{ display:none; width:100%; font-size:11.5px; line-height:1.4; color:#334155; font-weight:500; }
+.sit-answer-sent b{ color:#1e3a8a; font-weight:800; }
+.sit-as-row{ display:flex; justify-content:space-between; gap:8px; border-bottom:1px dashed #e2e8f0; padding:1px 0; }
+.sit-as-row.sum{ border-bottom:0; border-top:1.5px solid #cbd5e1; margin-top:2px; padding-top:3px; }
+.sit-as-row.sum b{ color:#1d4ed8; }
+body.pdf-share-mode .sit-answer-tags:has(.sit-answer-sent) .sit-answer-tag{ display:none!important; }
+body.pdf-share-mode .sit-answer-sent{ display:block!important; }
 /* v55.85: wie bei den Angeboten – Kacheln vom linken Bildschirmrand weg (Stift am Rand = Android-Zurueck-Geste) */
 @media screen and (orientation: landscape) and (min-width: 768px){ body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid{ padding-left:24px!important; } body:not(.pdf-share-mode) .situation-view-wrapper .sit-tab-bar{ padding-left:24px; } }
 </style>
@@ -10208,6 +10252,76 @@ const sitChipTags = (td, itemId) => {
   if (itemId === 'Gesamtkosten' || itemId === 'Haushalt') sitCostTags(td, itemId).forEach(t => out.push(t));
   return out;
 };
+// v55.98: Kunden-PDF – Antworten als ganze Saetze (Kundensprache) statt nackter Stichworte
+const sitJoin = arr => arr.length <= 1 ? arr.join('') : arr.slice(0, -1).join(', ') + ' und ' + arr[arr.length - 1];
+const sitSentence = (td, itemId) => {
+  const sel = sitChipsParse(td);
+  const g = id => sel[id] || [];
+  const one = id => g(id)[0];
+  const out = [];
+  const say = (...parts) => out.push(parts);
+  if (itemId === 'Anbieter') {
+    const a = one('anb');
+    if (a) say('Sie sind aktuell bei ', { b: a === 'Andere' ? 'einem anderen Anbieter' : a === 'o2' ? 'o2' : a }, '.');
+    const e = one('end');
+    const EM = { '< 3 Mon.': 'weniger als 3 Monaten', '3–6 Mon.': '3–6 Monaten', '6–12 Mon.': '6–12 Monaten', '> 12 Mon.': 'mehr als 12 Monaten' };
+    if (e) say('Ihr Vertrag endet in ', { b: EM[e] || e }, '.');
+    const k = one('kuend');
+    if (k) say('Der Vertrag ist ', { b: k === 'Ja' ? 'bereits gekündigt' : 'noch nicht gekündigt' }, '.');
+  } else if (itemId === 'Hardware') {
+    const hd = one('handy');
+    const HM = { iPhone: 'ein iPhone', Samsung: 'ein Samsung-Smartphone', Pixel: 'ein Google Pixel', Andere: 'ein anderes Smartphone' };
+    const al = one('alter');
+    const AM = { '< 1 J.': 'jünger als 1 Jahr', '1–2 J.': '1–2 Jahre alt', '> 2 J.': 'älter als 2 Jahre' };
+    if (hd && al) say('Sie nutzen ', { b: HM[hd] || hd }, ', das ', { b: AM[al] || al }, ' ist.');
+    else if (hd) say('Sie nutzen ', { b: HM[hd] || hd }, '.');
+    else if (al) say('Ihr Gerät ist ', { b: AM[al] || al }, '.');
+  } else if (itemId === 'Nutzung') {
+    const d = one('daten');
+    if (d === 'Unlimited') say('Sie brauchen ', { b: 'unbegrenztes Datenvolumen' }, '.');
+    else if (d) say('Ihr Datenbedarf liegt bei ', { b: d.replace('< ', 'unter ') + ' im Monat' }, '.');
+    const w = g('wichtig').map(x => x === 'Ausland' ? 'Nutzung im Ausland' : x);
+    if (w.length) say(w.length > 1 ? 'Besonders wichtig sind Ihnen ' : 'Besonders wichtig ist Ihnen ', { b: sitJoin(w) }, '.');
+  } else if (itemId === 'Haushalt') {
+    const o = sitCostGet(td);
+    const p = o.p > 0 ? o.p : 0, v = o.v > 0 ? o.v : 0;
+    if (p && v) say('Im Haushalt leben ', { b: p + (p === 1 ? ' Person' : ' Personen') }, ' mit ', { b: v + (v === 1 ? ' Mobilfunkvertrag' : ' Mobilfunkverträgen') }, '.');
+    else if (p) say('Im Haushalt leben ', { b: p + (p === 1 ? ' Person' : ' Personen') }, '.');
+    else if (v) say('Es bestehen ', { b: v + (v === 1 ? ' Mobilfunkvertrag' : ' Mobilfunkverträge') }, '.');
+    const pc = one('pers');
+    if (pc && !p) say('Im Haushalt leben ', { b: pc === '1' ? '1 Person' : pc + ' Personen' }, '.');
+  } else if (itemId === 'Fernsehen') {
+    const t = one('tv');
+    const TM = { Kabel: 'Kabel', Sat: 'Satellit', Streaming: 'Streaming' };
+    if (t === 'Kein TV') say('Sie nutzen ', { b: 'kein Fernsehen' }, '.');
+    else if (t) say('Sie schauen Fernsehen über ', { b: TM[t] || t }, '.');
+  } else if (itemId === 'WiFi') {
+    const w = one('wlan');
+    const WM = { Ja: 'zufrieden', Teilweise: 'nur teilweise zufrieden', Nein: 'nicht zufrieden' };
+    if (w) say('Mit Ihrem WLAN sind Sie ', { b: WM[w] || w }, '.');
+  } else if (itemId === 'Weitere Produkte') {
+    const gg = g('geraete');
+    if (gg.length) say('Weitere Geräte und Produkte: ', { b: sitJoin(gg) }, '.');
+  } else if (itemId === 'Gesamtkosten') {
+    const rows = sitCostRows(td, sitCostGet(td).t || {}).filter(r => r.total > 0);
+    const o = sitCostGet(td);
+    if (rows.length) {
+      const sum = rows.reduce((a, r) => a + r.total, 0);
+      rows.forEach(r => out.push({ row: true, l: r.print, v: (r.n > 1 ? r.n + ' × ' + sitCostFmt(r.total / r.n) + ' € = ' : '') + sitCostFmt(r.total) + ' €' }));
+      out.push({ row: true, sum: true, l: 'Gesamt pro Monat', v: sitCostFmt(sum) + ' €' + (o.p > 0 ? ' · ' + sitCostFmt(sum / o.p) + ' € pro Person' : '') });
+    } else {
+      const k = one('kost');
+      if (k) say('Sie zahlen heute ', { b: k.replace('< ', 'unter ').replace('> ', 'über ') + ' im Monat' }, '.');
+    }
+  }
+  return out;
+};
+const sitSentenceEl = (td, itemId) => {
+  const h = React.createElement;
+  const lines = sitSentence(td, itemId);
+  if (!lines.length) return null;
+  return h('div', { className: 'sit-answer-sent' }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
+};
 // Für Auswertung/Statistik: Chips zählen wie getippter Text (nur wenn Feld sonst leer)
 const sitTextWithChips = td => {
   const base = td || {};
@@ -10309,7 +10423,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
   const prices = (b, gid) => !cost || !b.price || !b.price[gid] ? null : b.price[gid].map(k => {
     if (k === 'pers') return h(SitPersRow, { key: 'pers', pers: cost.pers, onPers: cost.onPers });
     const row = cost.rows.find(r => r.k === k);
-    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, inkMode: cost.inkMode }) : null;
+    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen }) : null;
   });
   return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block' }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
@@ -10320,7 +10434,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
       className: 'sit-chip' + (cur.includes(o[0]) ? ' on' : ''),
       onClick: () => onToggle(g, o[0])
     }, o[0]))), b.bars[gid] ? bar(b.bars[gid]) : null, prices(b, gid));
-  }))), cost ? h(SitSumBar, { rows: cost.rows, pers: cost.pers }) : null);
+  }))), cost && !cost.compact ? h(SitSumBar, { rows: cost.rows, pers: cost.pers }) : null);
 }
 // v55.91: Preisfelder direkt in der jeweiligen Kategorie (Stift schreibt ins Feld = Scribble, Tippen, Ziffernblock)
 const sitPriceClean = v => {
@@ -10819,13 +10933,19 @@ function SitBoxPrice({ row, onSet, onPad }) {
   }));
   return h('div', { className: 'sit-bxs', 'aria-label': row.label + ' – Preis, je Kästchen eine Ziffer' }, box(0), box(1), box(2), h('span', { className: 'sit-bx-c' }, ','), box(3), box(4), h('b', { className: 'sit-bx-e' }, '€'));
 }
-function SitPriceRow({ row, vert, onVert, onApply, onPad }) {
+function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen }) {
   const h = React.createElement;
   const isM = row.k === 'mobile';
   const n = row.n || 1;
   const has = row.total > 0;
   const quick = SIT_QUICK[row.k] || [];
   const cur = has ? sitCostFmt(sitCostNum(row.price)) : '';
+  if (compact) return h('button', {
+    type: 'button',
+    className: 'sit-price-c' + (has ? ' has' : ''),
+    'data-price': row.k,
+    onClick: e => onOpen(row.k, e.currentTarget)
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, row.label), h('span', { className: 'v' }, has ? (n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : 'Preis'), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
   return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), row.label, h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h('div', { className: 'sit-price-vl' }, h('span', null, 'Verträge'), sitStp('', vert, onVert)) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
     key: q,
     type: 'button',
@@ -28079,6 +28199,32 @@ function App() {
       return 'own';
     }
   });
+  const sitCompactMq = '(orientation: landscape) and (min-width: 1100px)';
+  const [sitCompact, setSitCompact] = useState(() => {
+    try {
+      return window.matchMedia(sitCompactMq).matches;
+    } catch (e) {
+      return false;
+    }
+  });
+  useEffect(() => {
+    let mq = null;
+    try {
+      mq = window.matchMedia(sitCompactMq);
+    } catch (e) {
+      return;
+    }
+    const f = () => setSitCompact(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', f);
+    else if (mq.addListener) mq.addListener(f);
+    window.addEventListener('resize', f);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', f);
+      else if (mq.removeListener) mq.removeListener(f);
+      window.removeEventListener('resize', f);
+    };
+  }, []);
+  const [sitPriceSheet, setSitPriceSheet] = useState(null);
   const toggleSitInkMode = () => {
     const m = sitInkMode === 'own' ? 'sys' : 'own';
     setSitInkMode(m);
@@ -40012,7 +40158,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.97")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.98")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41762,7 +41908,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         color: pct === 100 ? '#16a34a' : '#94a3b8',
         flexShrink: 0
       }
-    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'));
+    }, pct === 100 ? '✓ Vollständig' : filled + '/' + SITUATION_ITEMS.length + ' Felder'), sitLayoutMode === 'chips' && sitCompact && (() => {
+      const rows = sitCostRows(textData, costState);
+      const sum = rows.reduce((a, r) => a + r.total, 0);
+      const co = sitCostGet(textData);
+      return /*#__PURE__*/React.createElement("span", {
+        className: "sit-sum-pill" + (sum > 0 ? ' has' : ''),
+        "data-sit-sum": "1"
+      }, "Gesamtkosten alt ", /*#__PURE__*/React.createElement("b", null, sitCostFmt(sum) + ' €'), co.p > 0 && sum > 0 ? /*#__PURE__*/React.createElement("em", null, sitCostFmt(sum / co.p) + ' € p. P.') : null);
+    })());
   })(), /*#__PURE__*/React.createElement("div", {
     className: "custom-scrollbar sit-card-grid",
     "data-sit-tabs": sitLayoutMode === 'tabs' ? String(sitTab) : undefined,
@@ -41921,7 +42075,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }, _chipTags.map((t, ti) => /*#__PURE__*/React.createElement("span", {
       key: ti,
       className: "sit-answer-tag"
-    }, t))), /*#__PURE__*/React.createElement("div", {
+    }, t)), sitSentenceEl(textData, item.id)), /*#__PURE__*/React.createElement("div", {
       className: "sit-card-canvas",
       style: {
         flex: 1,
@@ -42024,10 +42178,51 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         onVert: d => stepSitCost('v', d),
         onApply: applySitCost,
         onPad: openSitPad,
-        inkMode: sitInkMode
+        inkMode: sitInkMode,
+        compact: sitCompact,
+        onOpen: (k, el) => {
+          let r = null;
+          try {
+            r = el.getBoundingClientRect();
+          } catch (e) {}
+          setSitPriceSheet({ k, r });
+        }
       };
     })()
-  }), sitLayoutMode === 'chips' && view === 'situation' && sitCostOpen && ReactDOM.createPortal((() => {
+  }), sitLayoutMode === 'chips' && view === 'situation' && sitPriceSheet && !sitCostOpen && ReactDOM.createPortal((() => {
+    const row = sitCostRows(textData, costState).find(r => r.k === sitPriceSheet.k);
+    if (!row) return null;
+    const co = sitCostGet(textData);
+    const sr = sitPriceSheet.r;
+    const W = 420;
+    const left = sr ? Math.max(8, Math.min(window.innerWidth - W - 8, sr.left)) : 40;
+    const anchor = sr && sr.top > window.innerHeight / 2 ? { left, bottom: Math.max(8, window.innerHeight - sr.top + 8), width: W } : { left, top: sr ? Math.max(8, Math.min(sr.bottom + 8, window.innerHeight - 440)) : 80, width: W };
+    return /*#__PURE__*/React.createElement("div", {
+      className: "sit-pop-back",
+      onClick: e => {
+        if (e.target === e.currentTarget) setSitPriceSheet(null);
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sit-pop sit-price-sheet",
+      style: anchor
+    }, /*#__PURE__*/React.createElement(SitPriceRow, {
+      row,
+      vert: co.v || 0,
+      onVert: d => stepSitCost('v', d),
+      onApply: applySitCost,
+      onPad: (k, el) => {
+        setSitPriceSheet(null);
+        openSitPad(k, el);
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      className: "sit-pop-ok",
+      onClick: () => setSitPriceSheet(null)
+    }, /*#__PURE__*/React.createElement(Icon, {
+      d: SIT_ICO_CHECK,
+      size: 18
+    }), "Fertig")));
+  })(), document.body), sitLayoutMode === 'chips' && view === 'situation' && sitCostOpen && ReactDOM.createPortal((() => {
     const row = sitCostRows(textData, costState).find(r => r.k === sitCostOpen);
     if (!row) return null;
     const sr = sitPadRect;
