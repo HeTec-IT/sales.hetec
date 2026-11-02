@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.77';
+        manifestLink.href = 'manifest.webmanifest?v=55.78';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.77').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.78').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.77';
+    window.APP_VERSION = '55.78';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -27903,6 +27903,65 @@ function App() {
       ...psPriceTotals(packagePrices, jEff.j12, jEff.j23, prev.monatlich2Manual)
     }));
   }, [jKey]);
+  // v55.78: Das grosse Blatt (alle drei verbunden) hat eine EIGENE Seite. Beim Wechsel werden die Inhalte
+  // von Karte 1 und Blatt getauscht (Strich, Text, Status, Bild/Bundle) – nichts wird verkleinert, und
+  // beim naechsten Verbinden ist der Blatt-Inhalt wieder da. Der jeweils andere Stand liegt in offerData.sheetStash.
+  useEffect(() => {
+    const want = !!(jEff.j12 && jEff.j23);
+    const cur = !!offerData.sheetActive;
+    if (want === cur) return;
+    const blankT = {
+      x: 0,
+      y: 0,
+      scale: 1.0,
+      rotation: 0
+    };
+    const current = {
+      strokes: drawnStrokes.offer1 || [],
+      text: textData.offer1 || '',
+      status: canvasStatus.offer1 || 'neutral',
+      image: canvasImages.offer1 || null,
+      html: canvasHtml.offer1 || null,
+      transform: imageTransform.offer1 || blankT
+    };
+    const next = offerData.sheetStash || {
+      strokes: [],
+      text: '',
+      status: 'neutral',
+      image: null,
+      html: null,
+      transform: blankT
+    };
+    setDrawnStrokes(p => ({
+      ...p,
+      offer1: next.strokes || []
+    }));
+    setTextData(p => ({
+      ...p,
+      offer1: next.text || ''
+    }));
+    setCanvasStatus(p => ({
+      ...p,
+      offer1: next.status || 'neutral'
+    }));
+    setCanvasImages(p => ({
+      ...p,
+      offer1: next.image || null
+    }));
+    setCanvasHtml(p => ({
+      ...p,
+      offer1: next.html || null
+    }));
+    setImageTransform(p => ({
+      ...p,
+      offer1: next.transform || blankT
+    }));
+    setOfferData(p => ({
+      ...p,
+      sheetActive: want,
+      sheetStash: current
+    }));
+  }, [jKey, offerData.sheetActive]);
   // v55.77: nach Verbinden/Trennen die Karten neu zeichnen, sobald das Layout steht
   // (sonst bleibt die Bitmap in der alten Groesse → Schrift verzerrt).
   useEffect(() => {
@@ -38172,7 +38231,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.77")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.78")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
