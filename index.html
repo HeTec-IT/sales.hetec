@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.92';
+        manifestLink.href = 'manifest.webmanifest?v=55.93';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.92').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.93').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.92';
+    window.APP_VERSION = '55.93';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4249,11 +4249,10 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-question-chips{ di
 .sit-dot{ width:44px; height:44px; border-radius:12px; border:1.5px solid #e2e8f0; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .sit-dot i{ display:block; width:20px; height:20px; border-radius:99px; }
 .sit-dot.on{ border-color:#2563eb; box-shadow:0 0 0 3px #dbeafe; }
-/* v55.92: Querformat – rechte Spalte schmaler/ruhiger, damit die Schnellauswahl mehr Platz bekommt */
-@media screen and (orientation: landscape) and (min-width: 768px){
-  body:not(.pdf-share-mode) .situation-view-wrapper.sit-mode-chips > aside.sit-aside-panel{ min-width:288px !important; flex-basis:23% !important; max-width:304px !important; }
-  body:not(.pdf-share-mode) .situation-view-wrapper.sit-mode-chips .sit-aside-inner{ gap:12px !important; }
-  body:not(.pdf-share-mode) .situation-view-wrapper.sit-mode-chips .sit-chips-panel{ gap:12px; }
+/* v55.93: Querformat – Summenzeile (grid-column 1/-1) verhinderte das Zusammenfallen leerer auto-fit-Spalten → nur 3 von 6 Spalten belegt.
+   Ab 1100px Breite feste 3 Spalten ueber die volle Breite. */
+@media screen and (min-width: 1100px){
+  .sit-chips-panel{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 }
 /* Druck + PDF: Schnellauswahl-Panel/Umschalter weg, alle 10 Kacheln wie frueher (mit Antwort-Tags) */
 @media print{
@@ -39428,7 +39427,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.92")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.93")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -41018,7 +41017,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     fill: "#2dd4bf",
     fontFamily: "Arial, Helvetica, sans-serif"
   }, "WIR GESTALTEN ZUKUNFT")))), /*#__PURE__*/React.createElement("div", {
-    className: `flex-1 w-full relative ${view === 'situation' ? 'flex' : 'hidden'} situation-view-wrapper${sitLayoutMode === 'chips' ? ' sit-mode-chips' : ''}`,
+    className: `flex-1 w-full relative ${view === 'situation' ? 'flex' : 'hidden'} situation-view-wrapper`,
     style: {
       overflow: 'hidden',
       minWidth: 0
