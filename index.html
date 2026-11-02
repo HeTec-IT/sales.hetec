@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.67';
+        manifestLink.href = 'manifest.webmanifest?v=55.68';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.67').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.68').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1096,7 +1096,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.67';
+    window.APP_VERSION = '55.68';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -22756,7 +22756,8 @@ const SmallInputCanvas = ({
   triggerRedraw,
   forceKeyboard = false,
   fontSize = '15px',
-  fontWeight
+  fontWeight,
+  wrapperBg
 }) => {
   // forceKeyboard: Felder wie 'Angebot gültig bis' brauchen einen echten
   // Datepicker – Handschrift ergibt dort keinen gültigen Datumswert.
@@ -22781,7 +22782,10 @@ const SmallInputCanvas = ({
     }));
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "small-canvas-wrapper h-full relative flex items-center border-none"
+    className: "small-canvas-wrapper h-full relative flex items-center border-none",
+    style: wrapperBg ? {
+      background: wrapperBg
+    } : undefined
   }, /*#__PURE__*/React.createElement("input", {
     type: inputType,
     value: inputValue,
@@ -32011,6 +32015,7 @@ function App() {
       inputType: 'text',
       fontSize: big ? '26px' : '16px',
       fontWeight: big ? 700 : 600,
+      wrapperBg: 'transparent',
       onChange: handleChange,
       placeholder: label.split(' ')[0],
       drawnStrokes: drawnStrokes,
@@ -38149,7 +38154,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.67")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.68")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
