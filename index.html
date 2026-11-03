@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.106';
+        manifestLink.href = 'manifest.webmanifest?v=55.107';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.106').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.107').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.106';
+    window.APP_VERSION = '55.107';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -11082,8 +11082,8 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
     const c = ref.current;
     if (!c) return;
     e.preventDefault();
-    // v55.105: Sobald ein Stift erkannt wurde, schreibt nur noch der Stift (Finger/Handballen ignoriert, wie in den dynamischen Eingaben)
-    if (e.pointerType === 'touch' && ((window.__psPenTs || 0) > 0 || drawRef.current)) return;
+    // v55.107: nur der Stift schreibt (Finger, Handballen und Maus werden ignoriert – wie in den dynamischen Eingaben)
+    if (e.pointerType !== 'pen') return;
     const r0 = c.getBoundingClientRect();
     const d0 = window.devicePixelRatio || 1;
     if (c.width !== Math.round(r0.width * d0) || c.height !== Math.round(r0.height * d0)) sync();
@@ -40205,7 +40205,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.106")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.107")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
