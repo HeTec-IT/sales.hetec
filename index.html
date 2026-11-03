@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.110';
+        manifestLink.href = 'manifest.webmanifest?v=55.111';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.110').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.111').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.110';
+    window.APP_VERSION = '55.111';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -11049,6 +11049,7 @@ function SitPriceInput({ row, n, onApply, big }) {
   const h = React.createElement;
   const [txt, setTxt] = React.useState(row.price || '');
   const foc = React.useRef(false);
+  const auto = React.useRef(false);
   React.useEffect(() => {
     if (!foc.current) setTxt(row.price || '');
   }, [row.price]);
@@ -11069,10 +11070,24 @@ function SitPriceInput({ row, n, onApply, big }) {
     'aria-label': row.label + ' – Preis in Euro',
     onFocus: e => {
       foc.current = true;
+      auto.current = false;
       try { e.target.select(); } catch (_) {}
     },
     onChange: e => {
-      const t = clean(e.target.value);
+      const rawV = e.target.value;
+      let t = clean(rawV);
+      // wie im Stift-Feld: 4 Ziffern ohne Komma = 39,99 · 5 Ziffern = 123,45 (Komma nur automatisch, solange keins getippt wurde)
+      const grew = rawV.length > txt.length;
+      if (grew && (auto.current || t.indexOf(',') < 0)) {
+        const dg = rawV.replace(/\D/g, '');
+        if (dg.length >= 4 && !(txt.indexOf(',') >= 0 && !auto.current)) {
+          const d = dg.slice(0, 5);
+          t = d.length === 4 ? d.slice(0, 2) + ',' + d.slice(2) : d.slice(0, 3) + ',' + d.slice(3);
+          auto.current = true;
+        }
+      }
+      if (t.indexOf(',') < 0) auto.current = false;
+      else if (grew && !auto.current) auto.current = false;
       setTxt(t);
       onApply(row.k, n, t);
     },
@@ -40356,7 +40371,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.110")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.111")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
