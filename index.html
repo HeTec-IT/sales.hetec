@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.111';
+        manifestLink.href = 'manifest.webmanifest?v=55.112';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.111').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.112').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.111';
+    window.APP_VERSION = '55.112';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4200,6 +4200,39 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-price.has .sit-price-hd i{ background:#eff6ff; color:#1d4ed8; }
 .sit-price-hd em{ margin-left:auto; font-style:normal; font-size:11px; font-weight:700; color:#64748b; }
 .sit-price-r{ margin-left:auto; }
+.sit-pers{ margin-top:10px; container-type:inline-size; border-radius:14px; border:1.5px solid #e2e8f0; background:#f8fafc; padding:4px 8px; display:flex; flex-direction:column; gap:4px; }
+.sit-pers.has{ border-color:#bfdbfe; background:#f5f9ff; }
+.sit-pers-r{ display:flex; align-items:center; gap:8px; }
+.sit-pers-r i{ width:28px; height:28px; border-radius:9px; background:#dbeafe; color:#2563eb; display:flex; align-items:center; justify-content:center; font-style:normal; flex-shrink:0; }
+.sit-pers.has .sit-pers-r i{ background:#eff6ff; color:#1d4ed8; }
+.sit-pers-r .l{ font-size:13px; font-weight:800; color:#1e293b; margin-right:auto; white-space:nowrap; }
+.sit-pers-r .cnt{ display:none; font-size:12px; font-weight:800; color:#1d4ed8; margin-left:auto; }
+.sit-pp-w{ display:flex; gap:1px; align-items:center; }
+.sit-pp{ width:30px; height:32px; border-radius:10px; border:0; background:transparent; color:#cbd5e1; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; touch-action:manipulation; font-family:inherit; }
+.sit-pp.on{ color:#2563eb; }
+.sit-pp.more{ border:1.5px dashed #94a3b8; color:#64748b; margin-left:3px; width:38px; height:32px; }
+.sit-pp.more.on{ background:#2563eb; border:1.5px solid #2563eb; color:#fff; }
+.sit-pp.more b{ font-size:15px; font-weight:800; }
+.sit-pers-sub{ display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; padding-bottom:2px; }
+.sit-pers-st{ display:flex; align-items:center; background:#fff; border:1.5px solid #e2e8f0; border-radius:10px; padding:1px; }
+.sit-pers-st button{ width:36px; height:30px; border:0; border-radius:8px; background:#f1f5f9; color:#0f172a; font-size:19px; font-weight:700; cursor:pointer; font-family:inherit; touch-action:manipulation; }
+.sit-pers-st b{ min-width:34px; text-align:center; font-size:16px; font-weight:800; color:#0f172a; text-transform:none; letter-spacing:0; }
+@container (max-width: 299px){
+  .sit-pers-r i{ display:none; }
+  .sit-pp{ width:27px; }
+  .sit-pp.more{ width:34px; }
+}
+@container (max-width: 239px){
+  .sit-pers-r i{ display:flex; }
+  .sit-pers-r .l{ display:none; }
+  .sit-pp-w{ flex:1; justify-content:space-between; }
+}
+@container (max-width: 207px){
+  .sit-pers-r{ flex-wrap:wrap; row-gap:2px; }
+  .sit-pers-r .l{ display:block; margin-right:0; }
+  .sit-pers-r .cnt{ display:block; }
+  .sit-pp-w{ flex:none; width:100%; }
+}
 .sit-price-vl{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; }
 .sit-stp{ display:flex; align-items:center; gap:6px; }
 .sit-stp-l{ font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; }
@@ -10801,9 +10834,29 @@ function SitInkField({ onRead, focusRef }) {
     }
   }), msg ? h('span', { className: 'sit-ink-msg' }, msg) : null);
 }
+// v55.112: Personen mit Mensch-Symbolen (n-tes Symbol = n Personen, "+" = mehr als 5 mit Zaehler)
 function SitPersRow({ pers, onPers }) {
   const h = React.createElement;
-  return h('div', { className: 'sit-price' + (pers > 0 ? ' has' : '') }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: ICONS.Users, size: 15 })), 'Personen', h('span', { className: 'sit-price-r' }, sitStp('', pers, onPers))));
+  const svg = (on, kids) => h('svg', { viewBox: '0 0 24 24', width: 22, height: 22, fill: on ? '#bfdbfe' : 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }, kids);
+  const user = on => svg(on, [h('path', { key: 'a', d: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2' }), h('circle', { key: 'b', cx: 12, cy: 7, r: 4 })]);
+  const plus = svg(false, [h('path', { key: 'a', d: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2' }), h('circle', { key: 'b', cx: 9, cy: 7, r: 4 }), h('path', { key: 'c', d: 'M19 8v6M22 11h-6' })]);
+  const more = pers > 5;
+  const btns = [1, 2, 3, 4, 5].map(i => h('button', {
+    key: i,
+    type: 'button',
+    className: 'sit-pp' + (i <= pers ? ' on' : ''),
+    'aria-label': i + (i === 1 ? ' Person' : ' Personen'),
+    'aria-pressed': i === pers,
+    onClick: () => onPers((pers === i ? 0 : i) - pers)
+  }, user(i <= pers)));
+  btns.push(h('button', {
+    key: 'm',
+    type: 'button',
+    className: 'sit-pp more' + (more ? ' on' : ''),
+    'aria-label': 'Mehr als 5 Personen',
+    onClick: () => { if (!more) onPers(6 - pers); }
+  }, more ? h('b', null, pers) : plus));
+  return h('div', { className: 'sit-pers' + (pers > 0 ? ' has' : '') }, h('div', { className: 'sit-pers-r' }, h('i', null, h(Icon, { d: ICONS.Users, size: 15 })), h('span', { className: 'l' }, 'Personen'), h('span', { className: 'cnt' }, pers > 0 ? pers + (pers === 1 ? ' Person' : ' Personen') : ''), h('div', { className: 'sit-pp-w' }, btns)), more ? h('div', { className: 'sit-pers-sub' }, h('span', null, 'Anzahl'), h('div', { className: 'sit-pers-st' }, h('button', { type: 'button', 'aria-label': 'weniger', onClick: () => onPers(-1) }, '−'), h('b', null, pers), h('button', { type: 'button', 'aria-label': 'mehr', onClick: () => onPers(1) }, '+'))) : null);
 }
 // v55.97: Preis = Schnellpreise zum Antippen + Kaestchen je Ziffer (Stift: eine Ziffer pro Kaestchen, Komma steht fest)
 const SIT_QUICK = {
@@ -40371,7 +40424,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.111")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.112")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
