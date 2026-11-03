@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.108';
+        manifestLink.href = 'manifest.webmanifest?v=55.109';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.108').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.109').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.108';
+    window.APP_VERSION = '55.109';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -36681,6 +36681,31 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     try {
       await _psReflowHandwriting(stage);
     } catch (e) {}
+    // v55.109: getippter Text (Tastatur) in den Kacheln – Schriftgroesse (S/M/L) passt sich der PDF-Kachel an
+    try {
+      stage.querySelectorAll('.sit-card-canvas input[type="text"]').forEach(inp => {
+        const area = inp.parentElement;
+        const txt = String(inp.value || inp.getAttribute('value') || '').trim();
+        if (!area) return;
+        if (!txt) { inp.remove(); return; }
+        const W = area.clientWidth, H = area.clientHeight;
+        const d = document.createElement('div');
+        d.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;box-sizing:border-box;padding:1px 12px;display:flex;align-items:center;overflow:hidden;color:#1e293b;z-index:5;';
+        d.style.fontWeight = inp.style.fontWeight || '500';
+        d.style.fontStyle = inp.style.fontStyle || 'normal';
+        const sp = document.createElement('span');
+        sp.style.cssText = 'display:block;width:100%;line-height:1.12;overflow-wrap:anywhere;';
+        sp.textContent = txt;
+        d.appendChild(sp);
+        inp.replaceWith(d);
+        let fs = Math.min(parseFloat(inp.style.fontSize) || 32, 26);
+        sp.style.fontSize = fs + 'px';
+        while (fs > 9 && (sp.offsetHeight > (H || 0) - 2 || sp.scrollWidth > (W || 0) - 24)) {
+          fs -= 1;
+          sp.style.fontSize = fs + 'px';
+        }
+      });
+    } catch (e) {}
     try {
       if (window.__psReflowSrc) window.__psReflowSrc.clear();
     } catch (e) {}
@@ -40270,7 +40295,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.108")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.109")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
