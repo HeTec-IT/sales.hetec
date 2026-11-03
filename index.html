@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.112';
+        manifestLink.href = 'manifest.webmanifest?v=55.113';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.112').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.113').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.112';
+    window.APP_VERSION = '55.113';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10171,6 +10171,33 @@ const SITUATION_ITEMS = [{
 // alten Kacheln.
 // ═══════════════════════════════════════════════════════════════════
 const SIT_CHIP_KEY = '_sitChips';
+const SIT_I18N_KEYS = ["Vertrag & Anbieter", "Gerät & Nutzung", "Zuhause & TV", "Aktueller Anbieter", "Vertrag endet in", "Schon gekündigt?", "Rufnummer mitnehmen?", "Handy", "Alter des Geräts", "Datenvolumen", "Wichtig", "Fernsehen über", "WLAN zufrieden?", "Weitere Geräte", "Anbieter", "Hardware", "Nutzung", "Fernsehen", "WiFi", "Weitere Produkte", "Haushalt", "Andere", "< 3 Mon.", "3–6 Mon.", "6–12 Mon.", "> 12 Mon.", "Ja", "Nein", "< 1 J.", "1–2 J.", "> 2 J.", "Ausland", "Kamera", "Viel Speicher", "Kabel", "Sat", "Kein TV", "Teilweise", "Games", "Social Media", "Versicherung", "Smartwatch", "Laptop", "Aktuell bei o2", "Anderer Anbieter", "Vertrag endet in < 3 Monaten", "Vertrag endet in 3–6 Monaten", "Vertrag endet in 6–12 Monaten", "Vertrag endet in > 12 Monaten", "Bereits gekündigt", "Noch nicht gekündigt", "Rufnummer wird mitgenommen", "Rufnummer wird nicht mitgenommen", "Anderes Handy", "Gerät jünger als 1 Jahr", "Gerät 1–2 Jahre alt", "Gerät älter als 2 Jahre", "Kamera wichtig", "Viel Gerätespeicher", "Satellit", "WLAN zufrieden", "WLAN teilweise zufrieden", "WLAN nicht zufrieden", "Anderer Anbieter / Notiz …", "Modell / Schaden …", "Genauer Verbrauch …", "Sender / Pakete …", "Problem beschreiben …", "Anderes Gerät / Produkt …", "Mobilfunk", "DSL / Internet", "Hardware (Rate)", "Hardware-Rate", "Preis", "Personen", "Anzahl", "Gesamt pro Monat", "pro Person", "Mobilfunkverträge", "Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt."];
+const SIT_I18N_VALS = {
+  en: ["Contract & Provider", "Device & Usage", "Home & TV", "Current provider", "Contract ends in", "Already cancelled?", "Keep phone number?", "Phone", "Age of device", "Data volume", "Important", "Watching TV via", "WiFi satisfied?", "Other devices", "Provider", "Hardware", "Usage", "Television", "WiFi", "Other products", "Household", "Other", "< 3 mo.", "3–6 mo.", "6–12 mo.", "> 12 mo.", "Yes", "No", "< 1 yr", "1–2 yrs", "> 2 yrs", "Abroad", "Camera", "Lots of storage", "Cable", "Satellite", "No TV", "Partly", "Games", "Social media", "Insurance", "Smartwatch", "Laptop", "Currently with o2", "Another provider", "Contract ends in < 3 months", "Contract ends in 3–6 months", "Contract ends in 6–12 months", "Contract ends in > 12 months", "Already cancelled", "Not yet cancelled", "Phone number will be kept", "Phone number will not be kept", "Another phone", "Device less than 1 year old", "Device 1–2 years old", "Device older than 2 years", "Camera is important", "Lots of device storage", "Satellite", "Satisfied with WiFi", "Partly satisfied with WiFi", "Not satisfied with WiFi", "Other provider / note …", "Model / damage …", "Exact usage …", "Channels / packages …", "Describe the problem …", "Other device / product …", "Mobile", "DSL / Internet", "Hardware (installment)", "Hardware installment", "Price", "People", "Number", "Total per month", "per person", "Mobile contracts", "Customers usually pay for cable separately (cable fees). They may save this if they sign a contract with us."],
+  tr: ["Sözleşme ve Operatör", "Cihaz ve Kullanım", "Ev ve TV", "Mevcut operatör", "Sözleşme bitiş süresi", "Zaten feshedildi mi?", "Numara taşınsın mı?", "Telefon", "Cihaz yaşı", "Veri hacmi", "Önemli", "TV izleme yolu", "WLAN memnuniyeti?", "Diğer cihazlar", "Operatör", "Donanım", "Kullanım", "Televizyon", "WiFi", "Diğer ürünler", "Hane", "Diğer", "< 3 ay", "3–6 ay", "6–12 ay", "> 12 ay", "Evet", "Hayır", "< 1 yıl", "1–2 yıl", "> 2 yıl", "Yurt dışı", "Kamera", "Çok depolama", "Kablo", "Uydu", "TV yok", "Kısmen", "Oyunlar", "Sosyal medya", "Sigorta", "Akıllı saat", "Dizüstü", "Şu anda o2", "Başka bir operatör", "Sözleşme < 3 ay içinde bitiyor", "Sözleşme 3–6 ay içinde bitiyor", "Sözleşme 6–12 ay içinde bitiyor", "Sözleşme > 12 ay içinde bitiyor", "Zaten feshedildi", "Henüz feshedilmedi", "Numara taşınacak", "Numara taşınmayacak", "Başka bir telefon", "Cihaz 1 yıldan yeni", "Cihaz 1–2 yaşında", "Cihaz 2 yıldan eski", "Kamera önemli", "Çok cihaz depolaması", "Uydu", "WLAN'dan memnun", "WLAN'dan kısmen memnun", "WLAN'dan memnun değil", "Başka operatör / not …", "Model / hasar …", "Tam kullanım …", "Kanallar / paketler …", "Sorunu açıkla …", "Başka cihaz / ürün …", "Mobil", "DSL / İnternet", "Donanım (taksit)", "Donanım taksiti", "Fiyat", "Kişi", "Adet", "Aylık toplam", "kişi başına", "Mobil sözleşmeler", "Kablo ücretini müşteri genellikle ayrıca öder (kablo ücretleri). Bizimle sözleşme yaparsa bundan tasarruf edebilir."],
+  ru: ["Договор и оператор", "Устройство и использование", "Дом и ТВ", "Текущий оператор", "Договор заканчивается через", "Уже расторгнут?", "Сохранить номер?", "Телефон", "Возраст устройства", "Объём данных", "Важно", "Телевидение через", "Довольны WLAN?", "Другие устройства", "Оператор", "Устройство", "Использование", "Телевидение", "WiFi", "Другие продукты", "Домохозяйство", "Другое", "< 3 мес.", "3–6 мес.", "6–12 мес.", "> 12 мес.", "Да", "Нет", "< 1 г.", "1–2 г.", "> 2 л.", "За границей", "Камера", "Много памяти", "Кабель", "Спутник", "Нет ТВ", "Частично", "Игры", "Соцсети", "Страховка", "Смарт-часы", "Ноутбук", "Сейчас у o2", "Другой оператор", "Договор заканчивается менее чем через 3 месяца", "Договор заканчивается через 3–6 месяцев", "Договор заканчивается через 6–12 месяцев", "Договор заканчивается более чем через 12 месяцев", "Уже расторгнут", "Ещё не расторгнут", "Номер будет сохранён", "Номер не будет сохранён", "Другой телефон", "Устройству менее 1 года", "Устройству 1–2 года", "Устройству более 2 лет", "Камера важна", "Много памяти устройства", "Спутник", "Довольны WLAN", "Частично довольны WLAN", "Недовольны WLAN", "Другой оператор / заметка …", "Модель / повреждение …", "Точное потребление …", "Каналы / пакеты …", "Опишите проблему …", "Другое устройство / продукт …", "Мобильная связь", "DSL / Интернет", "Устройство (рассрочка)", "Рассрочка за устройство", "Цена", "Человек", "Кол-во", "Итого в месяц", "на человека", "Мобильные договоры", "За кабель клиент обычно платит отдельно (кабельные сборы). Возможно, он сэкономит на этом, если заключит договор с нами."],
+  ar: ["العقد والمزوّد", "الجهاز والاستخدام", "المنزل والتلفزيون", "المزوّد الحالي", "ينتهي العقد خلال", "هل تم الإلغاء؟", "الاحتفاظ بالرقم؟", "الهاتف", "عمر الجهاز", "حجم البيانات", "مهم", "مشاهدة التلفزيون عبر", "راضٍ عن الواي فاي؟", "أجهزة أخرى", "المزوّد", "الجهاز", "الاستخدام", "التلفزيون", "الواي فاي", "منتجات أخرى", "الأسرة", "آخر", "< 3 أشهر", "3–6 أشهر", "6–12 شهرًا", "> 12 شهرًا", "نعم", "لا", "< سنة", "1–2 سنة", "> سنتين", "في الخارج", "الكاميرا", "مساحة تخزين كبيرة", "كابل", "قمر صناعي", "بدون تلفزيون", "جزئيًا", "ألعاب", "وسائل التواصل", "تأمين", "ساعة ذكية", "لابتوب", "حاليًا لدى o2", "مزوّد آخر", "ينتهي العقد خلال أقل من 3 أشهر", "ينتهي العقد خلال 3–6 أشهر", "ينتهي العقد خلال 6–12 شهرًا", "ينتهي العقد بعد أكثر من 12 شهرًا", "تم الإلغاء بالفعل", "لم يتم الإلغاء بعد", "سيتم الاحتفاظ بالرقم", "لن يتم الاحتفاظ بالرقم", "هاتف آخر", "عمر الجهاز أقل من سنة", "عمر الجهاز 1–2 سنة", "عمر الجهاز أكثر من سنتين", "الكاميرا مهمة", "مساحة تخزين كبيرة للجهاز", "قمر صناعي", "راضٍ عن الواي فاي", "راضٍ جزئيًا عن الواي فاي", "غير راضٍ عن الواي فاي", "مزوّد آخر / ملاحظة …", "الطراز / العطل …", "الاستهلاك بالتفصيل …", "القنوات / الباقات …", "صف المشكلة …", "جهاز / منتج آخر …", "الهاتف المحمول", "DSL / الإنترنت", "الجهاز (قسط)", "قسط الجهاز", "السعر", "الأشخاص", "العدد", "الإجمالي شهريًا", "للشخص", "عقود الهاتف المحمول", "عادةً يدفع العميل رسوم الكابل بشكل منفصل. وقد يوفّرها إذا أبرم عقدًا معنا."],
+  pl: ["Umowa i operator", "Urządzenie i użytkowanie", "Dom i TV", "Obecny operator", "Umowa kończy się za", "Już wypowiedziana?", "Zachować numer?", "Telefon", "Wiek urządzenia", "Pakiet danych", "Ważne", "Telewizja przez", "Zadowolony z WLAN?", "Inne urządzenia", "Operator", "Sprzęt", "Użytkowanie", "Telewizja", "WiFi", "Inne produkty", "Gospodarstwo domowe", "Inne", "< 3 mies.", "3–6 mies.", "6–12 mies.", "> 12 mies.", "Tak", "Nie", "< 1 rok", "1–2 lata", "> 2 lata", "Zagranica", "Aparat", "Dużo pamięci", "Kablówka", "Satelita", "Brak TV", "Częściowo", "Gry", "Social media", "Ubezpieczenie", "Smartwatch", "Laptop", "Obecnie w o2", "Inny operator", "Umowa kończy się za mniej niż 3 miesiące", "Umowa kończy się za 3–6 miesięcy", "Umowa kończy się za 6–12 miesięcy", "Umowa kończy się za ponad 12 miesięcy", "Już wypowiedziana", "Jeszcze nie wypowiedziana", "Numer zostanie zachowany", "Numer nie zostanie zachowany", "Inny telefon", "Urządzenie ma mniej niż 1 rok", "Urządzenie ma 1–2 lata", "Urządzenie ma ponad 2 lata", "Aparat jest ważny", "Dużo pamięci urządzenia", "Satelita", "Zadowolony z WLAN", "Częściowo zadowolony z WLAN", "Niezadowolony z WLAN", "Inny operator / notatka …", "Model / uszkodzenie …", "Dokładne zużycie …", "Kanały / pakiety …", "Opisz problem …", "Inne urządzenie / produkt …", "Telefonia komórkowa", "DSL / Internet", "Sprzęt (rata)", "Rata za sprzęt", "Cena", "Osoby", "Liczba", "Razem miesięcznie", "na osobę", "Umowy komórkowe", "Za kablówkę klient zwykle płaci osobno (opłaty kablowe). Może to zaoszczędzić, jeśli zawrze z nami umowę."],
+  ro: ["Contract și furnizor", "Dispozitiv și utilizare", "Acasă și TV", "Furnizor actual", "Contractul se încheie în", "Deja reziliat?", "Păstrați numărul?", "Telefon", "Vechimea dispozitivului", "Volum de date", "Important", "Televizor prin", "Mulțumit de WLAN?", "Alte dispozitive", "Furnizor", "Hardware", "Utilizare", "Televiziune", "WiFi", "Alte produse", "Gospodărie", "Altul", "< 3 luni", "3–6 luni", "6–12 luni", "> 12 luni", "Da", "Nu", "< 1 an", "1–2 ani", "> 2 ani", "În străinătate", "Cameră", "Multă memorie", "Cablu", "Satelit", "Fără TV", "Parțial", "Jocuri", "Rețele sociale", "Asigurare", "Smartwatch", "Laptop", "În prezent la o2", "Alt furnizor", "Contractul se încheie în mai puțin de 3 luni", "Contractul se încheie în 3–6 luni", "Contractul se încheie în 6–12 luni", "Contractul se încheie în peste 12 luni", "Deja reziliat", "Încă nereziliat", "Numărul va fi păstrat", "Numărul nu va fi păstrat", "Alt telefon", "Dispozitiv mai nou de 1 an", "Dispozitiv de 1–2 ani", "Dispozitiv mai vechi de 2 ani", "Camera este importantă", "Multă memorie a dispozitivului", "Satelit", "Mulțumit de WLAN", "Parțial mulțumit de WLAN", "Nemulțumit de WLAN", "Alt furnizor / notă …", "Model / defecțiune …", "Consum exact …", "Canale / pachete …", "Descrieți problema …", "Alt dispozitiv / produs …", "Telefonie mobilă", "DSL / Internet", "Hardware (rată)", "Rată hardware", "Preț", "Persoane", "Număr", "Total pe lună", "pe persoană", "Contracte mobile", "Cablul îl plătește clientul de obicei separat (taxe de cablu). Poate economisi dacă încheie un contract la noi."],
+  es: ["Contrato y proveedor", "Dispositivo y uso", "Hogar y TV", "Proveedor actual", "El contrato termina en", "¿Ya cancelado?", "¿Conservar el número?", "Móvil", "Antigüedad del dispositivo", "Volumen de datos", "Importante", "Televisión por", "¿Satisfecho con el WiFi?", "Otros dispositivos", "Proveedor", "Hardware", "Uso", "Televisión", "WiFi", "Otros productos", "Hogar", "Otro", "< 3 meses", "3–6 meses", "6–12 meses", "> 12 meses", "Sí", "No", "< 1 año", "1–2 años", "> 2 años", "Extranjero", "Cámara", "Mucho almacenamiento", "Cable", "Satélite", "Sin TV", "En parte", "Juegos", "Redes sociales", "Seguro", "Smartwatch", "Portátil", "Actualmente en o2", "Otro proveedor", "El contrato termina en menos de 3 meses", "El contrato termina en 3–6 meses", "El contrato termina en 6–12 meses", "El contrato termina en más de 12 meses", "Ya cancelado", "Aún no cancelado", "Se conservará el número", "No se conservará el número", "Otro móvil", "Dispositivo de menos de 1 año", "Dispositivo de 1–2 años", "Dispositivo de más de 2 años", "La cámara es importante", "Mucho almacenamiento del dispositivo", "Satélite", "Satisfecho con el WiFi", "Parcialmente satisfecho con el WiFi", "No satisfecho con el WiFi", "Otro proveedor / nota …", "Modelo / daño …", "Consumo exacto …", "Canales / paquetes …", "Describir el problema …", "Otro dispositivo / producto …", "Móvil", "DSL / Internet", "Hardware (cuota)", "Cuota del hardware", "Precio", "Personas", "Cantidad", "Total al mes", "por persona", "Contratos móviles", "El cable normalmente lo paga el cliente por separado (tasas de cable). Puede ahorrarlo si firma un contrato con nosotros."],
+  it: ["Contratto e operatore", "Dispositivo e utilizzo", "Casa e TV", "Operatore attuale", "Il contratto scade tra", "Già disdetto?", "Portare il numero?", "Cellulare", "Età del dispositivo", "Volume dati", "Importante", "TV tramite", "Soddisfatto del WiFi?", "Altri dispositivi", "Operatore", "Hardware", "Utilizzo", "Televisione", "WiFi", "Altri prodotti", "Nucleo familiare", "Altro", "< 3 mesi", "3–6 mesi", "6–12 mesi", "> 12 mesi", "Sì", "No", "< 1 anno", "1–2 anni", "> 2 anni", "Estero", "Fotocamera", "Molta memoria", "Cavo", "Satellite", "Nessuna TV", "In parte", "Giochi", "Social media", "Assicurazione", "Smartwatch", "Laptop", "Attualmente con o2", "Altro operatore", "Il contratto scade tra meno di 3 mesi", "Il contratto scade tra 3–6 mesi", "Il contratto scade tra 6–12 mesi", "Il contratto scade tra più di 12 mesi", "Già disdetto", "Non ancora disdetto", "Il numero verrà mantenuto", "Il numero non verrà mantenuto", "Altro cellulare", "Dispositivo con meno di 1 anno", "Dispositivo di 1–2 anni", "Dispositivo con più di 2 anni", "La fotocamera è importante", "Molta memoria del dispositivo", "Satellite", "Soddisfatto del WiFi", "Parzialmente soddisfatto del WiFi", "Non soddisfatto del WiFi", "Altro operatore / nota …", "Modello / danno …", "Consumo esatto …", "Canali / pacchetti …", "Descrivi il problema …", "Altro dispositivo / prodotto …", "Telefonia mobile", "DSL / Internet", "Hardware (rata)", "Rata hardware", "Prezzo", "Persone", "Quantità", "Totale al mese", "a persona", "Contratti mobili", "Il cavo di solito lo paga il cliente a parte (canone via cavo). Potrebbe risparmiarlo stipulando un contratto con noi."],
+  pt: ["Contrato e operadora", "Dispositivo e uso", "Casa e TV", "Operadora atual", "O contrato termina em", "Já cancelado?", "Manter o número?", "Celular", "Idade do aparelho", "Volume de dados", "Importante", "TV via", "Satisfeito com o WiFi?", "Outros aparelhos", "Operadora", "Hardware", "Uso", "Televisão", "WiFi", "Outros produtos", "Domicílio", "Outro", "< 3 meses", "3–6 meses", "6–12 meses", "> 12 meses", "Sim", "Não", "< 1 ano", "1–2 anos", "> 2 anos", "Exterior", "Câmera", "Muito armazenamento", "Cabo", "Satélite", "Sem TV", "Em parte", "Jogos", "Redes sociais", "Seguro", "Smartwatch", "Notebook", "Atualmente na o2", "Outra operadora", "O contrato termina em menos de 3 meses", "O contrato termina em 3–6 meses", "O contrato termina em 6–12 meses", "O contrato termina em mais de 12 meses", "Já cancelado", "Ainda não cancelado", "O número será mantido", "O número não será mantido", "Outro celular", "Aparelho com menos de 1 ano", "Aparelho com 1–2 anos", "Aparelho com mais de 2 anos", "A câmera é importante", "Muito armazenamento do aparelho", "Satélite", "Satisfeito com o WiFi", "Parcialmente satisfeito com o WiFi", "Insatisfeito com o WiFi", "Outra operadora / nota …", "Modelo / dano …", "Consumo exato …", "Canais / pacotes …", "Descreva o problema …", "Outro aparelho / produto …", "Telefonia móvel", "DSL / Internet", "Hardware (parcela)", "Parcela do hardware", "Preço", "Pessoas", "Quantidade", "Total por mês", "por pessoa", "Contratos móveis", "O cabo normalmente é pago separadamente pelo cliente (taxas de cabo). Ele pode economizar isso ao fechar um contrato conosco."],
+  el: ["Συμβόλαιο & πάροχος", "Συσκευή & χρήση", "Σπίτι & TV", "Τρέχων πάροχος", "Το συμβόλαιο λήγει σε", "Έχει ήδη καταγγελθεί;", "Μεταφορά αριθμού;", "Κινητό", "Ηλικία συσκευής", "Όγκος δεδομένων", "Σημαντικό", "Τηλεόραση μέσω", "Ικανοποιημένος με το WiFi;", "Άλλες συσκευές", "Πάροχος", "Συσκευή", "Χρήση", "Τηλεόραση", "WiFi", "Άλλα προϊόντα", "Νοικοκυριό", "Άλλο", "< 3 μήνες", "3–6 μήνες", "6–12 μήνες", "> 12 μήνες", "Ναι", "Όχι", "< 1 έτος", "1–2 έτη", "> 2 έτη", "Εξωτερικό", "Κάμερα", "Πολύς χώρος αποθήκευσης", "Καλώδιο", "Δορυφόρος", "Χωρίς TV", "Εν μέρει", "Παιχνίδια", "Social media", "Ασφάλιση", "Smartwatch", "Laptop", "Αυτή τη στιγμή στην o2", "Άλλος πάροχος", "Το συμβόλαιο λήγει σε λιγότερο από 3 μήνες", "Το συμβόλαιο λήγει σε 3–6 μήνες", "Το συμβόλαιο λήγει σε 6–12 μήνες", "Το συμβόλαιο λήγει σε περισσότερο από 12 μήνες", "Έχει ήδη καταγγελθεί", "Δεν έχει καταγγελθεί ακόμα", "Ο αριθμός θα μεταφερθεί", "Ο αριθμός δεν θα μεταφερθεί", "Άλλο κινητό", "Συσκευή μικρότερη του 1 έτους", "Συσκευή 1–2 ετών", "Συσκευή μεγαλύτερη των 2 ετών", "Η κάμερα είναι σημαντική", "Πολύς αποθηκευτικός χώρος συσκευής", "Δορυφόρος", "Ικανοποιημένος με το WiFi", "Εν μέρει ικανοποιημένος με το WiFi", "Μη ικανοποιημένος με το WiFi", "Άλλος πάροχος / σημείωση …", "Μοντέλο / βλάβη …", "Ακριβής κατανάλωση …", "Κανάλια / πακέτα …", "Περιγράψτε το πρόβλημα …", "Άλλη συσκευή / προϊόν …", "Κινητή τηλεφωνία", "DSL / Διαδίκτυο", "Συσκευή (δόση)", "Δόση συσκευής", "Τιμή", "Άτομα", "Αριθμός", "Σύνολο ανά μήνα", "ανά άτομο", "Συμβόλαια κινητής", "Το καλώδιο το πληρώνει συνήθως ο πελάτης ξεχωριστά (τέλη καλωδίου). Μπορεί να το εξοικονομήσει αν κλείσει συμβόλαιο μαζί μας."],
+  uk: ["Договір і оператор", "Пристрій і використання", "Дім і ТБ", "Поточний оператор", "Договір закінчується через", "Уже розірвано?", "Зберегти номер?", "Телефон", "Вік пристрою", "Обсяг даних", "Важливо", "Телебачення через", "Задоволені WLAN?", "Інші пристрої", "Оператор", "Пристрій", "Використання", "Телебачення", "WiFi", "Інші продукти", "Домогосподарство", "Інше", "< 3 міс.", "3–6 міс.", "6–12 міс.", "> 12 міс.", "Так", "Ні", "< 1 р.", "1–2 р.", "> 2 р.", "За кордоном", "Камера", "Багато пам’яті", "Кабель", "Супутник", "Немає ТБ", "Частково", "Ігри", "Соцмережі", "Страхування", "Смарт-годинник", "Ноутбук", "Зараз в o2", "Інший оператор", "Договір закінчується менш ніж через 3 місяці", "Договір закінчується через 3–6 місяців", "Договір закінчується через 6–12 місяців", "Договір закінчується більш ніж через 12 місяців", "Уже розірвано", "Ще не розірвано", "Номер буде збережено", "Номер не буде збережено", "Інший телефон", "Пристрою менше 1 року", "Пристрою 1–2 роки", "Пристрою більше 2 років", "Камера важлива", "Багато пам’яті пристрою", "Супутник", "Задоволені WLAN", "Частково задоволені WLAN", "Не задоволені WLAN", "Інший оператор / нотатка …", "Модель / пошкодження …", "Точне споживання …", "Канали / пакети …", "Опишіть проблему …", "Інший пристрій / продукт …", "Мобільний зв’язок", "DSL / Інтернет", "Пристрій (розстрочка)", "Розстрочка за пристрій", "Ціна", "Особи", "Кількість", "Разом на місяць", "на особу", "Мобільні договори", "За кабель клієнт зазвичай платить окремо (кабельні збори). Можливо, він заощадить на цьому, якщо укладе договір з нами."]
+};
+// v55.113: Sprache (Globus) gilt auch in der Schnellauswahl
+let __sitLang = 'de';
+const SIT_I18N = {};
+Object.keys(SIT_I18N_VALS).forEach(l => {
+  const d = {};
+  SIT_I18N_KEYS.forEach((k, i) => { d[k] = SIT_I18N_VALS[l][i]; });
+  SIT_I18N[l] = d;
+});
+const sitT = str => {
+  if (__sitLang === 'de') return str;
+  const d = SIT_I18N[__sitLang];
+  return d && d[str] ? d[str] : str;
+};
 const SIT_CHIP_BLOCKS = [{
   title: 'Vertrag & Anbieter',
   icon: ICONS.Globe,
@@ -10333,6 +10360,23 @@ const sitChipTags = (td, itemId) => {
   if (itemId === 'Gesamtkosten' || itemId === 'Haushalt') sitCostTags(td, itemId).forEach(t => out.push(t));
   return out;
 };
+const sitChipTagsT = (td, itemId) => {
+  const sel = sitChipsParse(td);
+  const out = [];
+  const PH = ['end', 'kuend', 'port', 'alter', 'wlan'];
+  SIT_CHIP_GROUPS.forEach(g => {
+    if (g.item !== itemId) return;
+    const vals = [];
+    (sel[g.id] || []).forEach(v => {
+      const o = g.opts.find(x => x[0] === v);
+      if (!o) return;
+      if (PH.includes(g.id)) out.push([{ b: sitT(o[1] || o[0]) }]);
+      else vals.push(sitT(o[0]));
+    });
+    if (vals.length) out.push([sitT(g.label).replace(/\?$/, '') + ': ', { b: vals.join(', ') }]);
+  });
+  return out;
+};
 // v55.98: Kunden-PDF – Antworten als ganze Saetze (Kundensprache) statt nackter Stichworte
 const sitJoin = arr => arr.length <= 1 ? arr.join('') : arr.slice(0, -1).join(', ') + ' und ' + arr[arr.length - 1];
 const sitSentence = (td, itemId) => {
@@ -10341,6 +10385,15 @@ const sitSentence = (td, itemId) => {
   const one = id => g(id)[0];
   const out = [];
   const say = (...parts) => out.push(parts);
+  // v55.113: andere Sprache – uebersetzte Antwort-Phrasen statt deutscher Satzbausteine
+  if (__sitLang !== 'de' && itemId !== 'Gesamtkosten') {
+    if (itemId === 'Haushalt') {
+      const o = sitCostGet(td);
+      if (o.p > 0) say(sitT('Personen') + ': ', { b: o.p }, '.');
+      if (o.v > 0) say(sitT('Mobilfunkverträge') + ': ', { b: o.v }, '.');
+    } else sitChipTagsT(td, itemId).forEach(pt => say(...pt, '.'));
+    return out;
+  }
   if (itemId === 'Anbieter') {
     const a = one('anb');
     if (a) say('Sie sind aktuell bei ', { b: a === 'Andere' ? 'einem anderen Anbieter' : a === 'o2' ? 'o2' : a }, '.');
@@ -10390,8 +10443,8 @@ const sitSentence = (td, itemId) => {
     const o = sitCostGet(td);
     if (rows.length) {
       const sum = rows.reduce((a, r) => a + r.total, 0);
-      rows.forEach(r => out.push({ row: true, l: r.print, v: (r.n > 1 ? r.n + ' × ' + sitCostFmt(r.total / r.n) + ' € = ' : '') + sitCostFmt(r.total) + ' €' }));
-      out.push({ row: true, sum: true, l: 'Gesamt pro Monat', v: sitCostFmt(sum) + ' €' + (o.p > 0 ? ' · ' + sitCostFmt(sum / o.p) + ' € pro Person' : '') });
+      rows.forEach(r => out.push({ row: true, l: sitT(r.print), v: (r.n > 1 ? r.n + ' × ' + sitCostFmt(r.total / r.n) + ' € = ' : '') + sitCostFmt(r.total) + ' €' }));
+      out.push({ row: true, sum: true, l: sitT('Gesamt pro Monat'), v: sitCostFmt(sum) + ' €' + (o.p > 0 ? ' · ' + sitCostFmt(sum / o.p) + ' € ' + sitT('pro Person') : '') });
     } else {
       const k = one('kost');
       if (k) say('Sie zahlen heute ', { b: k.replace('< ', 'unter ').replace('> ', 'über ') + ' im Monat' }, '.');
@@ -10403,7 +10456,7 @@ const sitSentenceEl = (td, itemId) => {
   const h = React.createElement;
   const lines = sitSentence(td, itemId);
   if (!lines.length) return null;
-  return h('div', { className: 'sit-answer-sent' + (lines.some(l => l.row) ? ' sit-as-grid' : '') }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
+  return h('div', { className: 'sit-answer-sent' + (lines.some(l => l.row) ? ' sit-as-grid' : ''), dir: 'auto' }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
 };
 // Für Auswertung/Statistik: Chips zählen wie getippter Text (nur wenn Feld sonst leer)
 const sitTextWithChips = td => {
@@ -10501,22 +10554,22 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
       type: 'button',
       className: 'sit-note-bar' + (on ? ' has' : '') + (hasInk ? ' ink' : ''),
       onClick: () => onNote(itemId)
-    }, h('span', { className: 'sit-note-dp' }, h(Icon, { d: on ? SIT_ICO_CHECK : ICONS.Pen, size: 15 })), hasInk ? h('span', { className: 'sit-note-tx' }, h(SitInkPreview, { strokes: ks })) : h('span', { className: 'sit-note-tx' }, cu || SIT_NOTE_LABELS[itemId]), h('span', { className: 'sit-note-hint', 'aria-hidden': 'true' }, h('span', null, h(Icon, { d: ICONS.Pen, size: 15 })), h('span', null, h(Icon, { d: ICONS.Keyboard, size: 15 }))));
+    }, h('span', { className: 'sit-note-dp' }, h(Icon, { d: on ? SIT_ICO_CHECK : ICONS.Pen, size: 15 })), hasInk ? h('span', { className: 'sit-note-tx' }, h(SitInkPreview, { strokes: ks })) : h('span', { className: 'sit-note-tx' }, cu || sitT(SIT_NOTE_LABELS[itemId])), h('span', { className: 'sit-note-hint', 'aria-hidden': 'true' }, h('span', null, h(Icon, { d: ICONS.Pen, size: 15 })), h('span', null, h(Icon, { d: ICONS.Keyboard, size: 15 }))));
   };
   const prices = (b, gid) => !cost || !b.price || !b.price[gid] ? null : b.price[gid].map(k => {
     if (k === 'pers') return h(SitPersRow, { key: 'pers', pers: cost.pers, onPers: cost.onPers });
     const row = cost.rows.find(r => r.k === k);
     return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen, kbd: cost.kbd }) : null;
   });
-  return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block ' + (b.cat || '') }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
+  return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block ' + (b.cat || '') }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), sitT(b.title)), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
     const cur = sel[g.id] || [];
-    return h('div', { key: g.id }, h('div', { className: 'sit-chip-label' }, g.label), h('div', { className: 'sit-chip-row' }, g.opts.map(o => h('button', {
+    return h('div', { key: g.id }, h('div', { className: 'sit-chip-label' }, sitT(g.label)), h('div', { className: 'sit-chip-row' }, g.opts.map(o => h('button', {
       key: o[0],
       type: 'button',
       className: 'sit-chip' + (g.id === 'anb' ? ' p ' + (SIT_BRAND[o[0]] || '') : '') + (cur.includes(o[0]) ? ' on' : ''),
       onClick: () => onToggle(g, o[0])
-    }, o[0]))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, 'Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.')) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, b.plabel[gid]) : null, prices(b, gid));
+    }, sitT(o[0])))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, sitT('Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.'))) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, sitT(b.plabel[gid])) : null, prices(b, gid));
   }))), cost && !cost.compact ? h(SitSumBar, { rows: cost.rows, pers: cost.pers }) : null);
 }
 // v55.91: Preisfelder direkt in der jeweiligen Kategorie (Stift schreibt ins Feld = Scribble, Tippen, Ziffernblock)
@@ -10856,7 +10909,7 @@ function SitPersRow({ pers, onPers }) {
     'aria-label': 'Mehr als 5 Personen',
     onClick: () => { if (!more) onPers(6 - pers); }
   }, more ? h('b', null, pers) : plus));
-  return h('div', { className: 'sit-pers' + (pers > 0 ? ' has' : '') }, h('div', { className: 'sit-pers-r' }, h('i', null, h(Icon, { d: ICONS.Users, size: 15 })), h('span', { className: 'l' }, 'Personen'), h('span', { className: 'cnt' }, pers > 0 ? pers + (pers === 1 ? ' Person' : ' Personen') : ''), h('div', { className: 'sit-pp-w' }, btns)), more ? h('div', { className: 'sit-pers-sub' }, h('span', null, 'Anzahl'), h('div', { className: 'sit-pers-st' }, h('button', { type: 'button', 'aria-label': 'weniger', onClick: () => onPers(-1) }, '−'), h('b', null, pers), h('button', { type: 'button', 'aria-label': 'mehr', onClick: () => onPers(1) }, '+'))) : null);
+  return h('div', { className: 'sit-pers' + (pers > 0 ? ' has' : '') }, h('div', { className: 'sit-pers-r' }, h('i', null, h(Icon, { d: ICONS.Users, size: 15 })), h('span', { className: 'l' }, sitT('Personen')), h('span', { className: 'cnt' }, pers > 0 ? (__sitLang === 'de' ? pers + (pers === 1 ? ' Person' : ' Personen') : sitT('Personen') + ': ' + pers) : ''), h('div', { className: 'sit-pp-w' }, btns)), more ? h('div', { className: 'sit-pers-sub' }, h('span', null, sitT('Anzahl')), h('div', { className: 'sit-pers-st' }, h('button', { type: 'button', 'aria-label': 'weniger', onClick: () => onPers(-1) }, '−'), h('b', null, pers), h('button', { type: 'button', 'aria-label': 'mehr', onClick: () => onPers(1) }, '+'))) : null);
 }
 // v55.97: Preis = Schnellpreise zum Antippen + Kaestchen je Ziffer (Stift: eine Ziffer pro Kaestchen, Komma steht fest)
 const SIT_QUICK = {
@@ -11119,7 +11172,7 @@ function SitPriceInput({ row, n, onApply, big }) {
     className: 'sit-price-in' + (big ? ' big' : ''),
     'data-price-in': row.k,
     value: txt,
-    placeholder: 'Preis',
+    placeholder: sitT('Preis'),
     'aria-label': row.label + ' – Preis in Euro',
     onFocus: e => {
       foc.current = true;
@@ -11169,14 +11222,14 @@ function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnt
   if (compact && kbd) return h('label', {
     className: 'sit-price-c kb' + (has ? ' has' : ''),
     'data-price': row.k
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, row.label), n > 1 && has ? h('span', { className: 'nx' }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), n > 1 && has ? h('span', { className: 'nx' }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
   if (compact) return h('button', {
     type: 'button',
     className: 'sit-price-c' + (has ? ' has' : ''),
     'data-price': row.k,
     onClick: e => onOpen(row.k, e.currentTarget)
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, row.label), h('span', { className: 'v' }, has ? (n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : 'Preis'), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
-  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), row.label, h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h('div', { className: 'sit-price-vl' }, h('span', null, 'Verträge'), sitStp('', vert, onVert)) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
+  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h('div', { className: 'sit-price-vl' }, h('span', null, 'Verträge'), sitStp('', vert, onVert)) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
     key: q,
     type: 'button',
     className: cur === q ? 'on' : '',
@@ -28382,6 +28435,7 @@ function App() {
     offer3: 'neutral'
   });
   const [displayLanguage, setDisplayLanguage] = useState('de');
+  __sitLang = displayLanguage;
   const [translatedText, setTranslatedText] = useState({});
   const getDisplayText = useCallback(key => {
     const defaultText = textData[key] || '';
@@ -40424,7 +40478,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.112")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.113")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
