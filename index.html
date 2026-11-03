@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.117';
+        manifestLink.href = 'manifest.webmanifest?v=55.118';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.117').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.118').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.117';
+    window.APP_VERSION = '55.118';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4358,6 +4358,10 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-hint{ display:flex; gap:9px; align-items:flex-start; margin-top:8px; background:#FFF7E6; border:1.5px solid #F5C26B; border-radius:11px; padding:8px 10px; font-size:12px; line-height:1.35; font-weight:600; color:#7A4A06; }
 .sit-hint i{ flex:none; width:18px; height:18px; border-radius:99px; background:#B45309; color:#fff; font-style:normal; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; }
 .sit-hh{ margin:8px 0 0; }
+/* v55.118: rechte Sidebar auch auf breiten Bildschirmen scrollbar (Technologie/Roaming/TV-Kalkulation bleiben erreichbar) */
+@media screen and (min-width: 768px){
+  body:not(.pdf-share-mode) .situation-view-wrapper > aside.sit-aside-panel{ overflow-y:auto !important; overflow-x:hidden !important; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#cbd5e1 transparent; -webkit-overflow-scrolling:touch; }
+}
 /* v55.99: Querformat – Spalten fuellen die Hoehe, Groessen wachsen mit der Bildschirmhoehe (--k) */
 /* v55.98: Querformat ohne Scrollen – Schnellauswahl kompakt (Preise als Zeile → Preisfenster, Summe oben) */
 .sit-sum-pill{ display:inline-flex; align-items:baseline; gap:6px; padding:5px 12px; border-radius:10px; background:#f8fafc; border:1.5px solid #e2e8f0; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; white-space:nowrap; flex-shrink:0; }
@@ -40562,7 +40566,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.117")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.118")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
