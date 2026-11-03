@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.113';
+        manifestLink.href = 'manifest.webmanifest?v=55.114';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.113').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.114').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.113';
+    window.APP_VERSION = '55.114';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10941,7 +10941,8 @@ const sitBoxesFromRaw = r => {
   if (i >= 0) {
     e = r.slice(0, i).slice(0, 3);
     c = r.slice(i + 1).slice(0, 2);
-  } else if (r.length <= 3) e = r;
+  } else if (r.length <= 2) e = r;
+  else if (r.length === 3) { e = r.slice(0, 1); c = r.slice(1); }
   else if (r.length === 4) { e = r.slice(0, 2); c = r.slice(2); }
   else { e = r.slice(0, 3); c = r.slice(3, 5); }
   const ee = ['', '', ''];
@@ -11182,13 +11183,12 @@ function SitPriceInput({ row, n, onApply, big }) {
     onChange: e => {
       const rawV = e.target.value;
       let t = clean(rawV);
-      // wie im Stift-Feld: 4 Ziffern ohne Komma = 39,99 · 5 Ziffern = 123,45 (Komma nur automatisch, solange keins getippt wurde)
+      // wie im Rechner: ab 3 Ziffern ohne Komma sind die letzten 2 Cent (999 = 9,99 · 3999 = 39,99 · 12345 = 123,45)
       const grew = rawV.length > txt.length;
       if (grew && (auto.current || t.indexOf(',') < 0)) {
         const dg = rawV.replace(/\D/g, '');
-        if (dg.length >= 4 && !(txt.indexOf(',') >= 0 && !auto.current)) {
-          const d = dg.slice(0, 5);
-          t = d.length === 4 ? d.slice(0, 2) + ',' + d.slice(2) : d.slice(0, 3) + ',' + d.slice(3);
+        if (dg.length >= 3 && !(txt.indexOf(',') >= 0 && !auto.current)) {
+          t = psCalcTerm(dg.slice(0, 5));
           auto.current = true;
         }
       }
@@ -24288,6 +24288,16 @@ const psCalcTerm = t => {
   if (t.indexOf(',') !== -1 || t.length < 3) return t;
   return t.slice(0, -2) + ',' + t.slice(-2);
 };
+// v55.114: Tastatur-Eingabe ohne Komma: ab 3 Ziffern sind die letzten 2 Cent (3999 -> 39,99; 12345 -> 123,45). Anhaengen an "39,99" rechnet neu.
+const psAutoPrice = (prev, next) => {
+  const raw = next == null ? '' : String(next);
+  const t = raw.replace('.', ',');
+  if (!/^\d+(,\d*)?$/.test(t)) return raw;
+  if (t.length <= String(prev == null ? '' : prev).length) return t;
+  if (/^\d+,\d{3}$/.test(t)) return psCalcTerm(t.replace(/\D/g, '').slice(0, 5));
+  if (t.indexOf(',') === -1 && t.length >= 3) return psCalcTerm(t.slice(0, 5));
+  return t;
+};
 const psJoinGroups = (j12, j23) => {
   const g = [[0]];
   if (j12) g[0].push(1);else g.push([1]);
@@ -24295,8 +24305,18 @@ const psJoinGroups = (j12, j23) => {
   return g;
 };
 const psLeaderKeys = (j12, j23) => psJoinGroups(j12, j23).map(grp => 'offer' + (grp[0] + 1));
-const psPriceTotals = (prices, j12, j23, m2Manual) => {
+// v55.114: Sobald mindestens ein Angebot auf "Abgeschlossen" steht, zaehlen nur abgeschlossene Angebote in die Summen
+// (Kostenuebersicht & Abschluss = was der Kunde final zahlt). Ohne Abschluss: unveraendert alle.
+const psSumKeys = (j12, j23, status) => {
   const keys = psLeaderKeys(j12, j23);
+  if (!status) return keys;
+  const anyClosed = ['offer1', 'offer2', 'offer3'].some(k => status[k] === 'closed');
+  if (!anyClosed) return keys;
+  const grp = psJoinGroups(j12, j23);
+  return grp.filter(g => g.some(i => status['offer' + (i + 1)] === 'closed')).map(g => 'offer' + (g[0] + 1));
+};
+const psPriceTotals = (prices, j12, j23, m2Manual, status) => {
+  const keys = psSumKeys(j12, j23, status);
   const totalE = keys.reduce((s, k) => s + psParseEuro((prices[k] || {}).einmalig), 0);
   const totalM = keys.reduce((s, k) => s + psParseEuro((prices[k] || {}).monatlich), 0);
   const out = {
@@ -29109,7 +29129,7 @@ function App() {
     // v55.51: verbundene Kacheln zaehlen nur einmal (Preispaar der ersten Kachel)
     setOfferData(prev => ({
       ...prev,
-      ...psPriceTotals(updated, jEff.j12, jEff.j23, prev.monatlich2Manual)
+      ...psPriceTotals(updated, jEff.j12, jEff.j23, prev.monatlich2Manual, canvasStatus)
     }));
   };
   const [showSavingsBlock, setShowSavingsBlock] = React.useState(false);
@@ -29510,9 +29530,20 @@ function App() {
     jPrevRef.current = jKey;
     setOfferData(prev => ({
       ...prev,
-      ...psPriceTotals(packagePrices, jEff.j12, jEff.j23, prev.monatlich2Manual)
+      ...psPriceTotals(packagePrices, jEff.j12, jEff.j23, prev.monatlich2Manual, canvasStatus)
     }));
   }, [jKey]);
+  // v55.114: Status (Offen / Abgeschlossen) aendert sich -> Summen in "Kostenuebersicht & Abschluss" neu bilden
+  const csKey = ['offer1', 'offer2', 'offer3'].map(k => canvasStatus && canvasStatus[k] || 'neutral').join('|');
+  const csPrevRef = useRef(csKey);
+  useEffect(() => {
+    if (csPrevRef.current === csKey) return;
+    csPrevRef.current = csKey;
+    setOfferData(prev => ({
+      ...prev,
+      ...psPriceTotals(packagePrices, jEff.j12, jEff.j23, prev.monatlich2Manual, canvasStatus)
+    }));
+  }, [csKey]);
   // v55.78: Das grosse Blatt (alle drei verbunden) hat eine EIGENE Seite. Beim Wechsel werden die Inhalte
   // von Karte 1 und Blatt getauscht (Strich, Text, Status, Bild/Bundle) – nichts wird verkleinert, und
   // beim naechsten Verbinden ist der Blatt-Inhalt wieder da. Der jeweils andere Stand liegt in offerData.sheetStash.
@@ -33835,9 +33866,10 @@ function App() {
         digitalTouchedRef.current[`cost_${key}`] = true;
       }
     } catch (e) {}
+    const rawKey = `${key}Raw`;
+    value = psAutoPrice(offerData[rawKey], value);
     const cleanValue = value.replace(',', '.');
     let val = parseFloat(cleanValue);
-    const rawKey = `${key}Raw`;
     setOfferData(prev => {
       const next = {
         ...prev,
@@ -33849,7 +33881,7 @@ function App() {
         const manual = value.trim() !== '';
         next.monatlich2Manual = manual;
         if (!manual) {
-          const sumM = psPriceTotals(packagePrices, jEff.j12, jEff.j23, false).monatlich1;
+          const sumM = psPriceTotals(packagePrices, jEff.j12, jEff.j23, false, canvasStatus).monatlich1;
           next.monatlich2 = sumM;
           next.monatlich2Raw = sumM > 0 ? sumM.toFixed(2).replace('.', ',') : '';
         }
@@ -33869,7 +33901,7 @@ function App() {
           digitalTouchedRef.current[field === 'monatlich' ? 'cost_monatlich1' : 'cost_einmalig'] = true;
         }
       } catch (err) {}
-      setPackagePriceField(offerKey, field, e.target.value);
+      setPackagePriceField(offerKey, field, psAutoPrice((packagePrices[offerKey] || {})[field], e.target.value));
     };
     return /*#__PURE__*/React.createElement("div", {
       key: field,
@@ -40478,7 +40510,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.113")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.114")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -45944,14 +45976,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // v55.50 (Beta) Design C (Windows Fluent): drei Summenkarten
     const fmtE = v => v > 0 ? v.toFixed(2).replace('.', ',') + ' €' : '–';
     const parseP = v => parseFloat(String(v || '').replace(',', '.')) || 0;
-    const nE = psLeaderKeys(jEff.j12, jEff.j23).filter(k => parseP((packagePrices[k] || {}).einmalig) > 0).length;
-    const nM = psLeaderKeys(jEff.j12, jEff.j23).filter(k => parseP((packagePrices[k] || {}).monatlich) > 0).length;
+    const nE = psSumKeys(jEff.j12, jEff.j23, canvasStatus).filter(k => parseP((packagePrices[k] || {}).einmalig) > 0).length;
+    const nM = psSumKeys(jEff.j12, jEff.j23, canvasStatus).filter(k => parseP((packagePrices[k] || {}).monatlich) > 0).length;
+    const onlyClosed = ['offer1', 'offer2', 'offer3'].some(k => canvasStatus && canvasStatus[k] === 'closed');
     const sumE = offerData.einmalig || 0;
     const sumM = offerData.monatlich1 || 0;
     const m13 = offerData.monatlich2 || 0;
     const m13Hand = showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0;
     const anyPriceInk = PS_PRICE_FIELDS.some(([k, f]) => (drawnStrokes[psPriceKey(k, f)] || []).length > 0);
-    const subTxt = n => n > 0 ? 'Summe aus ' + n + (n === 1 ? ' Angebot' : ' Angeboten') : null;
+    const subTxt = n => n > 0 ? 'Summe aus ' + n + (onlyClosed ? (n === 1 ? ' abgeschlossenem Angebot' : ' abgeschlossenen Angeboten') : n === 1 ? ' Angebot' : ' Angeboten') : null;
     const emptyHint = anyPriceInk ? 'Handschrift zählt nicht, bitte Rechner-Symbol im Preisfeld nutzen' : 'Preise unter den Karten eintragen';
     const valNode = (v, perMonth) => [/*#__PURE__*/React.createElement("span", {
       key: 'v'
