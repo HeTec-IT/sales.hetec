@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.105';
+        manifestLink.href = 'manifest.webmanifest?v=55.106';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.105').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.106').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.105';
+    window.APP_VERSION = '55.106';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4285,6 +4285,21 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 @media screen and (min-width: 1100px){
   .sit-chips-panel{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 }
+/* v55.106: Kategorie-Farbrahmen (Vorschlag A) + Markenfarben der Anbieter-Chips + Kabel-Hinweis */
+.sit-chip-block.c1{ --c:#6366F1; --cd:#4338CA; --t:#EEF0FF; }
+.sit-chip-block.c2{ --c:#14B8A6; --cd:#0F766E; --t:#E8F8F5; }
+.sit-chip-block.c3{ --c:#F59E0B; --cd:#B45309; --t:#FFF6E3; }
+.sit-chip-block.c1,.sit-chip-block.c2,.sit-chip-block.c3{ border:2.5px solid var(--c); }
+.sit-chip-block .sit-chip-title{ color:var(--cd); font-weight:800; }
+.sit-chip-block .sit-chip-title i{ background:var(--t); color:var(--cd); }
+.sit-chip-block .sit-chip-label{ color:#475569; }
+.sit-chip-block .sit-chip.on{ background:var(--cd); border-color:var(--cd); color:#fff; }
+.sit-chip-block .sit-chip.p{ border-color:var(--b); color:var(--b); }
+.sit-chip-block .sit-chip.p.on{ background:var(--b); border-color:var(--b); color:#fff; }
+.sit-chip.o2{ --b:#1457E6; } .sit-chip.tk{ --b:#E20074; } .sit-chip.vf{ --b:#E60000; } .sit-chip.oo{ --b:#0A1F5C; } .sit-chip.an{ --b:#15803D; }
+.sit-hint{ display:flex; gap:9px; align-items:flex-start; margin-top:8px; background:#FFF7E6; border:1.5px solid #F5C26B; border-radius:11px; padding:8px 10px; font-size:12px; line-height:1.35; font-weight:600; color:#7A4A06; }
+.sit-hint i{ flex:none; width:18px; height:18px; border-radius:99px; background:#B45309; color:#fff; font-style:normal; font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+.sit-hh{ margin:8px 0 0; }
 /* v55.99: Querformat – Spalten fuellen die Hoehe, Groessen wachsen mit der Bildschirmhoehe (--k) */
 /* v55.98: Querformat ohne Scrollen – Schnellauswahl kompakt (Preise als Zeile → Preisfenster, Summe oben) */
 .sit-sum-pill{ display:inline-flex; align-items:baseline; gap:6px; padding:5px 12px; border-radius:10px; background:#f8fafc; border:1.5px solid #e2e8f0; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; white-space:nowrap; flex-shrink:0; }
@@ -4295,13 +4310,13 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 @media screen and (orientation: landscape) and (min-width: 1100px){
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ --k:clamp(0px,calc(100vh - 800px),300px); overflow-y:auto; overscroll-behavior:contain; gap:10px; align-content:stretch; grid-auto-rows:1fr; padding-bottom:0; margin-bottom:56px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block > div:not(.sit-chip-title){ flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block{ padding:calc(7px + var(--k)*0.03) 10px; gap:calc(5px + var(--k)*0.02); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block{ padding:calc(6px + var(--k)*0.03) 10px; gap:calc(4px + var(--k)*0.02); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title{ font-size:calc(12.5px + var(--k)*0.01); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-title i{ width:22px; height:22px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-label{ margin-bottom:calc(3px + var(--k)*0.02); font-size:calc(10px + var(--k)*0.008); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-row{ gap:calc(5px + var(--k)*0.02); }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip{ min-height:calc(32px + var(--k)*0.07); padding:0 calc(10px + var(--k)*0.02); font-size:calc(12.5px + var(--k)*0.012); }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(34px + var(--k)*0.06); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip{ min-height:calc(30px + var(--k)*0.05); padding:0 calc(10px + var(--k)*0.02); font-size:calc(12.5px + var(--k)*0.012); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(30px + var(--k)*0.045); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-dp{ width:28px; height:28px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-hint span{ width:26px; height:26px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-note-bar.ink{ min-height:40px; }
@@ -4309,7 +4324,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block > div > .sit-price{ margin-top:6px; padding:5px 8px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-price-hd{ min-height:30px; font-size:12.5px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-stp-r button{ width:34px; height:34px; font-size:19px; }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-c{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(36px + var(--k)*0.07); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-c{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(32px + var(--k)*0.05); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] .sit-card-canvas{ height:44px!important; min-height:44px!important; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] > div:not([data-sit-offtab]) > button{ padding-top:6px!important; padding-bottom:4px!important; min-height:0!important; }
 }
@@ -10114,22 +10129,28 @@ const SIT_CHIP_KEY = '_sitChips';
 const SIT_CHIP_BLOCKS = [{
   title: 'Vertrag & Anbieter',
   icon: ICONS.Globe,
-  groups: ['anb', 'end', 'kuend'],
-  bars: { kuend: 'Anbieter' },
-  price: { kuend: ['pers', 'mobile', 'landline'] }
+  cat: 'c1',
+  groups: ['anb', 'end', 'kuend', 'port'],
+  bars: { port: 'Anbieter' },
+  plabel: { port: 'Haushalt' },
+  price: { port: ['pers', 'mobile'] }
 }, {
   title: 'Gerät & Nutzung',
   icon: ICONS.Smartphone,
+  cat: 'c2',
   groups: ['handy', 'alter', 'daten', 'wichtig'],
   bars: { alter: 'Hardware', wichtig: 'Nutzung' },
   price: { alter: ['hw'] }
 }, {
   title: 'Zuhause & TV',
   icon: ICONS.Home,
+  cat: 'c3',
   groups: ['tv', 'wlan', 'geraete'],
   bars: { tv: 'Fernsehen', wlan: 'WiFi', geraete: 'Weitere Produkte' },
-  price: { tv: ['tv'], geraete: ['wp'] }
+  price: { tv: ['tv'], wlan: ['landline'], geraete: ['wp'] }
 }];
+// v55.106: Markenfarben der Anbieter-Chips
+const SIT_BRAND = { 'o2': 'o2', 'Telekom': 'tk', 'Vodafone': 'vf', '1&1': 'oo', 'Andere': 'an' };
 // Text in der Stift-Leiste je Thema (v55.90)
 const SIT_NOTE_LABELS = {
   'Anbieter': 'Anderer Anbieter / Notiz …',
@@ -10150,11 +10171,14 @@ const SIT_CHIP_GROUPS = [{
   id: 'kuend', item: 'Anbieter', label: 'Schon gekündigt?', multi: false,
   opts: [['Ja', 'Bereits gekündigt'], ['Nein', 'Noch nicht gekündigt']]
 }, {
+  id: 'port', item: 'Anbieter', label: 'Rufnummer mitnehmen?', multi: false,
+  opts: [['Ja', 'Rufnummer wird mitgenommen'], ['Nein', 'Rufnummer wird nicht mitgenommen']]
+}, {
   id: 'kost', item: 'Gesamtkosten', label: 'Zahlt heute monatlich', multi: false,
   opts: [['< 30 €', '< 30 € / Monat'], ['30–50 €', '30–50 € / Monat'], ['50–80 €', '50–80 € / Monat'], ['> 80 €', '> 80 € / Monat']]
 }, {
   id: 'handy', item: 'Hardware', label: 'Handy', multi: false,
-  opts: [['iPhone'], ['Samsung'], ['Pixel'], ['Andere', 'Anderes Handy']]
+  opts: [['iPhone'], ['Samsung'], ['Pixel'], ['Xiaomi'], ['Andere', 'Anderes Handy']]
 }, {
   id: 'alter', item: 'Hardware', label: 'Alter des Geräts', multi: false,
   opts: [['< 1 J.', 'Gerät jünger als 1 Jahr'], ['1–2 J.', 'Gerät 1–2 Jahre alt'], ['> 2 J.', 'Gerät älter als 2 Jahre']]
@@ -10163,12 +10187,12 @@ const SIT_CHIP_GROUPS = [{
   opts: [['< 10 GB'], ['10–50 GB'], ['50–100 GB'], ['Unlimited']]
 }, {
   id: 'wichtig', item: 'Nutzung', label: 'Wichtig', multi: true,
-  opts: [['Streaming'], ['Ausland'], ['Kamera', 'Kamera wichtig'], ['Hotspot']]
+  opts: [['Streaming'], ['Ausland'], ['Kamera', 'Kamera wichtig'], ['Hotspot'], ['Games'], ['Social Media'], ['Viel Speicher', 'Viel Gerätespeicher']]
 }, {
   id: 'pers', item: 'Haushalt', label: 'Personen im Haushalt', multi: false,
   opts: [['1', '1 Person'], ['2', '2 Personen'], ['3', '3 Personen'], ['4', '4 Personen'], ['5+', '5+ Personen']]
 }, {
-  id: 'tv', item: 'Fernsehen', label: 'Fernsehen über', multi: false,
+  id: 'tv', item: 'Fernsehen', label: 'Fernsehen über', multi: true,
   opts: [['Kabel'], ['Sat', 'Satellit'], ['Streaming'], ['Kein TV']]
 }, {
   id: 'wlan', item: 'WiFi', label: 'WLAN zufrieden?', multi: false,
@@ -10280,9 +10304,11 @@ const sitSentence = (td, itemId) => {
     if (e) say('Ihr Vertrag endet in ', { b: EM[e] || e }, '.');
     const k = one('kuend');
     if (k) say('Der Vertrag ist ', { b: k === 'Ja' ? 'bereits gekündigt' : 'noch nicht gekündigt' }, '.');
+    const pt = one('port');
+    if (pt) say('Ihre Rufnummer möchten Sie ', { b: pt === 'Ja' ? 'mitnehmen' : 'nicht mitnehmen' }, '.');
   } else if (itemId === 'Hardware') {
     const hd = one('handy');
-    const HM = { iPhone: 'ein iPhone', Samsung: 'ein Samsung-Smartphone', Pixel: 'ein Google Pixel', Andere: 'ein anderes Smartphone' };
+    const HM = { iPhone: 'ein iPhone', Samsung: 'ein Samsung-Smartphone', Pixel: 'ein Google Pixel', Xiaomi: 'ein Xiaomi-Smartphone', Andere: 'ein anderes Smartphone' };
     const al = one('alter');
     const AM = { '< 1 J.': 'jünger als 1 Jahr', '1–2 J.': '1–2 Jahre alt', '> 2 J.': 'älter als 2 Jahre' };
     if (hd && al) say('Sie nutzen ', { b: HM[hd] || hd }, ', das ', { b: AM[al] || al }, ' ist.');
@@ -10292,7 +10318,7 @@ const sitSentence = (td, itemId) => {
     const d = one('daten');
     if (d === 'Unlimited') say('Sie brauchen ', { b: 'unbegrenztes Datenvolumen' }, '.');
     else if (d) say('Ihr Datenbedarf liegt bei ', { b: d.replace('< ', 'unter ') + ' im Monat' }, '.');
-    const w = g('wichtig').map(x => x === 'Ausland' ? 'Nutzung im Ausland' : x);
+    const w = g('wichtig').map(x => x === 'Ausland' ? 'Nutzung im Ausland' : x === 'Viel Speicher' ? 'viel Gerätespeicher' : x);
     if (w.length) say(w.length > 1 ? 'Besonders wichtig sind Ihnen ' : 'Besonders wichtig ist Ihnen ', { b: sitJoin(w) }, '.');
   } else if (itemId === 'Haushalt') {
     const o = sitCostGet(td);
@@ -10303,10 +10329,10 @@ const sitSentence = (td, itemId) => {
     const pc = one('pers');
     if (pc && !p) say('Im Haushalt leben ', { b: pc === '1' ? '1 Person' : pc + ' Personen' }, '.');
   } else if (itemId === 'Fernsehen') {
-    const t = one('tv');
+    const t = g('tv');
     const TM = { Kabel: 'Kabel', Sat: 'Satellit', Streaming: 'Streaming' };
-    if (t === 'Kein TV') say('Sie nutzen ', { b: 'kein Fernsehen' }, '.');
-    else if (t) say('Sie schauen Fernsehen über ', { b: TM[t] || t }, '.');
+    if (t.includes('Kein TV')) say('Sie nutzen ', { b: 'kein Fernsehen' }, '.');
+    else if (t.length) say('Sie schauen Fernsehen über ', { b: sitJoin(t.map(x => TM[x] || x)) }, '.');
   } else if (itemId === 'WiFi') {
     const w = one('wlan');
     const WM = { Ja: 'zufrieden', Teilweise: 'nur teilweise zufrieden', Nein: 'nicht zufrieden' };
@@ -10437,15 +10463,15 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
     const row = cost.rows.find(r => r.k === k);
     return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen }) : null;
   });
-  return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block' }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
+  return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block ' + (b.cat || '') }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
     const cur = sel[g.id] || [];
     return h('div', { key: g.id }, h('div', { className: 'sit-chip-label' }, g.label), h('div', { className: 'sit-chip-row' }, g.opts.map(o => h('button', {
       key: o[0],
       type: 'button',
-      className: 'sit-chip' + (cur.includes(o[0]) ? ' on' : ''),
+      className: 'sit-chip' + (g.id === 'anb' ? ' p ' + (SIT_BRAND[o[0]] || '') : '') + (cur.includes(o[0]) ? ' on' : ''),
       onClick: () => onToggle(g, o[0])
-    }, o[0]))), b.bars[gid] ? bar(b.bars[gid]) : null, prices(b, gid));
+    }, o[0]))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, 'Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.')) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, b.plabel[gid]) : null, prices(b, gid));
   }))), cost && !cost.compact ? h(SitSumBar, { rows: cost.rows, pers: cost.pers }) : null);
 }
 // v55.91: Preisfelder direkt in der jeweiligen Kategorie (Stift schreibt ins Feld = Scribble, Tippen, Ziffernblock)
@@ -31714,6 +31740,7 @@ function App() {
       let arr = (cur[g.id] || []).slice();
       const i = arr.indexOf(label);
       if (i >= 0) arr.splice(i, 1);
+      else if (g.id === 'tv') arr = label === 'Kein TV' ? [label] : arr.filter(x => x !== 'Kein TV').concat(label);
       else if (g.multi) arr.push(label);
       else arr = [label];
       if (arr.length) cur[g.id] = arr;
@@ -40178,7 +40205,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.105")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.106")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
