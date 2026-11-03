@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.107';
+        manifestLink.href = 'manifest.webmanifest?v=55.108';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.107').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.108').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.107';
+    window.APP_VERSION = '55.108';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4231,6 +4231,8 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-qp button{ height:36px; padding:0 11px; border-radius:999px; border:1.5px solid #e2e8f0; background:#fff; font-size:12.5px; font-weight:700; color:#334155; cursor:pointer; font-family:inherit; touch-action:manipulation; }
 .sit-qp button.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
 .sit-bxs{ display:flex; align-items:center; gap:5px; flex:1; min-width:0; }
+.sit-bxs:focus{ outline:none; }
+.sit-bxs:focus-visible{ outline:2px solid #93c5fd; outline-offset:4px; border-radius:12px; }
 .sit-bx{ position:relative; flex:1 1 0; min-width:26px; max-width:48px; height:56px; border-radius:10px; border:1.5px solid #cbd5e1; background:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#0f172a; cursor:pointer; touch-action:none; -webkit-user-select:none; user-select:none; }
 .sit-bx.ct{ background:#f8fafc; }
 .sit-bx.on{ border-color:#93c5fd; background:#f5f9ff; }
@@ -10816,8 +10818,24 @@ const sitBoxesTo = b => {
   if (!e && !c) return '';
   return (e || '0') + ',' + (b[3] || '0') + (b[4] || '0');
 };
-function SitBoxPrice({ row, onSet, onPad }) {
+// v55.108: Tastatur/Ziffernblock – Ziffern + Komma tippen (3499 = 34,99), Rueck = loeschen, Enter = fertig
+const sitBoxesFromRaw = r => {
+  let e = '', c = '';
+  const i = r.indexOf(',');
+  if (i >= 0) {
+    e = r.slice(0, i).slice(0, 3);
+    c = r.slice(i + 1).slice(0, 2);
+  } else if (r.length <= 3) e = r;
+  else if (r.length === 4) { e = r.slice(0, 2); c = r.slice(2); }
+  else { e = r.slice(0, 3); c = r.slice(3, 5); }
+  const ee = ['', '', ''];
+  for (let k = 0; k < e.length; k++) ee[3 - e.length + k] = e[k];
+  return [...ee, c[0] || '', c[1] || ''];
+};
+function SitBoxPrice({ row, onSet, onPad, onEnter, autoFocus }) {
   const h = React.createElement;
+  const wrapRef = React.useRef(null);
+  const raw = React.useRef(null);
   const [bx, setBx] = React.useState(() => sitBoxesFrom(row.price));
   const bxRef = React.useRef(bx);
   bxRef.current = bx;
@@ -10828,11 +10846,18 @@ function SitBoxPrice({ row, onSet, onPad }) {
   React.useEffect(() => {
     if ((row.price || '') !== sent.current) {
       sent.current = row.price || '';
+      raw.current = null;
       setBx(sitBoxesFrom(row.price));
     }
   }, [row.price]);
+  React.useEffect(() => {
+    if (autoFocus && wrapRef.current) {
+      try { wrapRef.current.focus({ preventScroll: true }); } catch (_) {}
+    }
+  }, []);
   React.useEffect(() => () => clearTimeout(S.current.timer), []);
-  const commit = nb => {
+  const commit = (nb, keepRaw) => {
+    if (!keepRaw) raw.current = null;
     setBx(nb);
     bxRef.current = nb;
     const v = sitBoxesTo(nb);
@@ -10948,6 +10973,39 @@ function SitBoxPrice({ row, onSet, onPad }) {
     clearTimeout(s.timer);
     s.timer = setTimeout(finish, 650);
   };
+  const onKey = e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    let r = raw.current;
+    if (/^[0-9]$/.test(k)) {
+      r = (r == null ? '' : r) + k;
+      if (r.indexOf(',') < 0) r = r.slice(0, 5);
+      else {
+        const pr = r.split(',');
+        r = pr[0].slice(0, 3) + ',' + pr[1].slice(0, 2);
+      }
+    } else if (k === ',' || k === '.') {
+      if (r == null) r = '0';
+      if (r.indexOf(',') >= 0 || r.length > 3) { e.preventDefault(); return; }
+      r = r + ',';
+    } else if (k === 'Backspace') {
+      if (r == null) {
+        const b = bxRef.current;
+        const ee = b.slice(0, 3).join(''), cc = b.slice(3).join('');
+        r = ee + (cc ? ',' + cc : '');
+      }
+      r = r.slice(0, -1);
+    } else if (k === 'Delete') {
+      r = '';
+    } else if (k === 'Enter' || k === 'Escape') {
+      if (onEnter) { e.preventDefault(); e.stopPropagation(); onEnter(); }
+      return;
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+    raw.current = r;
+    commit(r === '' ? ['', '', '', '', ''] : sitBoxesFromRaw(r), true);
+  };
   const box = i => h('div', {
     key: i,
     className: 'sit-bx' + (i >= 3 ? ' ct' : '') + (bx[i] ? ' on' : '') + (bad === i ? ' bad' : ''),
@@ -10955,6 +11013,11 @@ function SitBoxPrice({ row, onSet, onPad }) {
     onClick: e => {
       if (S.current.drew) {
         S.current.drew = false;
+        return;
+      }
+      // Maus/PC: Tastatur-Eingabe starten; Finger: Ziffernblock
+      if (e.nativeEvent && e.nativeEvent.pointerType === 'mouse' && wrapRef.current) {
+        try { wrapRef.current.focus(); } catch (_) {}
         return;
       }
       onPad(row.k, e.currentTarget);
@@ -10969,9 +11032,9 @@ function SitBoxPrice({ row, onSet, onPad }) {
     onPointerUp: () => up(i),
     onPointerCancel: () => up(i)
   }));
-  return h('div', { className: 'sit-bxs', 'aria-label': row.label + ' – Preis, je Kästchen eine Ziffer' }, box(0), box(1), box(2), h('span', { className: 'sit-bx-c' }, ','), box(3), box(4), h('b', { className: 'sit-bx-e' }, '€'));
+  return h('div', { className: 'sit-bxs', ref: wrapRef, tabIndex: 0, onKeyDown: onKey, 'aria-label': row.label + ' – Preis, je Kästchen eine Ziffer' }, box(0), box(1), box(2), h('span', { className: 'sit-bx-c' }, ','), box(3), box(4), h('b', { className: 'sit-bx-e' }, '€'));
 }
-function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen }) {
+function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnter, autoFocus }) {
   const h = React.createElement;
   const isM = row.k === 'mobile';
   const n = row.n || 1;
@@ -10992,7 +11055,9 @@ function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen }) {
   }, q))) : null, h('div', { className: 'sit-price-line' }, h(SitBoxPrice, {
     row,
     onSet: v => onApply(row.k, n, v),
-    onPad
+    onPad,
+    onEnter,
+    autoFocus
   }), h('button', {
     type: 'button',
     className: 'sit-price-kb',
@@ -40205,7 +40270,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.107")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.108")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42257,6 +42322,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       vert: co.v || 0,
       onVert: d => stepSitCost('v', d),
       onApply: applySitCost,
+      onEnter: () => setSitPriceSheet(null),
+      autoFocus: true,
       onPad: (k, el) => {
         setSitPriceSheet(null);
         openSitPad(k, el);
