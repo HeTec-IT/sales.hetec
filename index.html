@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.115';
+        manifestLink.href = 'manifest.webmanifest?v=55.116';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.115').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.116').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.115';
+    window.APP_VERSION = '55.116';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4234,6 +4234,16 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
   .sit-pp-w{ flex:none; width:100%; }
 }
 .sit-price-vl{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; }
+.sit-vl{ display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+.sit-vl-r{ display:flex; align-items:center; flex-wrap:wrap; gap:2px 8px; }
+.sit-vl-r .l{ font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#475569; margin-right:auto; white-space:nowrap; }
+.sit-vl-w{ display:flex; gap:1px; align-items:center; flex:none; }
+.sit-vl-sub{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.sit-vl-same{ display:inline-flex; align-items:center; gap:6px; border:1.5px solid #bfdbfe; background:#f5f9ff; color:#1d4ed8; border-radius:999px; padding:4px 11px; font-size:12px; font-weight:800; font-family:inherit; cursor:pointer; touch-action:manipulation; white-space:nowrap; }
+.sit-vl-same.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
+.sit-vl-sub.st{ justify-content:flex-end; }
+.sit-vl-sub .cap{ font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; }
+.sit-price-c .nx.vb{ display:flex; align-items:center; gap:4px; border:0; background:#e0ecff; color:#1d4ed8; border-radius:8px; padding:3px 6px; flex-shrink:0; cursor:pointer; font-family:inherit; font-size:13px; font-weight:800; touch-action:manipulation; }
 .sit-stp{ display:flex; align-items:center; gap:6px; }
 .sit-stp-l{ font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; }
 .sit-stp-r{ display:flex; align-items:center; gap:2px; background:#fff; border:1.5px solid #e2e8f0; border-radius:12px; padding:2px; }
@@ -10193,6 +10203,8 @@ Object.keys(SIT_I18N_VALS).forEach(l => {
   SIT_I18N_KEYS.forEach((k, i) => { d[k] = SIT_I18N_VALS[l][i]; });
   SIT_I18N[l] = d;
 });
+const SIT_I18N_X = {"en": {"Verträge": "Contracts", "wie Personen": "same as persons"}, "tr": {"Verträge": "Hatlar", "wie Personen": "kişi sayısı kadar"}, "ru": {"Verträge": "Договоры", "wie Personen": "как людей"}, "ar": {"Verträge": "العقود", "wie Personen": "بعدد الأشخاص"}, "pl": {"Verträge": "Umowy", "wie Personen": "tyle co osób"}, "ro": {"Verträge": "Contracte", "wie Personen": "cât persoanele"}, "es": {"Verträge": "Contratos", "wie Personen": "igual que personas"}, "it": {"Verträge": "Contratti", "wie Personen": "come le persone"}, "pt": {"Verträge": "Contratos", "wie Personen": "igual às pessoas"}, "el": {"Verträge": "Συμβόλαια", "wie Personen": "όσα τα άτομα"}, "uk": {"Verträge": "Договори", "wie Personen": "за кількістю людей"}};
+Object.keys(SIT_I18N_X).forEach(l => { Object.assign(SIT_I18N[l] || (SIT_I18N[l] = {}), SIT_I18N_X[l]); });
 const sitT = str => {
   if (__sitLang === 'de') return str;
   const d = SIT_I18N[__sitLang];
@@ -10559,7 +10571,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
   const prices = (b, gid) => !cost || !b.price || !b.price[gid] ? null : b.price[gid].map(k => {
     if (k === 'pers') return h(SitPersRow, { key: 'pers', pers: cost.pers, onPers: cost.onPers });
     const row = cost.rows.find(r => r.k === k);
-    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen, kbd: cost.kbd }) : null;
+    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, pers: cost.pers, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen, kbd: cost.kbd }) : null;
   });
   return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block ' + (b.cat || '') }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), sitT(b.title)), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
@@ -10888,6 +10900,38 @@ function SitInkField({ onRead, focusRef }) {
   }), msg ? h('span', { className: 'sit-ink-msg' }, msg) : null);
 }
 // v55.112: Personen mit Mensch-Symbolen (n-tes Symbol = n Personen, "+" = mehr als 5 mit Zaehler)
+// v55.116: Mobilfunk-Vertraege wie Personen als Handy-Symbole (1-5, "+" ab 6 mit Stepper, "wie Personen" in einem Tipp)
+function SitVertRow({ vert, pers, onVert }) {
+  const h = React.createElement;
+  const svg = (on, kids) => h('svg', { viewBox: '0 0 24 24', width: 22, height: 22, fill: on ? '#bfdbfe' : 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }, kids);
+  const ph = on => svg(on, [h('rect', { key: 'a', x: 6, y: 2, width: 12, height: 20, rx: 2.5 }), h('path', { key: 'b', d: 'M12 18h.01' })]);
+  const plus = svg(false, [h('rect', { key: 'a', x: 3, y: 2, width: 12, height: 20, rx: 2.5 }), h('path', { key: 'b', d: 'M9 18h.01M19 8v6M22 11h-6' })]);
+  const more = vert > 5;
+  const btns = [1, 2, 3, 4, 5].map(i => h('button', {
+    key: i,
+    type: 'button',
+    className: 'sit-pp' + (i <= vert ? ' on' : ''),
+    'aria-label': i + (i === 1 ? ' Vertrag' : ' Verträge'),
+    'aria-pressed': i === vert,
+    onClick: () => onVert((vert === i ? 0 : i) - vert)
+  }, ph(i <= vert)));
+  btns.push(h('button', {
+    key: 'm',
+    type: 'button',
+    className: 'sit-pp more' + (more ? ' on' : ''),
+    'aria-label': 'Mehr als 5 Verträge',
+    onClick: () => { if (!more) onVert(6 - vert); }
+  }, more ? h('b', null, vert) : plus));
+  const same = pers > 0 && vert === pers;
+  const sub = [];
+  if (pers > 0) sub.push(h('button', {
+    key: 'same',
+    type: 'button',
+    className: 'sit-vl-same' + (same ? ' on' : ''),
+    onClick: () => onVert(same ? -vert : pers - vert)
+  }, h(Icon, { d: ICONS.Users, size: 14 }), sitT('wie Personen') + ' (' + pers + ')' + (same ? ' ✓' : '')));
+  return h('div', { className: 'sit-vl' }, h('div', { className: 'sit-vl-r' }, h('span', { className: 'l' }, sitT('Verträge')), h('div', { className: 'sit-vl-w' }, btns)), sub.length ? h('div', { className: 'sit-vl-sub' }, sub) : null, more ? h('div', { className: 'sit-vl-sub st' }, h('span', { className: 'cap' }, sitT('Anzahl')), h('div', { className: 'sit-pers-st' }, h('button', { type: 'button', 'aria-label': 'weniger', onClick: () => onVert(-1) }, '−'), h('b', null, vert), h('button', { type: 'button', 'aria-label': 'mehr', onClick: () => onVert(1) }, '+'))) : null);
+}
 function SitPersRow({ pers, onPers }) {
   const h = React.createElement;
   const svg = (on, kids) => h('svg', { viewBox: '0 0 24 24', width: 22, height: 22, fill: on ? '#bfdbfe' : 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }, kids);
@@ -11212,7 +11256,7 @@ function SitPriceInput({ row, n, onApply, big }) {
     }
   });
 }
-function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnter, autoFocus, kbd }) {
+function SitPriceRow({ row, vert, pers, onVert, onApply, onPad, compact, onOpen, onEnter, autoFocus, kbd }) {
   const h = React.createElement;
   const isM = row.k === 'mobile';
   const n = row.n || 1;
@@ -11222,14 +11266,14 @@ function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnt
   if (compact && kbd) return h('label', {
     className: 'sit-price-c kb' + (has ? ' has' : ''),
     'data-price': row.k
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), n > 1 && has ? h('span', { className: 'nx' }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), isM && onOpen ? h('button', { type: 'button', className: 'nx vb', 'aria-label': 'Verträge', onClick: e => { e.preventDefault(); e.stopPropagation(); onOpen(row.k, e.currentTarget.closest('.sit-price-c') || e.currentTarget); } }, n + ' ×') : n > 1 && has ? h('span', { className: 'nx' }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
   if (compact) return h('button', {
     type: 'button',
     className: 'sit-price-c' + (has ? ' has' : ''),
     'data-price': row.k,
     onClick: e => onOpen(row.k, e.currentTarget)
   }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
-  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h('div', { className: 'sit-price-vl' }, h('span', null, 'Verträge'), sitStp('', vert, onVert)) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
+  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h(SitVertRow, { vert, pers, onVert }) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
     key: q,
     type: 'button',
     className: cur === q ? 'on' : '',
@@ -40510,7 +40554,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.115")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.116")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42561,6 +42605,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }, /*#__PURE__*/React.createElement(SitPriceRow, {
       row,
       vert: co.v || 0,
+      pers: co.p || 0,
       onVert: d => stepSitCost('v', d),
       onApply: applySitCost,
       onEnter: () => setSitPriceSheet(null),
