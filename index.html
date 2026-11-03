@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.109';
+        manifestLink.href = 'manifest.webmanifest?v=55.110';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.109').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.110').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.109';
+    window.APP_VERSION = '55.110';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4231,6 +4231,16 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-qp button{ height:36px; padding:0 11px; border-radius:999px; border:1.5px solid #e2e8f0; background:#fff; font-size:12.5px; font-weight:700; color:#334155; cursor:pointer; font-family:inherit; touch-action:manipulation; }
 .sit-qp button.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
 .sit-bxs{ display:flex; align-items:center; gap:5px; flex:1; min-width:0; }
+.sit-price-c.kb{ cursor:text; }
+.sit-price-c.kb:focus-within{ border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+.sit-price-c .nx{ margin-left:auto; font-size:13px; font-weight:800; color:#64748b; white-space:nowrap; }
+.sit-price-c .nx + .sit-price-in{ margin-left:4px; }
+.sit-price-c .eu{ font-size:16px; font-weight:800; color:#94a3b8; }
+.sit-price-c.has .eu{ color:#1d4ed8; }
+.sit-price-in{ margin-left:auto; width:84px; min-width:0; border:none; outline:none; background:transparent; text-align:right; font-family:inherit; font-size:16px; font-weight:800; color:#1d4ed8; padding:0; box-shadow:none; }
+.sit-price-in::placeholder{ color:#94a3b8; }
+.sit-price-in.big{ flex:1; width:auto; text-align:left; font-size:20px; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:12px; background:#fff; }
+.sit-price-in.big:focus{ border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
 .sit-bxs:focus{ outline:none; }
 .sit-bxs:focus-visible{ outline:2px solid #93c5fd; outline-offset:4px; border-radius:12px; }
 .sit-bx{ position:relative; flex:1 1 0; min-width:26px; max-width:48px; height:56px; border-radius:10px; border:1.5px solid #cbd5e1; background:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#0f172a; cursor:pointer; touch-action:none; -webkit-user-select:none; user-select:none; }
@@ -10463,7 +10473,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
   const prices = (b, gid) => !cost || !b.price || !b.price[gid] ? null : b.price[gid].map(k => {
     if (k === 'pers') return h(SitPersRow, { key: 'pers', pers: cost.pers, onPers: cost.onPers });
     const row = cost.rows.find(r => r.k === k);
-    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen }) : null;
+    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen, kbd: cost.kbd }) : null;
   });
   return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block ' + (b.cat || '') }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), b.title), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
@@ -11034,13 +11044,64 @@ function SitBoxPrice({ row, onSet, onPad, onEnter, autoFocus }) {
   }));
   return h('div', { className: 'sit-bxs', ref: wrapRef, tabIndex: 0, onKeyDown: onKey, 'aria-label': row.label + ' – Preis, je Kästchen eine Ziffer' }, box(0), box(1), box(2), h('span', { className: 'sit-bx-c' }, ','), box(3), box(4), h('b', { className: 'sit-bx-e' }, '€'));
 }
-function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnter, autoFocus }) {
+// v55.110: Tastatur-Modus – Preis wie ein normales Textfeld (E-Mail-Feld): antippen, Zahl tippen, Enter = naechstes Preisfeld
+function SitPriceInput({ row, n, onApply, big }) {
+  const h = React.createElement;
+  const [txt, setTxt] = React.useState(row.price || '');
+  const foc = React.useRef(false);
+  React.useEffect(() => {
+    if (!foc.current) setTxt(row.price || '');
+  }, [row.price]);
+  const clean = v => {
+    let t = String(v).replace('.', ',').replace(/[^0-9,]/g, '');
+    const i = t.indexOf(',');
+    if (i >= 0) t = t.slice(0, i + 1) + t.slice(i + 1).replace(/,/g, '').slice(0, 2);
+    return t.slice(0, 8);
+  };
+  return h('input', {
+    type: 'text',
+    inputMode: 'decimal',
+    autoComplete: 'off',
+    className: 'sit-price-in' + (big ? ' big' : ''),
+    'data-price-in': row.k,
+    value: txt,
+    placeholder: 'Preis',
+    'aria-label': row.label + ' – Preis in Euro',
+    onFocus: e => {
+      foc.current = true;
+      try { e.target.select(); } catch (_) {}
+    },
+    onChange: e => {
+      const t = clean(e.target.value);
+      setTxt(t);
+      onApply(row.k, n, t);
+    },
+    onBlur: () => {
+      foc.current = false;
+      const v = sitCostNum(txt);
+      setTxt(v > 0 ? sitCostFmt(v) : '');
+    },
+    onKeyDown: e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const all = Array.from(document.querySelectorAll('input[data-price-in]')).filter(x => x.offsetParent !== null);
+      const nx = all[all.indexOf(e.currentTarget) + 1];
+      if (nx) nx.focus();
+      else e.currentTarget.blur();
+    }
+  });
+}
+function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnter, autoFocus, kbd }) {
   const h = React.createElement;
   const isM = row.k === 'mobile';
   const n = row.n || 1;
   const has = row.total > 0;
   const quick = SIT_QUICK[row.k] || [];
   const cur = has ? sitCostFmt(sitCostNum(row.price)) : '';
+  if (compact && kbd) return h('label', {
+    className: 'sit-price-c kb' + (has ? ' has' : ''),
+    'data-price': row.k
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, row.label), n > 1 && has ? h('span', { className: 'nx' }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
   if (compact) return h('button', {
     type: 'button',
     className: 'sit-price-c' + (has ? ' has' : ''),
@@ -11052,7 +11113,7 @@ function SitPriceRow({ row, vert, onVert, onApply, onPad, compact, onOpen, onEnt
     type: 'button',
     className: cur === q ? 'on' : '',
     onClick: () => onApply(row.k, n, cur === q ? '' : q)
-  }, q))) : null, h('div', { className: 'sit-price-line' }, h(SitBoxPrice, {
+  }, q))) : null, h('div', { className: 'sit-price-line' }, kbd ? h(SitPriceInput, { row, n, onApply, big: true }) : h(SitBoxPrice, {
     row,
     onSet: v => onApply(row.k, n, v),
     onPad,
@@ -40295,7 +40356,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.109")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.110")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -42317,6 +42378,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         onPad: openSitPad,
         inkMode: sitInkMode,
         compact: sitCompact,
+        kbd: inputMode === 'keyboard',
         onOpen: (k, el) => {
           let r = null;
           try {
