@@ -292,12 +292,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.114';
+        manifestLink.href = 'manifest.webmanifest?v=55.115';
         document.head.appendChild(manifestLink);
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.114').catch(function (e) {
+                navigator.serviceWorker.register('sw.js?v=55.115').catch(function (e) {
                     console.warn('SW-Registrierung fehlgeschlagen:', e);
                 });
             });
@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.114';
+    window.APP_VERSION = '55.115';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -40510,7 +40510,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       marginLeft: '-8px',
       marginRight: '2px'
     }
-  }, "v" + (window.APP_VERSION || "55.114")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
+  }, "v" + (window.APP_VERSION || "55.115")), LINK_EMPLOYEE && !PS_IS_ADMIN() && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMyStats(true),
     className: "p-2 text-slate-400 hover:text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors",
     title: "Meine Statistik – Qualität & Vorgänge ansehen"
@@ -44183,8 +44183,26 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       fontWeight: 700,
       color: btn.active ? '#166534' : '#374151'
     }
-  }, btn.label))), speedRecommendation && /*#__PURE__*/React.createElement("div", {
+  }, btn.label))), (() => {
+    // v55.115: ermittelte Technologien als Zeile unter der Kachel (auch im Kunden-PDF)
+    const names = { dsl: 'DSL / VDSL', cable: 'Kabel', fiber: 'Glasfaser', mobile: '5G / LTE', hybrid: 'Hybrid', sat: 'Satellit' };
+    const list = Object.keys(names).filter(id => checkedTechs && checkedTechs[id]).map(id => names[id]);
+    return list.length ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        gridColumn: '1 / -1',
+        padding: '4px 8px',
+        background: '#f0fdf4',
+        border: '1px solid #86efac',
+        borderRadius: '7px',
+        fontSize: '10px',
+        fontWeight: 700,
+        lineHeight: 1.35,
+        color: '#166534'
+      }
+    }, '✓ ' + (displayLanguage === 'de' ? 'Technologie' : 'Technology') + ': ' + list.join(' · ')) : null;
+  })(), speedRecommendation && /*#__PURE__*/React.createElement("div", {
     style: {
+      gridColumn: '1 / -1',
       padding: '4px 8px',
       background: '#f0fdf4',
       border: '1px solid #86efac',
@@ -44193,7 +44211,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       fontWeight: 700,
       color: '#166534'
     }
-  }, "✓ ", getRecDisplayText(speedRecommendation)))), /*#__PURE__*/React.createElement("div", {
+  }, "✓ Speed: ", getRecDisplayText(speedRecommendation)))), /*#__PURE__*/React.createElement("div", {
     className: "print-hide-roaming",
     style: {
       background: '#ffffff',
