@@ -50,7 +50,7 @@ for (const [label, base] of [['o2', BASE], ['telekom', TK]]) for (const [f, ok] 
   try { const r = await fetch(base + f + '?t=' + Date.now(), { cache: 'no-store' }); const j = await r.json(); R('JSON', label, f, 'HTTP', r.status, ok(j) ? 'OK' : 'FORM FALSCH'); } catch (e) { R('JSON', label, f, 'FEHLER', e.message); }
 }
 const br = await chromium.launch();
-async function szenario(name, { base = BASE, ls = {}, url = base, seiten = 1, warte = 12000, offlineDanach = false }) {
+async function szenario(name, { base = BASE, ls = {}, url = base, seiten = 1, warte = 20000, offlineDanach = false }) {
   const ctx = await br.newContext({ viewport: { width: 1180, height: 820 }, locale: 'de-DE' });
   await ctx.addInitScript(([ls]) => { try { if (!localStorage.getItem('__i')) { localStorage.setItem('__i', '1'); for (const k in ls) localStorage.setItem(k, ls[k]); } } catch (e) {} }, [ls]);
   for (let n = 1; n <= seiten; n++) {
@@ -59,9 +59,11 @@ async function szenario(name, { base = BASE, ls = {}, url = base, seiten = 1, wa
     p.on('console', m => { if (m.type() === 'error') fe.push('console: ' + m.text().slice(0, 120)); });
     p.on('response', r => { const u = r.url(); if (r.status() >= 400 && /hetec-it\.github\.io/.test(u)) bad.push(r.status() + ' ' + u.replace(/https:\/\/hetec-it\.github\.io\//, '')); });
     await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(e => fe.push('goto: ' + e.message.slice(0, 80)));
-    await p.waitForTimeout(warte);
+    const t0 = Date.now(); let tw = null;
+    while (Date.now() - t0 < warte) { await p.waitForTimeout(250); if (/index-neu/.test(p.url())) { tw = Date.now() - t0; break; } }
+    await p.waitForTimeout(4000);
     const info = await p.evaluate(async () => ({ v: window.APP_VERSION, titel: document.title, text: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 130), shop: localStorage.getItem('ps_shop'), roll: localStorage.getItem('ps_rollout'), sw: (await navigator.serviceWorker.getRegistrations().catch(() => [])).map(r => (r.active && r.active.scriptURL || '').replace(/^.*\//, '')).join(',') })).catch(e => ({ fehler: e.message.slice(0, 80) }));
-    R('SZENARIO', name, '#' + n, 'URL=' + p.url().replace(/https:\/\/hetec-it\.github\.io\//, ''), JSON.stringify(info), 'Fehler=' + JSON.stringify(fe.slice(0, 4)), 'HTTP>=400=' + JSON.stringify(bad.slice(0, 4)));
+    R('SZENARIO', name, '#' + n, 'URL=' + p.url().replace(/https:\/\/hetec-it\.github\.io\//, ''), JSON.stringify(info), 'Fehler=' + JSON.stringify(fe.slice(0, 4)), 'HTTP>=400=' + JSON.stringify(bad.slice(0, 4)), 'Wechsel_nach_ms=' + tw);
     if (n === seiten && offlineDanach) {
       await ctx.setOffline(true);
       const q = await ctx.newPage(); const fe2 = [];
@@ -74,15 +76,8 @@ async function szenario(name, { base = BASE, ls = {}, url = base, seiten = 1, wa
   }
   await ctx.close();
 }
-await szenario('Hall frisch Start 1+2 (+offline)', { ls: { ps_shop: 'schwaebisch-hall' }, seiten: 2, offlineDanach: true });
-await szenario('Hall per Link ?shop=schwaebisch-hall (Shop vorher Aalen, nach Shop-Wechsel)', { ls: { ps_shop: 'aalen' }, url: BASE + '?shop=schwaebisch-hall' });
-await szenario('Hall Kurzlink ?shop=hall', { ls: {}, url: BASE + '?shop=hall' });
-await szenario('Aalen (bleibt alt)', { ls: { ps_shop: 'aalen' } });
-await szenario('Backnang (bleibt alt)', { ls: { ps_shop: 'backnang' } });
-await szenario('kein Shop gespeichert (bleibt alt)', { ls: {} });
-await szenario('Hall mit ?alt=1 (alt erzwungen)', { ls: { ps_shop: 'schwaebisch-hall' }, url: BASE + '?alt=1' });
-await szenario('index-neu.html direkt (kein Shop)', { url: BASE + 'index-neu.html' });
-await szenario('Telekom (Fachhandel) unveraendert', { base: TK, ls: {}, url: TK, seiten: 1 });
-await szenario('Telekom Crailsheim-Shop', { base: TK, ls: { ps_shop: 'schwaebisch-hall' }, url: TK, seiten: 1 });
+for (let k = 1; k <= 4; k++) await szenario('Hall Erststart Kurzlink ?shop=hall Lauf ' + k, { ls: {}, url: BASE + '?shop=hall' });
+for (let k = 1; k <= 4; k++) await szenario('Hall Erststart nur ps_shop gespeichert Lauf ' + k, { ls: { ps_shop: 'schwaebisch-hall' } });
+await szenario('Aalen (bleibt alt)', { ls: { ps_shop: 'aalen' }, warte: 8000 });
 await br.close();
 R('FERTIG');
