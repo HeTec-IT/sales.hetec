@@ -71,13 +71,26 @@ function bauen(modell, extra) {
   };
 }
 
-// Eine Kachel aus dem sichtbaren Seitentext (Name + Preis + Speicher)
+// Speicher steht im Produktlink: .../google-pixel-11-256gb-frost-details
+export function speicherAusUrl(url) {
+  const m = /[-_](\d{2,4})(gb|tb)(?=[-_.?/]|$)/i.exec(String(url || ''));
+  return m ? speicherAusText(`${m[1]} ${m[2]}`) : null;
+}
+
+// Bundles ("Pixel 11 mit Pixel Buds Pro 2") werden nicht einzeln empfohlen
+const BUNDLE_RE = /Pixel\s+\d{1,2}(?:\s*(?:Pro\s*Fold|Pro\s*XL|Pro|XL|Fold|a))?\s+(?:mit|\+|und|plus)\s/i;
+
+// Eine Kachel aus dem sichtbaren Seitentext (Name + Gerätepreis + Speicher)
 export function kandidatAusKartentext(text, url = '', bild = '') {
+  if (BUNDLE_RE.test(String(text || '')) || /-mit-/i.test(String(url || ''))) return null;
   const modell = modellAusText(text);
   if (!modell) return null;
-  const preise = preiseAusText(text);
+  // Kachel-Text: "... 24 Monatsraten zu 0% Gerätepreis: 991,00 €" -> der Gerätepreis ist maßgeblich
+  const gp = /Ger(?:ä|ae)tepreis:?\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?\s*€/i.exec(String(text));
+  const preise = gp ? [Number(`${gp[1].replace(/\./g, '')}.${gp[2] || '00'}`)] : preiseAusText(text);
   if (!preise.length) return null;
-  return bauen(modell, { ...(speicherAusText(text) || {}), preis: Math.min(...preise), url: absolut(url), bild: absolut(bild) });
+  const link = /\.pdf(\?|$)/i.test(String(url || '')) ? '' : url;
+  return bauen(modell, { ...(speicherAusUrl(url) || {}), ...(speicherAusText(text) || {}), preis: Math.min(...preise), url: absolut(link), bild: absolut(bild) });
 }
 
 // Fallback: den ganzen Seitentext in Abschnitte je "Pixel NN" zerlegen
@@ -227,7 +240,9 @@ async function seiteLesen() {
         if (gesehen.has(t)) continue;
         gesehen.add(t);
         const img = karte.querySelector('img');
-        out.push({ text: t, href, bild: img ? (img.currentSrc || img.src) : '' });
+        // Produktlink der Kachel (nicht das Energielabel-PDF)
+        const produkt = [...karte.querySelectorAll('a[href]')].map(x => x.href).find(h => /\/e-shop\/google\//.test(h) && !/\.pdf/i.test(h));
+        out.push({ text: t, href: produkt || href, bild: img ? (img.currentSrc || img.src) : '' });
       }
       return out;
     });
