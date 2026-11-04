@@ -19,12 +19,16 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Browser installieren
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
       - name: Netflix-Preise lesen
         run: node scripts/netflix-preise.mjs
       - name: Speichern
@@ -33,4 +37,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
           git add netflix-preise.json
+          if [ -e netflix-debug.txt ]; then git add netflix-debug.txt; else git rm -q --cached --ignore-unmatch netflix-debug.txt; fi
           git diff --cached --quiet || (git commit -m "Netflix-Preise aktualisiert" && git pull --rebase && git push)
