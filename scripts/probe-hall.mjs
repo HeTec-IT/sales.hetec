@@ -21,9 +21,14 @@ const R = (...a) => console.log('RESULT', ...a);
 const sha = b => createHash('sha256').update(b).digest('hex');
 async function dateien(label, base, soll) {
   for (const [f, s] of Object.entries(soll)) {
-    const r = await fetch(base + f + '?t=' + Date.now(), { cache: 'no-store' });
-    const b = Buffer.from(await r.arrayBuffer());
-    R('DATEI', label, f, 'HTTP', r.status, 'Bytes', b.length, sha(b) === s ? 'IDENTISCH' : 'ABWEICHUNG ' + sha(b).slice(0, 12));
+    const st = [];
+    for (let t = 1; t <= 5; t++) {
+      const r = await fetch(base + f + '?t=' + Date.now() + t, { cache: 'no-store' });
+      const b = Buffer.from(await r.arrayBuffer());
+      st.push(r.status + (sha(b) === s ? 'ok' : 'x'));
+      if (t === 5) R('DATEI', label, f, 'Versuche', st.join(','), 'Bytes', b.length, st.every(x => x.endsWith('ok')) ? 'IDENTISCH x5' : 'ABWEICHUNG');
+      else await new Promise(r => setTimeout(r, 1500));
+    }
   }
 }
 await dateien('o2', BASE, O2);
