@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.121';
+    window.APP_VERSION = '55.122';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -23493,6 +23493,86 @@ const psEmpPreis = n => n.toLocaleString('de-DE', {
   minimumFractionDigits: n % 1 ? 2 : 0,
   maximumFractionDigits: 2
 }) + ' €';
+const PS_EMP_ANZAHLUNG = 1; // einmalige Anzahlung laut o2 Shop
+const PS_EMP_RATEN = 36; // Laufzeit für die angezeigte Monatsrate
+const psEmpGeld = n => n.toLocaleString('de-DE', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+}) + ' €';
+const psEmpRate = (preis, monate) => Math.round((preis - PS_EMP_ANZAHLUNG) / monate * 100) / 100;
+// Gerät im Stil der o2-Produktseite: Bild, Speicher, Monatsrate, einmalige Anzahlung
+const psGeraetBlock = (g, gross) => psH("div", {
+  style: {
+    display: 'flex',
+    gap: gross ? '14px' : '10px',
+    alignItems: 'center'
+  }
+}, g.bild && psH("img", {
+  src: g.bild,
+  alt: g.name,
+  draggable: false,
+  onError: ev => {
+    try {
+      ev.currentTarget.style.display = 'none';
+    } catch (_) {}
+  },
+  style: {
+    width: gross ? '92px' : '60px',
+    height: gross ? '116px' : '76px',
+    objectFit: 'contain',
+    flex: '0 0 auto',
+    pointerEvents: 'none'
+  }
+}), psH("div", {
+  style: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    minWidth: 0
+  }
+}, psH("div", {
+  style: {
+    fontSize: gross ? '20px' : '15px',
+    fontWeight: 800,
+    color: '#0f172a'
+  }
+}, g.name), g.speicher && psH("div", {
+  style: {
+    fontSize: '12px',
+    color: '#64748b'
+  }
+}, 'Speicher ' + g.speicher + ' · ohne Tarif'), psH("div", {
+  style: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '6px',
+    flexWrap: 'wrap',
+    marginTop: '2px'
+  }
+}, psH("span", {
+  style: {
+    fontSize: gross ? '26px' : '18px',
+    fontWeight: 900,
+    color: '#0f172a'
+  }
+}, psEmpGeld(psEmpRate(g.preis, PS_EMP_RATEN))), psH("span", {
+  style: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#475569'
+  }
+}, '/ Monat · ' + PS_EMP_RATEN + ' Monate')), psH("div", {
+  style: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#0f766e'
+  }
+}, 'Einmalig ' + psEmpGeld(PS_EMP_ANZAHLUNG) + ' Anzahlung'), psH("div", {
+  style: {
+    fontSize: '11px',
+    color: '#64748b'
+  }
+}, 'Gerätepreis ' + psEmpGeld(g.preis) + ' · 24 Monate: ' + psEmpGeld(psEmpRate(g.preis, 24)) + ' / Monat')));
 const psPixelKatalogLaden = () => {
   const c = window.__psPixelKat;
   if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return Promise.resolve(c.daten);
@@ -23670,33 +23750,13 @@ const PsEmpfehlungDetail = ({
       alignItems: 'center',
       justifyContent: 'space-between'
     }
-  }, chip('Beste Wahl für Angebot 1', '#ffffff', '#0f766e')), psH("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'baseline',
-      gap: '12px'
-    }
-  }, psH("div", {
+  }, chip('Beste Wahl für Angebot 1', '#ffffff', '#0f766e')), e.geraet ? psGeraetBlock(e.geraet, haupt) : psH("div", {
     style: {
       fontSize: haupt ? '22px' : '16px',
       fontWeight: 800,
       color: '#0f172a'
     }
-  }, e.geraet ? e.geraet.name : 'Google ' + e.stufeName), e.geraet && psH("div", {
-    style: {
-      fontSize: haupt ? '20px' : '15px',
-      fontWeight: 800,
-      color: '#0f172a',
-      whiteSpace: 'nowrap'
-    }
-  }, psEmpPreis(e.geraet.preis))), e.geraet && e.geraet.speicher && psH("div", {
-    style: {
-      fontSize: '13px',
-      color: '#64748b',
-      marginTop: '-6px'
-    }
-  }, e.geraet.speicher + ' · ohne Tarif'), e.gruende.map(t => haken(t, e.stufe + t)), haupt && e.geraet && e.geraet.url && psH("button", {
+  }, 'Google ' + e.stufeName), e.gruende.map(t => haken(t, e.stufe + t)), haupt && e.geraet && e.geraet.url && psH("button", {
     type: 'button',
     onClick: () => {
       try {
@@ -23849,7 +23909,7 @@ const PsEmpfehlungDetail = ({
       fontSize: '12px',
       color: '#64748b'
     }
-  }, "Preise ohne Tarif, ca.-Angaben aus dem o2 Shop. Verbindlich ist der Preis im Vertrag bzw. in Opus."))), document.body);
+  }, "Gerätepreis laut o2 Shop (ohne Tarif). Monatsrate errechnet: (Gerätepreis − 1 € Anzahlung) ÷ 36 Monate. Verbindlich ist der Preis im Vertrag bzw. in Opus."))), document.body);
 };
 const PsEmpfehlungLeiste = ({
   td,
@@ -23932,27 +23992,13 @@ const PsEmpfehlungLeiste = ({
       borderRadius: '999px',
       padding: '4px 10px'
     }
-  }, "✓ " + t))), psH("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'baseline',
-      justifyContent: 'space-between',
-      gap: '10px'
-    }
-  }, psH("div", {
+  }, "✓ " + t))), emp.geraet ? psGeraetBlock(emp.geraet, true) : psH("div", {
     style: {
       fontSize: '18px',
       fontWeight: 800,
       color: '#0f172a'
     }
-  }, emp.geraet ? emp.geraet.name : 'Google ' + emp.stufeName), emp.geraet && psH("div", {
-    style: {
-      fontSize: '15px',
-      fontWeight: 800,
-      color: '#0f172a',
-      whiteSpace: 'nowrap'
-    }
-  }, psEmpPreis(emp.geraet.preis))), psH("div", {
+  }, 'Google ' + emp.stufeName), psH("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -23964,7 +24010,7 @@ const PsEmpfehlungLeiste = ({
       fontSize: '12px',
       color: '#64748b'
     }
-  }, emp.geraet ? (emp.geraet.speicher ? emp.geraet.speicher + ' · ' : '') + 'ohne Tarif · o2 Shop' : 'Gerätedaten werden täglich geladen'), psH("button", {
+  }, emp.geraet ? 'o2 Shop' : 'Gerätedaten werden täglich geladen'), psH("button", {
     type: 'button',
     onClick: e => {
       e.stopPropagation();
