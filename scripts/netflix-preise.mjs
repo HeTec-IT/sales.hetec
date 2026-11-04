@@ -43,8 +43,8 @@ export function preiseAusText(html, mitSkripten = false) {
     return null;
   };
   return {
-    werbung: nach('Standard mit Werbung'),
-    standard: nach('Standard(?! mit Werbung)'),
+    werbung: nach('Standard(?:-Abo)?\\s+(?:mit Werbung|with ads)'),
+    standard: nach('Standard-Abo(?!\\s+mit Werbung)|Standard(?!-Abo)(?!\\s+mit Werbung)(?!\\s+with ads)'),
     premium: nach('Premium')
   };
 }
