@@ -250,9 +250,15 @@ function kandidatenSammeln(s) {
   return { karten, json, alle };
 }
 
-function debugText(s, k, fehler) {
+function debugText(s, k, fehler, geraete) {
   const z = [];
-  z.push(`Pixel-Abruf fehlgeschlagen: ${fehler}`, `Zeit: ${jetzt().stand}`, `Quelle: ${QUELLE}`);
+  z.push(fehler ? `Pixel-Abruf fehlgeschlagen: ${fehler}` : 'Pixel-Abruf OK (Diagnose eingeschaltet)', `Zeit: ${jetzt().stand}`, `Quelle: ${QUELLE}`);
+  const zeile = c => `- ${c.modell} | ${c.speicher || 'ohne Speicher'} | ${c.preis} € | ${c.url || 'ohne Link'}`;
+  if (k) {
+    z.push('', `Aus Kacheln (${k.karten.length}):`, ...k.karten.map(zeile));
+    z.push('', `Aus JSON (${k.json.length}):`, ...k.json.slice(0, 40).map(zeile));
+  }
+  if (geraete) z.push('', `Ergebnis (${geraete.length}):`, ...geraete.map(zeile));
   if (s) {
     z.push(`HTTP: ${s.status}  Endadresse: ${s.url}`, `Titel: ${s.titel}`);
     z.push('', `Kacheln (Links mit Pixel): ${s.karten.length}`);
@@ -292,7 +298,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       geaendertAm: geaendert ? datum : (alt.geaendertAm || datum),
       geraete,
     }, null, 2) + '\n');
-    await rm(DEBUG, { force: true });
+    if (process.env.PIXEL_DEBUG) await writeFile(DEBUG, debugText(seite, kand, null, geraete));
+    else await rm(DEBUG, { force: true });
     console.log(geaendert ? 'PIXEL-GERÄTE GEÄNDERT:' : 'unverändert:', geraete.map(g => `${g.modell} ${g.speicher} ${g.preis} €`).join(' | '));
   } catch (e) {
     await writeFile(DEBUG, debugText(seite, kand, e.message));

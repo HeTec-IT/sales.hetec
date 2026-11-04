@@ -31,10 +31,13 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Pixel-Geräte vom o2 Shop holen
         run: node scripts/pixel-geraete.mjs
+        env:
+          PIXEL_DEBUG: '1'   # Diagnose (pixel-debug.txt) mitschreiben; nach der Testphase entfernen
       - name: Speichern
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
-          git add -A -- pixel-geraete.json pixel-debug.txt
+          git add pixel-geraete.json
+          if [ -e pixel-debug.txt ]; then git add pixel-debug.txt; else git rm -q --cached --ignore-unmatch pixel-debug.txt; fi
           git diff --cached --quiet || (git commit -m "Pixel-Geräte aktualisiert" && git pull --rebase && git push)
