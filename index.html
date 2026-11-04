@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.141';
+    window.APP_VERSION = '55.142';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18167,8 +18167,9 @@ const PS_TV_PAKETE = {
     mega: { std: 100, eu: null, nutzung: 'Zuhause & unterwegs', netflix: 'inkl', disney: 'inkl', werbefrei: true, notiz: ['RTL+ Premium inklusive', 'Apple TV+ inklusive'], phase1: { monate: 6, preis: 0 } }
   },
   vodafone: {
-    m: { std: null, eu: null, nutzung: 'Mit GigaTV Mobile App', netflix: 'optional', disney: null, werbefrei: null, label: 'Home', sub: '9,99 € in den ersten 6 Monaten, danach 14,99 €', phase1: { monate: 6, preis: 9.99 } },
-    xl: { std: null, eu: null, nutzung: 'Mit GigaTV Mobile App', netflix: 'inkl', disney: null, werbefrei: null, label: 'Home + Premium', sub: 'inklusive Netflix', notiz: ['Vodafone Premium inklusive'] }
+    // Netflix dazubuchbar über Vodafone: Preis je Tarif des Kunden (2 € Streaming-Vorteil), Disney+ gibt es bei Giga TV nicht
+    m: { std: null, eu: null, nutzung: 'Mit GigaTV Mobile App', netflix: 'optional', netflixPreise: { werbung: 4.99, standard: 13.99, premium: 19.99 }, disney: null, werbefrei: true, label: 'Home', sub: '9,99 € in den ersten 6 Monaten, danach 14,99 €', phase1: { monate: 6, preis: 9.99 } },
+    xl: { std: null, eu: null, nutzung: 'Mit GigaTV Mobile App', netflix: 'optional', netflixPreise: { werbung: 4.99, standard: 13.99, premium: 19.99 }, disney: null, werbefrei: true, label: 'Home + Premium', sub: '+ 20 HD-Sender ohne Werbung', notiz: ['Vodafone Premium: 20 HD-Sender ohne Werbung'] }
   }
 };
 // Netflix-Preise beim Kunden: täglich per Bot aus netflix-preise.json, sonst diese zuletzt geprüften Werte.
@@ -18261,7 +18262,7 @@ const tvZahl = v => {
   return isNaN(n) ? 0 : n;
 };
 // Ein Paket gegen die Kundenwünsche prüfen: passt es, was kostet es wirklich (inkl. Netflix/Disney+ als Zusatz)?
-const tvBewerten = (spec, basis, w, maxStd) => {
+const tvBewerten = (spec, basis, w, maxStd, np) => {
   const zeilen = [];
   const fehlt = [];
   let extra = 0;
@@ -18275,8 +18276,12 @@ const tvBewerten = (spec, basis, w, maxStd) => {
         extraGratis = true;
       }
     } else if (art === 'optional') {
-      zeilen.push({ ok: true, text: name + ' optional ab ' + tvEuro(PS_TV_EXTRA) });
-      if (wunsch) extra += PS_TV_EXTRA;
+      // Netflix über Vodafone: Preis des Kunden-Tarifs (sonst ab günstigstem bzw. Standard, wenn werbefrei gewünscht)
+      const nfp = name === 'Netflix' ? spec.netflixPreise : null;
+      const genau = nfp && np && typeof nfp[np.id] === 'number';
+      const preis = nfp ? (genau ? nfp[np.id] : w.Werbefrei && typeof nfp.standard === 'number' ? nfp.standard : Math.min(...Object.values(nfp))) : PS_TV_EXTRA;
+      zeilen.push({ ok: true, text: genau ? name + ' ' + np.label + ' über Vodafone ' + tvEuro(preis) : name + ' optional ab ' + tvEuro(preis) });
+      if (wunsch) extra += preis;
     } else {
       zeilen.push({ ok: false, text: name + ' nicht enthalten' });
       if (wunsch) fehlt.push(name + ' nicht enthalten');
@@ -18307,8 +18312,9 @@ const tvAnalyse = (providerId, pd, totals, w, np, dp) => {
   const ids = pd.cols.map(c => c.id).filter(id => spezi[id] && typeof totals[id] === 'number');
   const maxStd = Math.max(0, ...ids.map(id => spezi[id].std || 0));
   const bew = ids.map(id => {
-    const b = tvBewerten(spezi[id], totals[id], w, maxStd);
-    const weiter = (np && !spezi[id].netflix ? np.preis : 0) + (dp && !spezi[id].disney ? dp.preis : 0);
+    const b = tvBewerten(spezi[id], totals[id], w, maxStd, np);
+    // Netflix nur optional dazubuchbar und nicht gewünscht: Kunde zahlt es weiter direkt
+    const weiter = (np && (!spezi[id].netflix || (spezi[id].netflix === 'optional' && !w.Netflix)) ? np.preis : 0) + (dp && !spezi[id].disney ? dp.preis : 0);
     // Kunde hat den Dienst ohne Werbung, das Paket nur mit Werbung -> passt nicht gleichwertig
     const adN = !!np && np.werbefrei && !!spezi[id].netflix && spezi[id].werbefrei === false;
     const adD = !!dp && dp.werbefrei && !!spezi[id].disney && spezi[id].werbefrei === false;
@@ -18417,11 +18423,13 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
   const nfSpec = spezi[aktivId] || {};
   const dienstZeilen = (name, plan, art) => {
     const z = [];
+    const vf = name === 'Netflix' && nfSpec.netflixPreise ? nfSpec.netflixPreise[plan.id] : undefined;
     if (art === 'inkl') z.push({ ok: true, t: name + ' beim Kunden (' + plan.label + ', ' + tvEuro(plan.preis) + ') entfällt, ist im Paket enthalten' });
     else if (art === 'gratis') z.push({ ok: true, t: name + ' statt ' + tvEuro(plan.preis) + ' direkt: 3 Monate gratis, danach +' + tvEuro(PS_TV_EXTRA) });
+    else if (art === 'optional' && typeof vf === 'number') z.push({ ok: true, t: name + ' ' + plan.label + ' über Vodafone ' + tvEuro(vf) + ' statt ' + tvEuro(plan.preis) + ' direkt' });
     else if (art === 'optional') z.push({ ok: true, t: name + ' statt ' + tvEuro(plan.preis) + ' direkt: optional ab ' + tvEuro(PS_TV_EXTRA) });
     else z.push({ ok: false, t: name + ' nicht im Paket: Kunde zahlt weiter ' + tvEuro(plan.preis) + ' direkt (in den Kosten eingerechnet)' });
-    if (art) {
+    if (art && typeof vf !== 'number') {
       if (plan.werbefrei && nfSpec.werbefrei === false) z.push({ ok: false, t: 'Achtung: Kunde hat ' + name + ' ohne Werbung, im Paket nur mit Werbung' });
       else if (plan.werbefrei && nfSpec.werbefrei == null) z.push({ ok: false, t: 'Werbefreiheit bei ' + name + ' im Paket nicht hinterlegt, vorher prüfen' });
       else if (!plan.werbefrei && nfSpec.werbefrei === true) z.push({ ok: true, t: name + ' im Paket sogar ohne Werbung' });
@@ -18720,11 +18728,11 @@ const psTvProviderData = o2Live => {
       }, {
         icon: '📡',
         label: 'Vodafone Premium',
-        range: '9,99 €',
+        range: '5 €',
         tarif: {
           s: 0,
           m: 0,
-          xl: 9.99
+          xl: 5
         }
       }, {
         icon: '🎬',
@@ -18751,16 +18759,17 @@ const psTvProviderData = o2Live => {
       }, {
         id: 'xl',
         label: '+Premium',
-        sub: 'inkl. Netflix',
-        checks: [true, true, true],
+        sub: '20 HD-Sender ohne Werbung',
+        checks: [true, true, false],
         badge: null
       }],
       totals: {
         s: 9.99,
         m: 14.99,
-        xl: 29.97
+        xl: 19.99
       },
-      recommended: 'm'
+      recommended: 'm',
+      footnotes: ['Alle: Netflix über Vodafone mit 2 € Streaming-Vorteil (12 Monate Mindestlaufzeit), mit Vodafone-Internet 5 € Rabatt pro Monat']
     }
   };
   if (o2Live && o2Live.preise) {
@@ -18793,8 +18802,13 @@ const psTvProviderData = o2Live => {
   if (lv && typeof lv.s === 'number' && typeof lv.m === 'number' && lv.s >= 3 && lv.s <= 20 && lv.m >= 5 && lv.m <= 30 && lv.s < lv.m) {
     const vd = providerData.vodafone;
     const mon = typeof lv.monate === 'number' && lv.monate >= 1 && lv.monate <= 24 ? lv.monate : 6;
-    const nf = typeof lv.netflix === 'number' && lv.netflix >= 2 && lv.netflix <= 12 ? lv.netflix : vd.rows[2].tarif.xl;
-    const prem = vd.rows[1].tarif.xl;
+    const np3 = lv.netflixPreise;
+    const np3ok = !!np3 && typeof np3.werbung === 'number' && typeof np3.standard === 'number' && typeof np3.premium === 'number' && np3.werbung >= 2 && np3.premium <= 35 && np3.werbung < np3.standard && np3.standard < np3.premium;
+    const nf = np3ok ? np3.werbung : typeof lv.netflix === 'number' && lv.netflix >= 2 && lv.netflix <= 12 ? lv.netflix : vd.rows[2].tarif.xl;
+    const prem = typeof lv.premium === 'number' && lv.premium >= 1 && lv.premium <= 20 ? lv.premium : vd.rows[1].tarif.xl;
+    vd.rows[1].tarif.xl = prem;
+    vd.rows[1].range = fmtP(prem) + ' €';
+    if (np3ok) ['m', 'xl'].forEach(k => { PS_TV_PAKETE.vodafone[k].netflixPreise = { werbung: np3.werbung, standard: np3.standard, premium: np3.premium }; });
     vd.rows[0].tarif.s = lv.s;
     vd.rows[0].tarif.m = lv.m;
     vd.rows[0].tarif.xl = lv.m;
@@ -18803,7 +18817,7 @@ const psTvProviderData = o2Live => {
     vd.rows[2].range = 'ab ' + fmtP(nf) + ' €';
     vd.totals.s = lv.s;
     vd.totals.m = lv.m;
-    vd.totals.xl = Math.round((lv.m + prem + nf) * 100) / 100;
+    vd.totals.xl = Math.round((lv.m + prem) * 100) / 100;
     vd.cols[0].sub = '1.–' + mon + '. Monat';
     vd.cols[1].sub = 'ab ' + (mon + 1) + '. Monat';
     const sp = PS_TV_PAKETE.vodafone.m;
