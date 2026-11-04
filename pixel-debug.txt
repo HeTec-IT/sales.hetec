@@ -1,0 +1,204 @@
+Pixel-Abruf OK (Diagnose eingeschaltet)
+Zeit: 04.11.2026 08:36
+Quelle: https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden
+
+Aus Kacheln (9):
+- Pixel 11 Pro | ohne Speicher | 1189 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro Fold | ohne Speicher | 1981 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 | ohne Speicher | 991 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro XL | ohne Speicher | 1405 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 | ohne Speicher | 1045 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-obsidian-mit-pixel-buds-pro-2-hazel-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro | ohne Speicher | 1333 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-obsidian-mit-pixel-watch-5-wifi-45-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 Pro | ohne Speicher | 973 € | https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 | ohne Speicher | 703 € | https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10a | ohne Speicher | 541 € | https://www.o2online.de/resource/blob/2186592/69916cd73f6765ab1a4eed99f74d9a18/google-pixel-10a-energy-label-a-download-data.pdf
+
+Aus JSON (0):
+
+Ergebnis (7):
+- Pixel 11 | ohne Speicher | 991 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro | ohne Speicher | 1189 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro XL | ohne Speicher | 1405 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro Fold | ohne Speicher | 1981 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 | ohne Speicher | 703 € | https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10a | ohne Speicher | 541 € | https://www.o2online.de/resource/blob/2186592/69916cd73f6765ab1a4eed99f74d9a18/google-pixel-10a-energy-label-a-download-data.pdf
+- Pixel 10 Pro | ohne Speicher | 973 € | https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+HTTP: 200  Endadresse: https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden
+Titel: Google Pixel mit Vertrag: Jetzt kaufen | o2
+
+Kacheln (Links mit Pixel): 10
+- Zeitlich begrenzte Deals Angebote für Kund:innen Android Smartphones Samsung Galaxy S26-Serie iPhone 17-Serie Google Pixel 11 Serie 0,- € Anschlusspreis iPhone 17 Pro Max + AirPods Pro 3 iPhone 17 Pro Max + Airpods Pro 3 0,- € Anschlusspreis iPhone 17 Pro Max + Watch Ultra 3 iPhone 17 Pro Max + Watc  [https://www.o2online.de/geraete/google/]
+- Google Pixel 11 Pro monatlich 49,50 € einmalig 1,00 € bei 24 Monatsraten zu 0% Gerätepreis: 1.189,00 €  [https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung]
+- Google Pixel 11 Pro Fold monatlich 82,50 € einmalig 1,00 € bei 24 Monatsraten zu 0% Gerätepreis: 1.981,00 €  [https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung]
+- Google Pixel 11 monatlich 41,00 € einmalig 7,00 € bei 24 Monatsraten zu 0% Gerätepreis: 991,00 €  [https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung]
+- Google Pixel 11 Pro XL monatlich 58,50 € einmalig 1,00 € bei 24 Monatsraten zu 0% Gerätepreis: 1.405,00 €  [https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung]
+- Google Pixel 11 mit Pixel Buds Pro 2 monatlich 43,50 € einmalig 1,00 € bei 24 Monatsraten zu 0% Gerätepreis: 1.045,00 €  [https://www.o2online.de/e-shop/google/google-pixel-11-256gb-obsidian-mit-pixel-buds-pro-2-hazel-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung]
+
+JSON-Antworten: 4
+- 200 1 https://www.o2online.de/e-shop/cart/itemcount
+- 200 61 https://config.eu.usercentrics.eu/settings/2BGLbVtv/latest/languages.json
+- 200 76418 https://config.eu.usercentrics.eu/settings/2BGLbVtv/latest/de.json  <- enthält Pixel
+- 200 17474 https://config.eu.usercentrics.eu/translations/translations-de.json
+
+Ausschnitt https://config.eu.usercentrics.eu/settings/2BGLbVtv/latest/de.json:
+ableLegalBasis":false,"usesThirdCountry":false,"isServerSideTagging":false,"customTechnologiesUsed":[],"isExempt":false,"_meta":{"name":"Facebook cAPI"}},{"type":"custom","templateId":"W8tDj_wKH","version":"22.9.3","categorySlug":"customCategory-21d43518-3cd1-489b-b60c-21cbcc31246f","description":"","isHidden":false,"isShared":false,"isDeactivated":false,"isAutoUpdateAllowed":true,"defaultConsentStatus":false,"subConsents":[],"legalBasisList":[],"disableLegalBasis":false,"usesThirdCountry":false,"isServerSideTagging":false,"customTechnologiesUsed":[],"isExempt":false,"_meta":{"name":"Facebook Pixel"}},{"type":"custom","templateId":"sk0QvxMQFmstcv","version":"16.1.0","categorySlug":"marketing","description":"","isHidden":false,"isShared":false,"isDeactivated":true,"isAutoUpdateAllowed":true,"defaultConsentStatus":false,"subConsents":[],"legalBasisList":[],"disableLegalBasis":false,"usesThirdCountry":false,"isServerSideTagging":false,"customTechnologiesUsed":[],"isExempt":false,"_meta":{"name":"Matelso (bedarfsgerechte Werbung)"}},{"type":"custom","templateId":"op-dZ4JKT","version":"10.1.0","categorySlug":"customCategory-21d43518-3cd1-489b-b60c-21cbcc31246f","description":"","isHidden":false,"isShared":false,"isDeactivated":false,"isAutoUpdateAllowed":true,"defaultConsentStatus":false,"subConsents":[],"legalBasisList":[],"disableLegalBasis":false,"usesThirdCountry":false,"isServerSideTagging":false,"customTechnologiesUsed":[],"isExempt":false,"_meta":{"name":"Tiktok"}},{"type":
+
+Zeilen mit Pixel im Seitentext:
+  Google Pixel 11 Serie
+  Google Pixel mit Vertrag
+  Google Pixel 11 Pro
+  Google Pixel 11 Pro Fold
+  Google Pixel 11
+  Google Pixel 11 Pro XL
+  Google Pixel 11 mit Pixel Buds Pro 2
+  Google Pixel 11 Pro mit Pixel Watch 5 WiFi
+  Google Pixel 10 Pro
+  Google Pixel 10
+  Google Pixel 10a
+  Google Pixel Watch 5 LTE 45mm
+  Google Pixel Watch 5 WiFi 45mm
+  Google Pixel Buds 2a
+  Google Pixel Buds Pro 2
+  Jetzt günstig sichern: Google Pixel-Handy
+  Google ist bekannt für Smartphones mit tollem Preis-Leistungs-Verhältnis und guter Kamera. Die Top-Modelle überzeugen aber auch in anderer Hinsicht und sind rundum gut aufgestellt. Aktuelle Beispiele 
+  Was macht Googles Pixel-Handys so gut?
+  Obwohl es noch günstigere Handys gibt, wirst du in den entsprechenden Preisklassen kaum bessere Smartphone-Kameras finden als hier. Google Pixel-Handys sind für Kameras auf höchstem Niveau bekannt. Al
+  Der Grund dafür liegt vor allem in der exzellenten Kamera-Software, die Google integriert hat. Bei all seinen Pixel Handys optimiert der Hersteller durch künstliche Intelligenz und Bild-Algorithmen di
+  Gigabyte sparen: Google Pixel mit Vertrag
+  Sicherst du dir ein Google Pixel mit Vertrag, speicherst du deine Bilder auf Wunsch auch unterwegs in der vorinstallierten Google Fotos-App. Spare dadurch Speicherplatz auf deinem Handy und teile in d
+  Google Pixel-Handys sind zukunftssicher
+  Pixel 8 und Pixel 8 Pro bekommen ab Release sieben Jahre Software-Updates.
+  Das bedeutet, dass die Geräte sehr zukunftssicher sind. Auch wenn du also planst, dein Handy für eine lange Zeit zu nutzen, kannst du dir guten Gewissens ein Google Pixel-Handy mit Vertrag sichern.
+  Ein großer Vorteil eines neuen Google Pixel-Smartphones ist, dass es große Android Updates meist deutlich früher als Geräte anderer Hersteller erhält. Außerdem ist zum Release in der Regel bereits die
+  Pixel 8 und Pixel 8 Pro haben ab Werk Android 14 vorinstalliert.
+  Für Google Pixel 7a ist Android 14 als Update verfügbar.
+  Seinen Smartphones spendiert Google einen eigenen Prozessor, der sich Tensor nennt. Dadurch kann Google Hardware und Software perfekt aufeinander abstimmen. Die Pixel 8-Serie ist mit folgenden Chips a
+  Welches Google Pixel-Handy ist das beste?
+  Wir helfen dir, das ideale Google Pixel-Handy mit Vertrag für dich zu finden:
+  Das günstigste aktuelle Modell ist Google Pixel 7a.
+  Google Pixel 8 ist ein rundum gutes Premium-Smartphone mit tollem Preis-Leistungs-Verhältnis und Spitzen-Kamera.
+  Pixel 8 Pro ist Googles High-End-Modell mit Super-Zoom und riesigem QHD+-Display.
+  Google Pixel Watch 2: Ein starker Begleiter
+  Google Pixel Watch 2 zieht mit ihrem innovativen Design Blicke auf sich und behält deine Fitness im Blick. Sie ist der perfekte Partner für dein neues Google Pixel-Handy oder andere Android Smartphone
+  Jetzt Google Pixel mit Vertrag kaufen
+  Dein nächstes Handy soll ein neues Google Pixel mit Vertrag sein? Dann wähle einfach dein Wunschmodell in unserer Übersicht aus. Anschließend kannst du bestimmen, welchen günstigen Handytarif du damit
+  Du möchtest dein Google Pixel lieber ohne Vertrag? Dann tippe einfach rechts oben auf „ohne Tarif kaufen“ und sichere dir nur ein neues Smartphone.
+
+Seitentext (Anfang):
+PRIVATKUNDEN
+GESCHÄFTSKUNDEN
+O2 Shops
+Bestellhotline 0800 33 55 003
+Mobilfunk
+Mobilfunk 
+Handys mit Vertrag 
+Handytarife 
+Handytarife für alle unter 29 
+O2 Plus Bundles 
+Datentarife 
+Tarife für Kinder 
+Prepaid-Tarife 
+Top Gadgets mit Tarif 
+Sehr gutes Netz entdecken 
+Alle Hersteller 
+0,- € Anschlusspreis
+Dein bisher leistungsstärkstes Upgrade.
+Apple iPhone 18
+Die neue Samsung Galaxy Z-Serie
+Zu den Angeboten
+Internet zuhause
+Internet zuhause 
+Verfügbarkeit prüfen 
+Alle Internet-Tarife 
+Glasfaser 
+DSL 
+Kabel-Internet 
+Internet über LTE/5G 
+Internet ohne Laufzeit 
+Mobiles WLAN 
+Singles
+Paare
+Familien
+Power-User
+Verfügbarkeit prüfen
+Verfügbarkeit prüfen
+Zuhause unbegrenzt surfen
+Zuhause surfen mit LTE/5G
+Kombi-Angebote
+Kombi-Angebote 
+O2 Plus Bundles 
+Angebote für O2 Kunden 
+Internet mit TV 
+Internet mit Mobilfunk 
+Top Gadgets mit Tarif 
+Exklusiv für O2 Kunden
+Dauerhaft bis zu 25 € monatlichen Rabatt auf jeden weiteren Mobilfunk-Tarif
+Bis zu 25 € Rabatt ab dem 2. Tarif
+10 € mtl. Ersparnis auf die Grundgebühr
+Füge einen „Internet zuhause“ Tarif hinzu
+Füge einen „Internet zuhause“ Tarif hinzu
+TV & Extras
+TV & Extras 
+NEU: HD-TV & Streaming 
+Onlineschutz 
+Handyversicherung 
+Mehr Entertainment 
+Alle Extras entdecken 
+3 Monate Netflix geschenkt
+O2 TV + Netflix
+ab 4,99 € mtl.
+O2 TV Classic
+1 Monat kostenlos testen
+O2 Onlineschutz: Sofortiger Schutz vor Internetkriminalität!
+Nur für kurze Zeit
+Geräte
+Geräte 
+Handys ohne Vertrag 
+Gaming & VR 
+Smartwatches 
+Tablets 
+Laptops 
+MacBooks 
+Fernseher 
+Kopfhörer & Lautsprecher 
+Gebrauchte Handys 
+Handyankauf 
+Alle Angebote entdecken 
+Top Gadgets mit Tarif
+Günstig im Paket
+Top Gadgets mit Tarif
+Nur 1 € einmalig
+Xplora X6 Play Kinder Smartwatch
+Xplora X6 Play Kids Smartwatch
+ Top Deals
+ Top Deals 
+Zeitlich begrenzte Deals 
+Angebote für Kund:innen 
+Android Smartphones 
+Samsung Galaxy S26-Serie 
+iPhone 17-Serie 
+Google Pixel 11 Serie 
+0,- € Anschlusspreis
+iPhone 17 Pro Max + AirPods Pro 3
+iPhone 17 Pro Max + Airpods Pro 3
+0,- € Anschlusspreis
+iPhone 17 Pro Max + Watch Ultra 3
+iPhone 17 Pro Max + Watch Ultra 3
+0,- € Anschlusspreis
+Samsung Galaxy S26 Ultra
+Samsung Galaxy S26 Ultra
+Warenkorb
+Mein O2 
+Angebote für O2 Kunden 
+Priority-Vorteilswelt 
+O2 Community 
+Vertragsverlängerung 
+O2 weiterempfehlen 
+Exklusiv in der Mein O2 App
+ Jetzt downloaden und einmalig 10 GB und jeden Monat 500 MB gratis Daten sichern.
+Zum Angebot
+Freunde werben Freunde
+Sichere dir bis zu 5 x 50 € Gutschrift fürs Weiterempfehlen von O2. 
+Freunde werben Freund
+
+Kandidaten: Kacheln 9, JSON 0, gesamt 9
