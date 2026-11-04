@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.129';
+    window.APP_VERSION = '55.130';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -24262,7 +24262,7 @@ const PsEmpfehlungLeiste = ({
   return psH("div", {
     className: "ps-emp-wrap w-full md:grid md:grid-cols-3 gap-6",
     "data-html2canvas-ignore": "true"
-  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}} @media (max-width:1023px){.ps-emp-karte{grid-column:1 / -1!important}} @media screen and (orientation:landscape) and (min-width:768px){body:not(.pdf-share-mode) .ps-emp-wrap{padding-left:24px!important;box-sizing:border-box!important}}"), psH("div", {
+  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}} @media (orientation:portrait){.ps-emp-karte{grid-column:1 / -1!important}} @media screen and (orientation:landscape) and (min-width:768px){body:not(.pdf-share-mode) .ps-emp-wrap{padding-left:24px!important;box-sizing:border-box!important}}"), psH("div", {
     className: 'ps-emp-karte',
     role: 'button',
     tabIndex: 0,
@@ -24295,6 +24295,32 @@ const PsEmpfehlungLeiste = ({
       color: '#0f766e'
     }
   }, "Empfehlung für Angebot 1"), psH("div", {
+  style: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '12px 32px'
+  }
+}, psH("div", {
+  style: {
+    flex: '1 1 300px',
+    minWidth: 0
+  }
+}, emp.geraet ? psGeraetBlock(emp.geraet, true) : psH("div", {
+    style: {
+      fontSize: '18px',
+      fontWeight: 800,
+      color: '#0f172a'
+    }
+  }, 'Google ' + emp.stufeName)), psH("div", {
+  style: {
+    flex: '1 1 300px',
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  }
+}, psH("div", {
     style: {
       display: 'flex',
       flexWrap: 'wrap',
@@ -24310,13 +24336,7 @@ const PsEmpfehlungLeiste = ({
       borderRadius: '999px',
       padding: '4px 10px'
     }
-  }, "✓ " + t))), emp.geraet ? psGeraetBlock(emp.geraet, true) : psH("div", {
-    style: {
-      fontSize: '18px',
-      fontWeight: 800,
-      color: '#0f172a'
-    }
-  }, 'Google ' + emp.stufeName), emp.geraet && onUebernehmen && psUebernehmenZeile(td, onUebernehmen, emp.geraet), psH("div", {
+  }, "✓ " + t))), emp.geraet && onUebernehmen && psUebernehmenZeile(td, onUebernehmen, emp.geraet), psH("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -24347,7 +24367,7 @@ const PsEmpfehlungLeiste = ({
       cursor: 'pointer',
       whiteSpace: 'nowrap'
     }
-  }, "Doppelt tippen · Details"))), offen && psH(PsEmpfehlungDetail, {
+  }, "Doppelt tippen · Details"))))), offen && psH(PsEmpfehlungDetail, {
     emp: emp,
     td: td,
     onUebernehmen: onUebernehmen,
