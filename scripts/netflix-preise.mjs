@@ -3,7 +3,12 @@
 // Bei Fehler/unplausiblen Werten: Abbruch OHNE Änderung, die alte Datei bleibt (Exit 0). Diagnose steht dann in netflix-debug.txt.
 import { readFile, writeFile, rm } from 'node:fs/promises';
 
-const QUELLE = 'https://help.netflix.com/de/node/24926';
+// Die Hilfeseite zeigt je nach Standort des Servers das Land (Runner = USA). Mit Ländercode am Ende gibt es die deutschen Preise.
+const QUELLEN = [
+  'https://help.netflix.com/de/node/24926/de',
+  'https://help.netflix.com/en/node/24926/de',
+  'https://help.netflix.com/de/node/24926?country=DE'
+];
 const DATEI = new URL('../netflix-preise.json', import.meta.url);
 const DEBUG = new URL('../netflix-debug.txt', import.meta.url);
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
@@ -62,7 +67,7 @@ function ausschnitte(text, re, n = 12, rand = 110) {
   return out;
 }
 
-async function mitBrowser() {
+async function mitBrowser(quelle) {
   let chromium;
   try {
     ({ chromium } = await import('playwright'));
@@ -73,7 +78,7 @@ async function mitBrowser() {
   const br = await chromium.launch();
   try {
     const page = await (await br.newContext({ userAgent: UA, locale: 'de-DE' })).newPage();
-    await page.goto(QUELLE, { waitUntil: 'networkidle', timeout: 45000 });
+    await page.goto(quelle, { waitUntil: 'networkidle', timeout: 45000 });
     await page.waitForTimeout(3000);
     return { text: await page.evaluate(() => document.body.innerText), html: await page.content() };
   } catch (e) {
@@ -84,52 +89,54 @@ async function mitBrowser() {
   }
 }
 
-async function main() {
-  const alt = JSON.parse(await readFile(DATEI, 'utf8'));
-  const diag = [];
+async function lesen(quelle, diag) {
   let p = null;
   let html = '';
-
-  // 1) einfacher Abruf
+  let render = null;
   try {
-    const r = await fetch(QUELLE, { headers: { 'User-Agent': UA, 'Accept-Language': 'de-DE,de;q=0.9' } });
+    const r = await fetch(quelle, { headers: { 'User-Agent': UA, 'Accept-Language': 'de-DE,de;q=0.9' } });
     html = await r.text();
-    console.log('HTTP', r.status, 'Länge', html.length);
-    diag.push('Einfacher Abruf: HTTP ' + r.status + ', ' + html.length + ' Zeichen');
+    console.log(quelle, '-> HTTP', r.status, 'Länge', html.length);
+    diag.push(quelle + ' | einfacher Abruf: HTTP ' + r.status + ', ' + html.length + ' Zeichen');
     p = preiseAusText(html, false);
     if (!plausibel(p)) p = preiseAusText(html, true);
   } catch (e) {
-    console.log('Netflix-Seite nicht erreichbar:', e.message);
-    diag.push('Einfacher Abruf fehlgeschlagen: ' + e.message);
+    console.log('nicht erreichbar:', quelle, e.message);
+    diag.push(quelle + ' | einfacher Abruf fehlgeschlagen: ' + e.message);
   }
-
-  // 2) Seite mit echtem Browser rendern
-  let render = null;
   if (!plausibel(p)) {
-    render = await mitBrowser();
+    render = await mitBrowser(quelle);
     if (render) {
       p = preiseAusText(render.text, false);
       if (!plausibel(p)) p = preiseAusText(render.html, true);
-      diag.push('Browser-Abruf: ' + render.text.length + ' Zeichen Text');
+      const txt = render.text.replace(/\s+/g, ' ');
+      diag.push(quelle + ' | Browser: ' + txt.length + ' Zeichen, Land-Hinweis: ' + (/Die derzeit angezeigten Informationen beziehen sich auf: ([^.]{0,40})/.exec(txt) || [])[1]);
+      if (!plausibel(p)) {
+        diag.push('  Gelesen: ' + JSON.stringify(p), ...ausschnitte(txt, '€|EUR\\b', 8), '  Seitenanfang: ' + txt.slice(0, 400));
+      }
     }
   }
-  console.log('Gelesen:', JSON.stringify(p));
+  return { p, html, render };
+}
 
-  if (!plausibel(p)) {
-    console.log('Preise nicht lesbar oder unplausibel – Datei bleibt unverändert. Diagnose: netflix-debug.txt');
-    const roh = textAusHtml(html, true);
-    const txt = render ? render.text.replace(/\s+/g, ' ') : '';
-    diag.push('Gelesen: ' + JSON.stringify(p));
-    diag.push('--- Einfacher Abruf: Stellen mit Euro ---', ...ausschnitte(roh, '€|EUR\\b'));
-    diag.push('--- Einfacher Abruf: Stellen mit "Standard mit Werbung" ---', ...ausschnitte(roh, 'Standard mit Werbung', 6));
-    if (render) {
-      diag.push('--- Browser: Stellen mit Euro ---', ...ausschnitte(txt, '€|EUR\\b'));
-      diag.push('--- Browser: Seitenanfang ---', txt.slice(0, 800));
+async function main() {
+  const alt = JSON.parse(await readFile(DATEI, 'utf8'));
+  const diag = [];
+  let treffer = null;
+  for (const q of QUELLEN) {
+    const r = await lesen(q, diag);
+    console.log('Gelesen:', JSON.stringify(r.p));
+    if (plausibel(r.p)) {
+      treffer = { quelle: q, p: r.p };
+      break;
     }
+  }
+  if (!treffer) {
+    console.log('Preise nicht lesbar oder unplausibel – Datei bleibt unverändert. Diagnose: netflix-debug.txt');
     await writeFile(DEBUG, diag.join('\n') + '\n');
     return;
   }
-
+  const p = treffer.p;
   await rm(DEBUG, { force: true });
   const neu = JSON.parse(JSON.stringify(alt));
   const preise = { werbung: p.werbung, standard: p.standard, premium: p.premium };
@@ -140,6 +147,7 @@ async function main() {
       geaendert = true;
     }
   }
+  neu.quelle = treffer.quelle;
   neu.geprueft = heute();
   delete neu.hinweis;
   if (geaendert) neu.geaendertAm = heute();
