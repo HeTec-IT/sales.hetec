@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.130';
+    window.APP_VERSION = '55.131';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18171,6 +18171,29 @@ const PS_TV_PAKETE = {
     xl: { std: null, eu: null, nutzung: 'Mit GigaTV Mobile App', netflix: 'inkl', disney: null, werbefrei: null, label: 'Home + Premium', sub: 'inklusive Netflix', notiz: ['Vodafone Premium inklusive'] }
   }
 };
+// Netflix-Preise beim Kunden: täglich per Bot aus netflix-preise.json, sonst diese zuletzt geprüften Werte.
+const PS_NETFLIX_FALLBACK = {
+  stand: '04.11.2026',
+  tarife: [
+    { id: 'werbung', label: 'Mit Werbung', preis: 6.99, werbefrei: false },
+    { id: 'standard', label: 'Standard', preis: 15.99, werbefrei: true },
+    { id: 'premium', label: 'Premium', preis: 21.99, werbefrei: true }
+  ]
+};
+const psNetflixLaden = () => {
+  const c = window.__psNetflix;
+  if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return Promise.resolve(c.daten);
+  return fetch('netflix-preise.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const ok = d && Array.isArray(d.tarife) && d.tarife.length >= 1 && d.tarife.every(t => t && typeof t.id === 'string' && typeof t.preis === 'number' && t.preis > 0 && t.preis < 60);
+      if (!ok) return null;
+      const daten = { stand: d.geprueft || '', tarife: d.tarife.map(t => ({ id: t.id, label: t.label || t.id, preis: t.preis, werbefrei: t.werbefrei === true })) };
+      window.__psNetflix = { zeit: Date.now(), daten };
+      return daten;
+    })
+    .catch(() => null);
+};
 const PS_TV_EXTRA = 4.99; // Netflix bzw. Disney+ nach den 3 Gratis-Monaten (o2) bzw. optional (Giga TV)
 const PS_TV_WUENSCHE = ['Netflix', 'Disney+', 'Werbefrei', 'Viel Aufnahme', 'EU-Ausland'];
 const tvH = React.createElement;
@@ -18219,6 +18242,30 @@ const tvBewerten = (spec, basis, w, maxStd) => {
   const gesamt24 = p.monate * p.preis + (24 - p.monate) * basis + extra * (24 - (extraGratis ? 3 : 0));
   return { ok: fehlt.length === 0, fehlt, extra, extraGratis, kosten: basis + extra, gesamt24, zeilen };
 };
+// Pakete eines Anbieters gegen die Wünsche prüfen und das passende wählen.
+// np = Netflix-Tarif des Kunden (oder null): Hat ein Paket kein Netflix, zahlt der Kunde es weiter direkt -> wird eingerechnet.
+const tvAnalyse = (providerId, pd, totals, w, np) => {
+  const spezi = PS_TV_PAKETE[providerId] || {};
+  const ids = pd.cols.map(c => c.id).filter(id => spezi[id] && typeof totals[id] === 'number');
+  const maxStd = Math.max(0, ...ids.map(id => spezi[id].std || 0));
+  const bew = ids.map(id => {
+    const b = tvBewerten(spezi[id], totals[id], w, maxStd);
+    const weiter = np && !spezi[id].netflix ? np.preis : 0;
+    // Kunde hat Netflix ohne Werbung, das Paket nur mit Werbung -> passt nicht gleichwertig
+    const adMiss = !!np && np.werbefrei && !!spezi[id].netflix && spezi[id].werbefrei === false && !b.fehlt.some(t => t.indexOf('Werbung') !== -1);
+    const fehlt = adMiss ? b.fehlt.concat('Netflix nur mit Werbung') : b.fehlt;
+    return { id, ...b, fehlt, ok: fehlt.length === 0, weiter, kosten: b.kosten + weiter, gesamt24: b.gesamt24 + weiter * 24 };
+  });
+  const mitWunsch = PS_TV_WUENSCHE.some(k => w[k]);
+  const keinPaket = mitWunsch && bew.length > 0 && !bew.some(b => b.ok);
+  let rec = pd.recommended;
+  if (mitWunsch && bew.length) {
+    const passend = bew.filter(b => b.ok).slice().sort((a, b) => a.kosten - b.kosten);
+    rec = passend.length ? passend[0].id : bew.slice().sort((a, b) => a.fehlt.length - b.fehlt.length || a.kosten - b.kosten)[0].id;
+  }
+  if (!ids.includes(rec)) rec = ids[0];
+  return { spezi, ids, maxStd, bew, mitWunsch, keinPaket, rec };
+};
 // Fehlerschutz: ein Fehler im Assistenten schaltet auf die klassische Tabelle zurück
 class TvAssistentSchutz extends React.Component {
   constructor(p) {
@@ -18240,23 +18287,13 @@ class TvAssistentSchutz extends React.Component {
     return this.state.fehler ? null : this.props.children;
   }
 }
-const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, onWunsch }) => {
+const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, onWunsch, nf, nfTarife, nfStand, onNf, anbieter, onAnbieter }) => {
   const [wLokal, setWLokal] = useState({});
   const [gewaehlt, setGewaehlt] = useState(null);
   const gesteuert = typeof onWunsch === 'function';
   const w = gesteuert ? Object.fromEntries((wuensche || []).map(k => [k, true])) : wLokal;
-  const spezi = PS_TV_PAKETE[providerId] || {};
-  const ids = pd.cols.map(c => c.id).filter(id => spezi[id] && typeof totals[id] === 'number');
-  const maxStd = Math.max(0, ...ids.map(id => spezi[id].std || 0));
-  const bew = ids.map(id => ({ id, ...tvBewerten(spezi[id], totals[id], w, maxStd) }));
-  const mitWunsch = PS_TV_WUENSCHE.some(k => w[k]);
-  const keinPaket = mitWunsch && bew.length > 0 && !bew.some(b => b.ok);
-  let rec = pd.recommended;
-  if (mitWunsch && bew.length) {
-    const passend = bew.filter(b => b.ok).slice().sort((a, b) => a.kosten - b.kosten);
-    rec = passend.length ? passend[0].id : bew.slice().sort((a, b) => a.fehlt.length - b.fehlt.length || a.kosten - b.kosten)[0].id;
-  }
-  if (!ids.includes(rec)) rec = ids[0];
+  const np = nf && nfTarife ? (nfTarife.find(t => t.id === nf) || null) : null;
+  const { spezi, ids, maxStd, bew, mitWunsch, keinPaket, rec } = tvAnalyse(providerId, pd, totals, w, np);
   const aktivId = gewaehlt && ids.includes(gewaehlt) ? gewaehlt : rec;
   const akt = bew.find(b => b.id === aktivId);
   const col = pd.cols.find(c => c.id === aktivId);
@@ -18272,16 +18309,78 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
   const summeHeute = heute.reduce((s, f) => s + tvZahl(f.wert), 0);
   const diff = summeHeute > 0 ? summeHeute - akt.kosten : null;
   const diff24 = summeHeute > 0 ? summeHeute * 24 - akt.gesamt24 : null;
+  // Alle Anbieter nebeneinander: jeweils das passende Paket mit echten Monatskosten
+  const ueber = (anbieter || []).map(a => {
+    const an = tvAnalyse(a.id, a.pd, a.totals, w, np);
+    const best = an.bew.find(x => x.id === an.rec);
+    if (!best) return null;
+    const sp = an.spezi[best.id];
+    return {
+      id: a.id,
+      label: a.pd.label,
+      color: a.pd.color,
+      paket: sp.label || a.pd.cols.find(c => c.id === best.id).label,
+      kosten: best.kosten,
+      ok: best.ok,
+      unklar: !!np && np.werbefrei && !!sp.netflix && sp.werbefrei == null,
+      diff: summeHeute > 0 ? summeHeute - best.kosten : null
+    };
+  }).filter(Boolean);
+  const guenstigst = ueber.filter(u => u.ok && !u.unklar).sort((a, b) => a.kosten - b.kosten)[0];
   const wechseln = k => {
     if (gesteuert) onWunsch(k);
     else setWLokal(prev => ({ ...prev, [k]: !prev[k] }));
     setGewaehlt(null);
+  };
+  // Netflix-Tarif des Kunden wählen: trägt den Preis in ein Streaming-Feld ein und setzt den Wunsch "Netflix"
+  const nfFeld = preis => heute.slice(1).find(f => tvZahl(f.wert) === preis);
+  const nfWaehlen = t => {
+    const alt = np ? nfFeld(np.preis) : null;
+    if (np && np.id === t.id) {
+      if (alt) alt.setze('');
+      if (onNf) onNf(null);
+      return;
+    }
+    const ziel = alt || heute.slice(1).find(f => !tvZahl(f.wert)) || heute[1];
+    ziel.setze(t.preis.toFixed(2).replace('.', ','));
+    if (onNf) onNf(t.id);
+    if (!w.Netflix) wechseln('Netflix');
   };
   const haken = ok => tvH('span', {
     'aria-hidden': 'true',
     style: { width: '20px', height: '20px', borderRadius: '50%', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 900, color: ok ? '#ffffff' : '#64748b', background: ok ? '#0f766e' : '#e2e8f0' }
   }, ok ? '✓' : '–');
   const farbe = pd.color;
+  // Netflix-Vergleich für das gewählte Paket
+  const nfSpec = spezi[aktivId] || {};
+  const nfZeilen = np ? (() => {
+    const art = nfSpec.netflix;
+    const z = [];
+    if (art === 'inkl') z.push({ ok: true, t: 'Netflix beim Kunden (' + np.label + ', ' + tvEuro(np.preis) + ') entfällt, ist im Paket enthalten' });
+    else if (art === 'gratis') z.push({ ok: true, t: 'Netflix statt ' + tvEuro(np.preis) + ' direkt: 3 Monate gratis, danach +' + tvEuro(PS_TV_EXTRA) });
+    else if (art === 'optional') z.push({ ok: true, t: 'Netflix statt ' + tvEuro(np.preis) + ' direkt: optional ab ' + tvEuro(PS_TV_EXTRA) });
+    else z.push({ ok: false, t: 'Netflix nicht im Paket: Kunde zahlt weiter ' + tvEuro(np.preis) + ' direkt (in den Kosten eingerechnet)' });
+    if (art) {
+      if (np.werbefrei && nfSpec.werbefrei === false) z.push({ ok: false, t: 'Achtung: Kunde hat Netflix ohne Werbung, im Paket nur mit Werbung' });
+      else if (np.werbefrei && nfSpec.werbefrei == null) z.push({ ok: false, t: 'Werbefreiheit im Paket nicht hinterlegt, vorher prüfen' });
+      else if (!np.werbefrei && nfSpec.werbefrei === true) z.push({ ok: true, t: 'Im Paket sogar ohne Werbung' });
+    }
+    return z;
+  })() : null;
+  const ueberblick = ueber.length > 1 ? tvH('div', { key: 'ueberblick', style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+    tvH('div', { style: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.08em', color: '#64748b' } }, np ? 'ALLE ANBIETER · MIT NETFLIX ' + np.label.toUpperCase() + ' ' + tvEuro(np.preis) : 'ALLE ANBIETER IM VERGLEICH'),
+    tvH('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' } }, ueber.map(u => tvH('button', {
+      key: u.id,
+      type: 'button',
+      'aria-pressed': u.id === providerId,
+      onClick: () => { if (onAnbieter) onAnbieter(u.id); },
+      style: { textAlign: 'left', minHeight: '44px', background: '#ffffff', border: u.id === providerId ? '2px solid ' + u.color : '1px solid #e2e8f0', borderRadius: '14px', padding: u.id === providerId ? '9px 11px' : '10px 12px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '2px', fontFamily: 'inherit' }
+    },
+      tvH('span', { style: { fontSize: '12px', fontWeight: 800, color: u.color } }, u.label + (guenstigst && guenstigst.id === u.id ? ' · günstigster' : '')),
+      tvH('span', { style: { fontSize: '13px', fontWeight: 700, color: '#0f172a' } }, u.paket),
+      tvH('span', { style: { fontSize: '18px', fontWeight: 800, color: '#0f172a' } }, tvEuro(u.kosten)),
+      tvH('span', { style: { fontSize: '12px', fontWeight: 700, color: !u.ok || u.unklar ? '#b45309' : u.diff !== null && u.diff > 0.004 ? '#0b5a4a' : '#64748b' } },
+        !u.ok ? 'passt nicht ganz' : u.unklar ? 'Werbung prüfen' : u.diff === null ? 'passt' : u.diff > 0.004 ? 'spart ' + tvEuro(u.diff) + ' / Monat' : 'kein Vorteil'))))) : null;
   const hinweis = providerId === 'o2' ? 'Gratis-Aktionen gelten je 1× pro Kunde · danach ' + tvEuro(PS_TV_EXTRA) + ' pro Monat je Dienst, kündbar · '
     : (pd.footnotes || []).filter(f => f.indexOf('Alle:') === 0).map(f => f + ' · ').join('');
   return tvH('div', {
@@ -18299,6 +18398,16 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
           style: { height: '44px', padding: '0 16px', borderRadius: '999px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', border: w[k] ? '1px solid ' + farbe : '1px solid #cbd5e1', background: w[k] ? farbe : '#ffffff', color: w[k] ? '#ffffff' : '#0f172a' }
         }, k))),
         nichtGeprueft.length > 0 && tvH('div', { style: { fontSize: '12px', color: '#92400e', marginTop: '8px' } }, 'Bei ' + pd.label + ' nicht hinterlegt, daher nicht geprüft: ' + nichtGeprueft.join(', '))),
+      nfTarife && tvH('div', { style: { borderTop: '1px solid #e2e8f0', paddingTop: '14px' } },
+        tvH('div', { style: { fontSize: '15px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' } }, 'Hat der Kunde Netflix?'),
+        tvH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, nfTarife.map(t => tvH('button', {
+          key: t.id,
+          type: 'button',
+          'aria-pressed': !!np && np.id === t.id,
+          onClick: () => nfWaehlen(t),
+          style: { minHeight: '48px', padding: '6px 14px', borderRadius: '14px', fontSize: '13px', fontWeight: 700, lineHeight: 1.25, cursor: 'pointer', fontFamily: 'inherit', border: np && np.id === t.id ? '1px solid #b91c1c' : '1px solid #cbd5e1', background: np && np.id === t.id ? '#b91c1c' : '#ffffff', color: np && np.id === t.id ? '#ffffff' : '#0f172a' }
+        }, t.label, tvH('br'), tvEuro(t.preis)))),
+        nfStand && tvH('div', { style: { fontSize: '11px', color: '#64748b', marginTop: '6px' } }, 'Netflix-Preise Stand ' + nfStand)),
       tvH('div', { style: { borderTop: '1px solid #e2e8f0', paddingTop: '14px' } },
         tvH('div', { style: { fontSize: '15px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' } }, 'Zahlt heute (€ pro Monat)'),
         tvH('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }, heute.map(f => tvH('label', { key: f.label, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', fontSize: '14px', color: '#475569' } },
@@ -18315,6 +18424,7 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
           tvH('span', null, 'Summe'), tvH('span', null, tvEuro(summeHeute))))),
     // Rechts: eine Empfehlung + Alternativen
     tvH('div', { style: { flex: '2 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' } },
+      ueberblick,
       tvH('div', { style: { background: '#ffffff', border: '2px solid ' + farbe, borderRadius: '20px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 8px 24px ' + farbe + '2e' } },
         tvH('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' } },
           tvH('div', null,
@@ -18327,6 +18437,9 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
         keinPaket && aktivId === rec && tvH('div', { style: { background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', fontSize: '14px', fontWeight: 700, color: '#92400e' } }, 'Kein Paket erfüllt alle Wünsche. Fehlt hier: ' + akt.fehlt.join(', ')),
         tvH('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px 16px', fontSize: '14px', color: '#0f172a' } }, akt.zeilen.map(z => tvH('div', { key: z.text, style: { display: 'flex', gap: '9px', alignItems: 'center', color: z.ok ? '#0f172a' : '#64748b' } }, haken(z.ok), z.text))),
         akt.extra > 0 && tvH('div', { style: { background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', fontSize: '14px', fontWeight: 700, color: '#92400e' } }, (akt.extraGratis ? 'Mit Netflix / Disney+ nach den Gratis-Monaten: ' : 'Mit Zusatzdienst: ') + tvEuro(akt.kosten) + ' im Monat'),
+        nfZeilen && tvH('div', { style: { background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '12px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '14px' } },
+          tvH('div', { style: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.06em', color: '#9f1239' } }, 'NETFLIX-VERGLEICH'),
+          nfZeilen.map(z => tvH('div', { key: z.t, style: { display: 'flex', gap: '9px', alignItems: 'flex-start', color: z.ok ? '#0f172a' : '#b45309', fontWeight: z.ok ? 500 : 700 } }, haken(z.ok), z.t))),
         diff !== null && diff > 0.004 && tvH('div', { style: { background: '#e6f4f1', borderRadius: '12px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
           tvH('span', { style: { fontSize: '16px', fontWeight: 800, color: '#0b5a4a' } }, 'Spart ' + tvEuro(diff) + ' im Monat gegenüber heute'),
           diff24 > 0 && tvH('span', { style: { fontSize: '13px', color: '#0b5a4a' } }, tvEuro(diff24) + ' in 24 Monaten')),
@@ -18377,6 +18490,15 @@ const TvPriceModal = ({
   const [assistent, setAssistent] = useState(true); // v55.125: Assistent-Ansicht (nur o2 TV)
   useEffect(() => {
     if (isOpen && tvIst && !prevTV) setPrevTV(String(tvIst)); // v55.126: heutiger TV-Preis aus Seite 1
+  }, [isOpen]);
+  // Netflix-Tarif des Kunden (für den Preisvergleich im TV-Assistenten)
+  const [nfDaten, setNfDaten] = useState(window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK);
+  const [nfPlan, setNfPlan] = useState(null);
+  useEffect(() => {
+    if (!isOpen || !PS_TV_ASSISTENT) return;
+    let aktiv = true;
+    psNetflixLaden().then(d => { if (aktiv && d) setNfDaten(d); });
+    return () => { aktiv = false; };
   }, [isOpen]);
   // v55.8.1: o2-TV-Preise automatisch aus tv-preise.json (GitHub Action holt sie täglich von o2online.de).
   // Fehlt die Datei oder ist sie ungültig, gelten die fest hinterlegten Preise unten.
@@ -18947,7 +19069,23 @@ const TvPriceModal = ({
     }],
     wuensche,
     onWunsch,
-    onUebernehmen
+    onUebernehmen,
+    nf: nfPlan,
+    nfTarife: nfDaten.tarife,
+    nfStand: nfDaten.stand,
+    onNf: setNfPlan,
+    anbieter: ['o2', 'telekom', 'vodafone'].filter(id => providerData[id]).map(id => {
+      const t = {};
+      providerData[id].cols.forEach(col => {
+        t[col.id] = providerData[id].rows.reduce((sum, row, ri) => col.checks[ri] ? sum + getPrice(id, col.id, ri, row.tarif[col.id]) : sum, 0);
+      });
+      return { id, pd: providerData[id], totals: t };
+    }),
+    onAnbieter: id => {
+      setProvider(id);
+      const pinnedForP = pinned.find(x => x.provider === id);
+      setSelectedCol(pinnedForP ? pinnedForP.packageId : null);
+    }
   })), !compareMode && !assistentAn && /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
