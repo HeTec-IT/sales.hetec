@@ -1,28 +1,26 @@
 Pixel-Abruf OK (Diagnose eingeschaltet)
-Zeit: 04.11.2026 08:36
+Zeit: 04.11.2026 08:38
 Quelle: https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden
 
-Aus Kacheln (9):
-- Pixel 11 Pro | ohne Speicher | 1189 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 Pro Fold | ohne Speicher | 1981 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 | ohne Speicher | 991 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 Pro XL | ohne Speicher | 1405 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 | ohne Speicher | 1045 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-obsidian-mit-pixel-buds-pro-2-hazel-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 Pro | ohne Speicher | 1333 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-obsidian-mit-pixel-watch-5-wifi-45-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 10 Pro | ohne Speicher | 973 € | https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 10 | ohne Speicher | 703 € | https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 10a | ohne Speicher | 541 € | https://www.o2online.de/resource/blob/2186592/69916cd73f6765ab1a4eed99f74d9a18/google-pixel-10a-energy-label-a-download-data.pdf
+Aus Kacheln (7):
+- Pixel 11 Pro | 256 GB | 1189 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro Fold | 256 GB | 1981 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 | 256 GB | 991 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro XL | 256 GB | 1405 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 Pro | 128 GB | 973 € | https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 | 128 GB | 703 € | https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10a | 128 GB | 541 € | https://www.o2online.de/e-shop/google/google-pixel-10a-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
 
 Aus JSON (0):
 
 Ergebnis (7):
-- Pixel 11 | ohne Speicher | 991 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 Pro | ohne Speicher | 1189 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 Pro XL | ohne Speicher | 1405 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 11 Pro Fold | ohne Speicher | 1981 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 10 | ohne Speicher | 703 € | https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
-- Pixel 10a | ohne Speicher | 541 € | https://www.o2online.de/resource/blob/2186592/69916cd73f6765ab1a4eed99f74d9a18/google-pixel-10a-energy-label-a-download-data.pdf
-- Pixel 10 Pro | ohne Speicher | 973 € | https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 | 256 GB | 991 € | https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro | 256 GB | 1189 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro XL | 256 GB | 1405 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 11 Pro Fold | 256 GB | 1981 € | https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 | 128 GB | 703 € | https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10a | 128 GB | 541 € | https://www.o2online.de/e-shop/google/google-pixel-10a-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
+- Pixel 10 Pro | 128 GB | 973 € | https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung
 HTTP: 200  Endadresse: https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden
 Titel: Google Pixel mit Vertrag: Jetzt kaufen | o2
 
@@ -201,4 +199,4 @@ Freunde werben Freunde
 Sichere dir bis zu 5 x 50 € Gutschrift fürs Weiterempfehlen von O2. 
 Freunde werben Freund
 
-Kandidaten: Kacheln 9, JSON 0, gesamt 9
+Kandidaten: Kacheln 7, JSON 0, gesamt 7

@@ -1,7 +1,7 @@
 {
   "quelle": "https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden",
   "geprueft": "04.11.2026",
-  "stand": "04.11.2026 08:36",
+  "stand": "04.11.2026 08:38",
   "geaendertAm": "04.11.2026",
   "geraete": [
     {
@@ -9,8 +9,8 @@
       "modell": "Pixel 11",
       "gen": 11,
       "stufe": "basis",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "256 GB",
+      "speicherGb": 256,
       "preis": 991,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2320596/846fd960e877033173999f13dce979f4/png/article-item-frost-imagemed-mit-yt-stoerer-picture-data.webp"
@@ -20,8 +20,8 @@
       "modell": "Pixel 11 Pro",
       "gen": 11,
       "stufe": "pro",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "256 GB",
+      "speicherGb": 256,
       "preis": 1189,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2311270/9559b7d4720eee03a997b43c840b0b12/png/article-item-canyon-imagemed-picture-data.webp"
@@ -31,8 +31,8 @@
       "modell": "Pixel 11 Pro XL",
       "gen": 11,
       "stufe": "pro-xl",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "256 GB",
+      "speicherGb": 256,
       "preis": 1405,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2311666/d3fc5c6e290b452c0a6a7bb36e2b3b61/png/article-item-canyon-imagemed-picture-data.webp"
@@ -42,8 +42,8 @@
       "modell": "Pixel 11 Pro Fold",
       "gen": 11,
       "stufe": "fold",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "256 GB",
+      "speicherGb": 256,
       "preis": 1981,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2312024/a65a55b27aec1ab3f542597ca0643026/png/article-item-olive-imagemed-picture-data.webp"
@@ -53,8 +53,8 @@
       "modell": "Pixel 10",
       "gen": 10,
       "stufe": "basis",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "128 GB",
+      "speicherGb": 128,
       "preis": 703,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2069204/76b9d5bcdc48cfe680eaf0682d074088/png/article-item-4510-320211-00-imagemed-picture-data.webp"
@@ -64,10 +64,10 @@
       "modell": "Pixel 10a",
       "gen": 10,
       "stufe": "a",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "128 GB",
+      "speicherGb": 128,
       "preis": 541,
-      "url": "https://www.o2online.de/resource/blob/2186592/69916cd73f6765ab1a4eed99f74d9a18/google-pixel-10a-energy-label-a-download-data.pdf",
+      "url": "https://www.o2online.de/e-shop/google/google-pixel-10a-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2188102/ecaeec87805c503a6a1fc960a63ca3ad/png/article-item-4510-320257-00-imagemed-picture-data.webp"
     },
     {
@@ -75,8 +75,8 @@
       "modell": "Pixel 10 Pro",
       "gen": 10,
       "stufe": "pro",
-      "speicher": "",
-      "speicherGb": 0,
+      "speicher": "128 GB",
+      "speicherGb": 128,
       "preis": 973,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2069258/58a1ea7674a178a9bcdb274d1bedb38b/png/article-item-4510-320216-00-imagemed-picture-data.webp"
