@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.134';
+    window.APP_VERSION = '55.135';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18718,9 +18718,11 @@ const TvPriceModal = ({
   onUebernehmen,
   wuensche,
   onWunsch,
-  tvIst
+  tvIst,
+  kabel
 }) => {
   const [provider, setProvider] = useState('o2');
+  const [prevKabel, setPrevKabel] = useState('');
   const [prevTV, setPrevTV] = useState('');
   const [prevHD, setPrevHD] = useState('');
   const [prevStream, setPrevStream] = useState('');
@@ -18736,6 +18738,7 @@ const TvPriceModal = ({
   const [assistent, setAssistent] = useState(true); // v55.125: Assistent-Ansicht (nur o2 TV)
   useEffect(() => {
     if (isOpen && tvIst && !prevTV) setPrevTV(String(tvIst)); // v55.126: heutiger TV-Preis aus Seite 1
+    if (isOpen && kabel && !prevKabel) setPrevKabel(String(PS_KABEL_TV).replace('.', ',')); // v55.135: Kabel-TV entfällt
   }, [isOpen]);
   // Netflix-Tarif des Kunden (für den Preisvergleich im TV-Assistenten)
   const [nfDaten, setNfDaten] = useState(window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK);
@@ -19089,7 +19092,11 @@ const TvPriceModal = ({
       label: 'Streaming 2 · Disney+',
       wert: prevStream,
       setze: setPrevStream
-    }],
+    }].concat(kabel ? [{
+      label: 'Kabel-TV (entfällt)',
+      wert: prevKabel,
+      setze: setPrevKabel
+    }] : []),
     wuensche,
     onWunsch,
     onUebernehmen,
@@ -24394,6 +24401,8 @@ const PsEmpfehlungDetail = ({
 };
 // ═══ TV-Empfehlung über Angebot 3: erscheint automatisch, wenn auf Seite 1 TV und ein TV-Wunsch (Netflix, Disney+ …) gewählt sind ═══
 const PS_TV_HEIMAT = 'o2';
+// Kabel-TV beim Kunden (Kabelgebühr, ca. 20 € pro Monat): entfällt, wenn er TV über o2 / MagentaTV / Giga TV macht
+const PS_KABEL_TV = 20;
 const psTvName = (k) => (k.label === 'o2 TV' ? 'o2 ' : k.label + ' ') + k.paket;
 const psTvText = (k) => {
   const inkl = [k.netflix === 'inkl' ? 'Netflix' : '', k.disney === 'inkl' ? 'Disney+' : ''].filter(Boolean);
@@ -24440,7 +24449,8 @@ const PsTvKarte = ({ tv, td, voll }) => {
   const k = erg.haupt;
   const text = psTvText(k);
   const geld = n => n.toFixed(2).replace('.', ',') + ' €';
-  const ist = parseFloat(String(tv.tvIst || '').replace(',', '.')) || 0;
+  const istTv = parseFloat(String(tv.tvIst || '').replace(',', '.')) || 0;
+  const ist = istTv + (tv.kabel ? PS_KABEL_TV : 0);
   const spart = ist > 0 ? ist - k.kosten : 0;
   const zeilen = k.zeilen.filter(z => z.ok).slice(0, 4);
   const knopf = nr => {
@@ -24471,6 +24481,7 @@ const PsTvKarte = ({ tv, td, voll }) => {
           psH('span', { style: { fontSize: '13px', fontWeight: 700, color: '#475569' } }, '/ Monat · 24 Monate')),
         k.kosten > k.preis + 0.004 && psH('div', { style: { fontSize: '12px', color: '#92400e', fontWeight: 700 } }, 'mit Netflix / Disney+ nach den Gratis-Monaten ' + geld(k.kosten)),
         spart > 0.004 && psH('div', { style: { fontSize: '13px', fontWeight: 800, color: '#0f766e' } }, 'Spart ' + geld(spart) + ' im Monat gegenüber heute'),
+        tv.kabel && psH('div', { style: { fontSize: '12px', color: '#475569' } }, 'Kabel-TV ca. ' + geld(PS_KABEL_TV) + ' entfällt' + (istTv > 0 ? ' (+ Fernsehen heute ' + geld(istTv) + ')' : '')),
         !k.ok && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, 'Fehlt: ' + k.fehlt.join(', '))),
       psH('div', { style: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' } },
         psH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } }, zeilen.map(z => psH('span', { key: z.text, style: { fontSize: '12px', fontWeight: 700, color: '#0f766e', background: '#e6f4f1', borderRadius: '999px', padding: '4px 10px' } }, '✓ ' + z.text))),
@@ -24515,8 +24526,10 @@ const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, onOeffnen }) => {
   if (!aktiv || zu || !erg) return null;
   const k = erg.haupt;
   const geld = n => n.toFixed(2).replace('.', ',') + ' €';
-  const ist = parseFloat(String(tvIst || '').replace(',', '.')) || 0;
+  const istTv = parseFloat(String(tvIst || '').replace(',', '.')) || 0;
+  const ist = istTv + (kabel ? PS_KABEL_TV : 0);
   const spart = ist > 0 ? ist - k.kosten : null;
+  const heuteText = (istTv > 0 ? 'Fernsehen heute ' + geld(istTv) : '') + (istTv > 0 && kabel ? ' + ' : '') + (kabel ? 'Kabel-TV ca. ' + geld(PS_KABEL_TV) + ' (entfällt)' : '');
   // Netflix / Disney+ einzeln beim Anbieter: günstigster Tarif (mit Werbung) und günstigster werbefreier Tarif
   const einzeln = [];
   if ((wuensche || []).indexOf('Netflix') !== -1) einzeln.push(nf.tarife);
@@ -24546,12 +24559,12 @@ const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, onOeffnen }) => {
     vorteil
       ? psH('div', { style: Object.assign({ background: '#e6f4f1', color: '#0b5a4a', fontWeight: 800 }, box) },
           'Spart ' + geld(spart) + ' im Monat · ' + geld(spart * 24) + ' in 24 Monaten',
-          psH('div', { style: { fontSize: '12px', fontWeight: 600 } }, 'Kunde zahlt heute ' + geld(ist) + ' für Fernsehen'))
+          psH('div', { style: { fontSize: '12px', fontWeight: 600 } }, 'Kunde zahlt heute ' + geld(ist) + ': ' + heuteText),
+          kabel && istTv <= 0 && psH('div', { style: { fontSize: '12px', fontWeight: 600 } }, 'Preis bei „Fernsehen“ eintragen, wenn der Kunde zusätzlich TV zahlt.'))
       : spart !== null
-        ? psH('div', { style: Object.assign({ background: '#fffbeb', color: '#92400e', fontWeight: 700 }, box) }, 'Kunde zahlt heute ' + geld(ist) + ', hier ' + geld(k.kosten) + ': Vorteil über die Inhalte erklären')
+        ? psH('div', { style: Object.assign({ background: '#fffbeb', color: '#92400e', fontWeight: 700 }, box) }, 'Kunde zahlt heute ' + geld(ist) + ' (' + heuteText + '), hier ' + geld(k.kosten) + ': Vorteil über die Inhalte erklären')
         : psH('div', { style: Object.assign({ background: '#f1f5f9', color: '#0f172a' }, box) },
             einzeln.length > 0 && psH('div', null, (wuensche.indexOf('Netflix') !== -1 && wuensche.indexOf('Disney+') !== -1 ? 'Netflix + Disney+' : wuensche.indexOf('Netflix') !== -1 ? 'Netflix' : 'Disney+') + ' einzeln: ab ' + geld(ab) + ' (mit Werbung), werbefrei ' + geld(frei)),
-            kabel && psH('div', null, 'Kabelgebühren entfallen zusätzlich.'),
             psH('div', { style: { fontSize: '12px', color: '#475569', marginTop: '2px' } }, 'Heutigen Preis bei „Fernsehen“ eintragen, dann steht hier die genaue Ersparnis.')),
     psH('button', {
       type: 'button',
@@ -35217,6 +35230,7 @@ function App() {
     aktiv: (psTvChips.tvwichtig || []).length > 0 && (psTvChips.tv || []).some(x => x !== 'Kein TV'),
     wuensche: psTvChips.tvwichtig || [],
     tvIst: costState && costState.tv || '',
+    kabel: (psTvChips.tv || []).indexOf('Kabel') !== -1,
     onUebernehmen: psTvUebernehmen,
     onOeffnen: () => setShowTvModal(true)
   };
@@ -40815,6 +40829,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     wuensche: sitChipsParse(textData).tvwichtig || [],
     onWunsch: k => toggleSitChip(SIT_CHIP_GROUPS.find(g => g.id === 'tvwichtig'), k),
     tvIst: costState && costState.tv || '',
+    kabel: (sitChipsParse(textData).tv || []).indexOf('Kabel') !== -1,
     onUebernehmen: snap => {
       // TV-Paket NICHT in Kosten (Ist) übernehmen – das sind Kundenbestandskosten, nicht neue!
       if (typeof snap === 'object') setTvSnapshot(snap);else setTvSnapshot({
