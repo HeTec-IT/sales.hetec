@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.122';
+    window.APP_VERSION = '55.123';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -23573,6 +23573,40 @@ const psGeraetBlock = (g, gross) => psH("div", {
     color: '#64748b'
   }
 }, 'Gerätepreis ' + psEmpGeld(g.preis) + ' · 24 Monate: ' + psEmpGeld(psEmpRate(g.preis, 24)) + ' / Monat')));
+const psEmpText = g => g.name + (g.speicher ? ' ' + g.speicher : '');
+// Knopf "In Angebot n übernehmen": Gerät als Text ins Angebot, Anzahlung zu "Einmalig" (Monatlich bleibt frei)
+const psUebernehmenKnopf = (td, onUebernehmen, g, nr) => {
+  const key = 'offer' + nr;
+  const drin = String(td && td[key] || '').indexOf(psEmpText(g)) !== -1;
+  return psH("button", {
+    key: 'uebernehmen' + nr,
+    type: 'button',
+    disabled: drin,
+    onClick: ev => {
+      ev.stopPropagation();
+      try {
+        onUebernehmen(key, g);
+      } catch (err) {
+        try {
+          console.warn('Übernahme fehlgeschlagen:', err);
+        } catch (_) {}
+      }
+    },
+    style: {
+      alignSelf: 'flex-start',
+      height: '44px',
+      padding: '0 18px',
+      borderRadius: '12px',
+      border: '1px solid #0f766e',
+      background: drin ? '#e6f4f1' : '#0f766e',
+      color: drin ? '#0f766e' : '#ffffff',
+      fontSize: '14px',
+      fontWeight: 800,
+      cursor: drin ? 'default' : 'pointer',
+      whiteSpace: 'nowrap'
+    }
+  }, drin ? '✓ In Angebot ' + nr + ' übernommen' : 'In Angebot ' + nr + ' übernehmen');
+};
 const psPixelKatalogLaden = () => {
   const c = window.__psPixelKat;
   if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return Promise.resolve(c.daten);
@@ -23695,7 +23729,9 @@ class PsEmpfehlungSchutz extends React.Component {
 }
 const PsEmpfehlungDetail = ({
   emp,
-  onClose
+  onClose,
+  td,
+  onUebernehmen
 }) => {
   const chip = (txt, fg, bg, key) => psH("span", {
     key: key || txt,
@@ -23732,7 +23768,7 @@ const PsEmpfehlungDetail = ({
       flex: '0 0 auto'
     }
   }, "✓"), txt);
-  const kachel = (e, haupt) => psH("div", {
+  const kachel = (e, haupt, nr) => psH("div", {
     key: e.stufe,
     style: {
       background: '#ffffff',
@@ -23756,7 +23792,7 @@ const PsEmpfehlungDetail = ({
       fontWeight: 800,
       color: '#0f172a'
     }
-  }, 'Google ' + e.stufeName), e.gruende.map(t => haken(t, e.stufe + t)), haupt && e.geraet && e.geraet.url && psH("button", {
+  }, 'Google ' + e.stufeName), e.gruende.map(t => haken(t, e.stufe + t)), e.geraet && onUebernehmen && psUebernehmenKnopf(td, onUebernehmen, e.geraet, nr), haupt && e.geraet && e.geraet.url && psH("button", {
     type: 'button',
     onClick: () => {
       try {
@@ -23895,7 +23931,7 @@ const PsEmpfehlungDetail = ({
       flexDirection: 'column',
       gap: '14px'
     }
-  }, kachel(emp, true), emp.alternativen.length > 0 && psH("div", {
+  }, kachel(emp, true, 1), emp.alternativen.length > 0 && psH("div", {
     style: {
       fontSize: '12px',
       fontWeight: 800,
@@ -23903,7 +23939,7 @@ const PsEmpfehlungDetail = ({
       textTransform: 'uppercase',
       color: '#64748b'
     }
-  }, "Weitere Treffer"), emp.alternativen.map(a => kachel(a, false)))), psH("div", {
+  }, "Weitere Treffer"), emp.alternativen.map((a, i) => kachel(a, false, i + 2)))), psH("div", {
     style: {
       padding: '0 22px 18px',
       fontSize: '12px',
@@ -23914,7 +23950,8 @@ const PsEmpfehlungDetail = ({
 const PsEmpfehlungLeiste = ({
   td,
   step,
-  joined
+  joined,
+  onUebernehmen
 }) => {
   const [kat, setKat] = React.useState(window.__psPixelKat ? window.__psPixelKat.daten : null);
   const [offen, setOffen] = React.useState(false);
@@ -24003,6 +24040,7 @@ const PsEmpfehlungLeiste = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      flexWrap: 'wrap',
       gap: '10px'
     }
   }, psH("span", {
@@ -24010,7 +24048,7 @@ const PsEmpfehlungLeiste = ({
       fontSize: '12px',
       color: '#64748b'
     }
-  }, emp.geraet ? 'o2 Shop' : 'Gerätedaten werden täglich geladen'), psH("button", {
+  }, emp.geraet ? 'o2 Shop' : 'Gerätedaten werden täglich geladen'), emp.geraet && onUebernehmen && psUebernehmenKnopf(td, onUebernehmen, emp.geraet, 1), psH("button", {
     type: 'button',
     onClick: e => {
       e.stopPropagation();
@@ -24030,6 +24068,8 @@ const PsEmpfehlungLeiste = ({
     }
   }, "Doppelt tippen · Details"))), offen && psH(PsEmpfehlungDetail, {
     emp: emp,
+    td: td,
+    onUebernehmen: onUebernehmen,
     onClose: () => setOffen(false)
   }));
 };
@@ -34505,6 +34545,20 @@ function App() {
       }
       return next;
     });
+  };
+  // Pixel-Empfehlung -> Angebot: Gerät als Text, Anzahlung (1 €) zu "Einmalig" addiert; "Monatlich" bleibt frei (hängt vom Tarif ab)
+  const psEmpUebernehmen = (offerKey, g) => {
+    const text = psEmpText(g);
+    const alt = String(textData[offerKey] || '');
+    if (alt.indexOf(text) !== -1) return;
+    handleTextChange(offerKey, alt.trim() ? alt.replace(/\s+$/, '') + '\n' + text : text);
+    const sk = psPriceKey(offerKey, 'einmalig');
+    try {
+      digitalTouchedRef.current[sk] = true;
+    } catch (err) {}
+    const neu = psParseEuro((packagePrices[offerKey] || {}).einmalig) + PS_EMP_ANZAHLUNG;
+    setPackagePriceField(offerKey, 'einmalig', neu.toFixed(2).replace('.', ','));
+    triggerToast(text + ' in Angebot ' + offerKey.slice(-1) + ' übernommen · Anzahlung ' + psEmpGeld(PS_EMP_ANZAHLUNG) + ' bei Einmalig');
   };
   const renderPriceField = (offerKey, field, opts) => {
     const ref = priceFieldRefs[offerKey + '_' + field];
@@ -45380,7 +45434,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }, s.l))), /*#__PURE__*/React.createElement(PsEmpfehlungSchutz, null, /*#__PURE__*/React.createElement(PsEmpfehlungLeiste, {
     td: textData,
     step: offerLayoutMode === 'step' ? currentOfferStep : -1,
-    joined: !!(jEff && jEff.j12 && jEff.j23)
+    joined: !!(jEff && jEff.j12 && jEff.j23),
+    onUebernehmen: psEmpUebernehmen
   })), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-6 w-full md:grid md:grid-cols-3 offer-print-grid"
   }, [{
