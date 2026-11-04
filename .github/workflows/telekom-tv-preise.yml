@@ -1,0 +1,42 @@
+name: Telekom-TV-Preise aktualisieren
+
+on:
+  schedule:
+    - cron: '55 11 * * *'   # ca. 12:5x Uhr (Winterzeit), in der Sommerzeit eine Stunde später
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/telekom-tv-preise.mjs'
+      - 'scripts/tv-helfer.mjs'
+      - '.github/workflows/telekom-tv-preise.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telekom-tv-preise
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Browser installieren
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Telekom-TV-Preise lesen
+        run: node scripts/telekom-tv-preise.mjs
+      - name: Speichern
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add telekom-tv-preise.json
+          if [ -e telekom-tv-debug.txt ]; then git add telekom-tv-debug.txt; else git rm -q --cached --ignore-unmatch telekom-tv-debug.txt; fi
+          git diff --cached --quiet || (git commit -m "Telekom-TV-Preise aktualisiert" && git pull --rebase && git push)

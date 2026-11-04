@@ -1,0 +1,42 @@
+name: Vodafone-TV-Preise aktualisieren
+
+on:
+  schedule:
+    - cron: '58 11 * * *'   # ca. 12:5x Uhr (Winterzeit), in der Sommerzeit eine Stunde später
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/vodafone-tv-preise.mjs'
+      - 'scripts/tv-helfer.mjs'
+      - '.github/workflows/vodafone-tv-preise.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vodafone-tv-preise
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Browser installieren
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Vodafone-TV-Preise lesen
+        run: node scripts/vodafone-tv-preise.mjs
+      - name: Speichern
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add vodafone-tv-preise.json
+          if [ -e vodafone-tv-debug.txt ]; then git add vodafone-tv-debug.txt; else git rm -q --cached --ignore-unmatch vodafone-tv-debug.txt; fi
+          git diff --cached --quiet || (git commit -m "Vodafone-TV-Preise aktualisiert" && git pull --rebase && git push)
