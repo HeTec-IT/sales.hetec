@@ -9,6 +9,7 @@ export function textAusHtml(html, mitSkripten) {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\\u20ac|\\u20AC|&euro;|&#8364;/g, '€')
     .replace(/\\u00a0|&nbsp;|&#160;| /g, ' ')
+    .replace(/&auml;/g, 'ä').replace(/&ouml;/g, 'ö').replace(/&uuml;/g, 'ü').replace(/&Auml;/g, 'Ä').replace(/&Ouml;/g, 'Ö').replace(/&Uuml;/g, 'Ü').replace(/&szlig;/g, 'ß')
     .replace(/&amp;/g, '&')
     .replace(/\\"/g, '"')
     .replace(/\s+/g, ' ');

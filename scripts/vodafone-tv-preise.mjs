@@ -41,7 +41,7 @@ export function plausibel(p) {
 export function zusatzAusText(text) {
   const t = norm(text);
   const out = {};
-  const p = new RegExp('20\\s+HD-Sender\\s+ohne\\s+Werbung\\s+für\\s+(\\d{1,2}(?:,\\d{2})?)' + EUR, 'i').exec(t);
+  const p = new RegExp('20\\s+HD-Sender\\s+ohne\\s+Werbung\\s+f(?:ü|&uuml;|ue)r\\s+(\\d{1,2}(?:,\\d{2})?)' + EUR, 'i').exec(t);
   if (p) out.premium = zahl(p[1]);
   const r = new RegExp('Hast\\s+Du\\s+Internet\\s+von\\s+uns\\?[^€]{0,40}?Dann\\s+sparst\\s+Du\\s+(\\d{1,2}(?:,\\d{2})?)' + EUR, 'i').exec(t);
   if (r) out.internetRabatt = zahl(r[1]);
@@ -49,7 +49,7 @@ export function zusatzAusText(text) {
 }
 
 export function zusatzPlausibel(z) {
-  return !!z && (z.premium === undefined || ok(z.premium, 1, 20)) && (z.internetRabatt === undefined || ok(z.internetRabatt, 1, 20)) && (z.premium !== undefined || z.internetRabatt !== undefined);
+  return !!z && (z.premium === undefined || ok(z.premium, 1, 20)) && (z.internetRabatt === undefined || ok(z.internetRabatt, 1, 20)) && z.premium !== undefined;
 }
 
 // Netflix über Vodafone: "Standardpreis 6,99 € – Angebotspreis 4,99 € pro Monat" für Mit Werbung, Standard, Premium (in dieser Reihenfolge)
