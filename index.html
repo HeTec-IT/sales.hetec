@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.132';
+    window.APP_VERSION = '55.133';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18481,110 +18481,8 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
         }, 'Stattdessen wählen')))))),
     tvH('div', { style: { fontSize: '11px', color: '#64748b' } }, hinweis + (pd.preisStand ? 'Preise o2online.de, Stand ' + pd.preisStand : 'Preise ohne Gewähr')));
 };
-const TvPriceModal = ({
-  isOpen,
-  onClose,
-  onUebernehmen,
-  wuensche,
-  onWunsch,
-  tvIst
-}) => {
-  const [provider, setProvider] = useState('o2');
-  const [prevTV, setPrevTV] = useState('');
-  const [prevHD, setPrevHD] = useState('');
-  const [prevStream, setPrevStream] = useState('');
-  const [selectedCol, setSelectedCol] = useState(null);
-  // Custom Preise: { 'o2_s_0': 9.99, 'telekom_m_1': 7.50, ... }
-  const [customPrices, setCustomPrices] = useState({});
-  const [editingCell, setEditingCell] = useState(null); // { prov, col, row, key }
-  const [editValue, setEditValue] = useState('');
-  // v54.2.0: Vergleich – bis zu 3 Pakete anbieterübergreifend anpinnen (Lang-Druck auf Paket)
-  const [pinned, setPinned] = useState([]);
-  const [pinLimitHint, setPinLimitHint] = useState(false);
-  const [compareMode, setCompareMode] = useState(false);
-  const [assistent, setAssistent] = useState(true); // v55.125: Assistent-Ansicht (nur o2 TV)
-  useEffect(() => {
-    if (isOpen && tvIst && !prevTV) setPrevTV(String(tvIst)); // v55.126: heutiger TV-Preis aus Seite 1
-  }, [isOpen]);
-  // Netflix-Tarif des Kunden (für den Preisvergleich im TV-Assistenten)
-  const [nfDaten, setNfDaten] = useState(window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK);
-  const [nfPlan, setNfPlan] = useState(null);
-  const [dsDaten, setDsDaten] = useState(window.__psDisney ? window.__psDisney.daten : PS_DISNEY_FALLBACK);
-  const [dsPlan, setDsPlan] = useState(null);
-  useEffect(() => {
-    if (!isOpen || !PS_TV_ASSISTENT) return;
-    let aktiv = true;
-    psNetflixLaden().then(d => { if (aktiv && d) setNfDaten(d); });
-    psDisneyLaden().then(d => { if (aktiv && d) setDsDaten(d); });
-    return () => { aktiv = false; };
-  }, [isOpen]);
-  // v55.8.1: o2-TV-Preise automatisch aus tv-preise.json (GitHub Action holt sie täglich von o2online.de).
-  // Fehlt die Datei oder ist sie ungültig, gelten die fest hinterlegten Preise unten.
-  const [o2Live, setO2Live] = useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
-  useEffect(() => {
-    if (!isOpen) return;
-    const c = window.__o2TvPreise;
-    if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return;
-    let aktiv = true;
-    fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d || !d.o2 || !d.o2.preise) return;
-        window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
-        if (aktiv) setO2Live(d.o2);
-      })
-      .catch(() => {});
-    return () => { aktiv = false; };
-  }, [isOpen]);
-  const longPressTimer = React.useRef(null);
-  const pinFiredRef = React.useRef(false);
-  const startLongPress = entry => {
-    pinFiredRef.current = false;
-    clearTimeout(longPressTimer.current);
-    const alreadyPinned = pinned.some(p => p.id === entry.id);
-    longPressTimer.current = setTimeout(() => {
-      pinFiredRef.current = true;
-      setPinned(prev => {
-        if (prev.some(p => p.id === entry.id)) return prev.filter(p => p.id !== entry.id);
-        if (prev.length >= 3) {
-          setPinLimitHint(true);
-          setTimeout(() => setPinLimitHint(false), 1600);
-          return prev;
-        }
-        const next = [...prev, entry];
-        if (next.length >= 2) setCompareMode(true);
-        return next;
-      });
-      // Aktiv-Markierung an das (ent)pinnte Paket anpassen, sonst zeigt die
-      // Zusammenfassung unten den Preis eines inzwischen ausgeblendeten Pakets.
-      setSelectedCol(alreadyPinned ? null : entry.packageId);
-    }, 480);
-  };
-  const cancelLongPress = () => clearTimeout(longPressTimer.current);
-  const confirmEdit = () => {
-    if (!editingCell) return;
-    const val = parseFloat(String(editValue).replace(',', '.'));
-    if (!isNaN(val) && val >= 0) {
-      setCustomPrices(prev => ({
-        ...prev,
-        [editingCell.key]: val
-      }));
-    }
-    setEditingCell(null);
-  };
-  const getPrice = (prov, colId, rowIdx, original) => {
-    const key = `${prov}_${colId}_${rowIdx}`;
-    return customPrices[key] ?? original;
-  };
-  const resetPrices = () => {
-    setCustomPrices({});
-    setEditingCell(null);
-  };
-  if (!isOpen) return null;
-  const parse = v => {
-    const n = parseFloat(String(v).replace(',', '.'));
-    return isNaN(n) ? 0 : n;
-  };
+// Preisdaten aller TV-Anbieter (o2 mit Live-Preisen aus tv-preise.json) – vom Modal und von der Empfehlungskarte genutzt
+const psTvProviderData = o2Live => {
   const providerData = {
     o2: {
       label: 'o2 TV',
@@ -18812,6 +18710,113 @@ const TvPriceModal = ({
       if (o2Live.geprueft) o2d.preisStand = o2Live.geprueft;
     }
   }
+  return providerData;
+};
+const TvPriceModal = ({
+  isOpen,
+  onClose,
+  onUebernehmen,
+  wuensche,
+  onWunsch,
+  tvIst
+}) => {
+  const [provider, setProvider] = useState('o2');
+  const [prevTV, setPrevTV] = useState('');
+  const [prevHD, setPrevHD] = useState('');
+  const [prevStream, setPrevStream] = useState('');
+  const [selectedCol, setSelectedCol] = useState(null);
+  // Custom Preise: { 'o2_s_0': 9.99, 'telekom_m_1': 7.50, ... }
+  const [customPrices, setCustomPrices] = useState({});
+  const [editingCell, setEditingCell] = useState(null); // { prov, col, row, key }
+  const [editValue, setEditValue] = useState('');
+  // v54.2.0: Vergleich – bis zu 3 Pakete anbieterübergreifend anpinnen (Lang-Druck auf Paket)
+  const [pinned, setPinned] = useState([]);
+  const [pinLimitHint, setPinLimitHint] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [assistent, setAssistent] = useState(true); // v55.125: Assistent-Ansicht (nur o2 TV)
+  useEffect(() => {
+    if (isOpen && tvIst && !prevTV) setPrevTV(String(tvIst)); // v55.126: heutiger TV-Preis aus Seite 1
+  }, [isOpen]);
+  // Netflix-Tarif des Kunden (für den Preisvergleich im TV-Assistenten)
+  const [nfDaten, setNfDaten] = useState(window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK);
+  const [nfPlan, setNfPlan] = useState(null);
+  const [dsDaten, setDsDaten] = useState(window.__psDisney ? window.__psDisney.daten : PS_DISNEY_FALLBACK);
+  const [dsPlan, setDsPlan] = useState(null);
+  useEffect(() => {
+    if (!isOpen || !PS_TV_ASSISTENT) return;
+    let aktiv = true;
+    psNetflixLaden().then(d => { if (aktiv && d) setNfDaten(d); });
+    psDisneyLaden().then(d => { if (aktiv && d) setDsDaten(d); });
+    return () => { aktiv = false; };
+  }, [isOpen]);
+  // v55.8.1: o2-TV-Preise automatisch aus tv-preise.json (GitHub Action holt sie täglich von o2online.de).
+  // Fehlt die Datei oder ist sie ungültig, gelten die fest hinterlegten Preise unten.
+  const [o2Live, setO2Live] = useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const c = window.__o2TvPreise;
+    if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return;
+    let aktiv = true;
+    fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d || !d.o2 || !d.o2.preise) return;
+        window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
+        if (aktiv) setO2Live(d.o2);
+      })
+      .catch(() => {});
+    return () => { aktiv = false; };
+  }, [isOpen]);
+  const longPressTimer = React.useRef(null);
+  const pinFiredRef = React.useRef(false);
+  const startLongPress = entry => {
+    pinFiredRef.current = false;
+    clearTimeout(longPressTimer.current);
+    const alreadyPinned = pinned.some(p => p.id === entry.id);
+    longPressTimer.current = setTimeout(() => {
+      pinFiredRef.current = true;
+      setPinned(prev => {
+        if (prev.some(p => p.id === entry.id)) return prev.filter(p => p.id !== entry.id);
+        if (prev.length >= 3) {
+          setPinLimitHint(true);
+          setTimeout(() => setPinLimitHint(false), 1600);
+          return prev;
+        }
+        const next = [...prev, entry];
+        if (next.length >= 2) setCompareMode(true);
+        return next;
+      });
+      // Aktiv-Markierung an das (ent)pinnte Paket anpassen, sonst zeigt die
+      // Zusammenfassung unten den Preis eines inzwischen ausgeblendeten Pakets.
+      setSelectedCol(alreadyPinned ? null : entry.packageId);
+    }, 480);
+  };
+  const cancelLongPress = () => clearTimeout(longPressTimer.current);
+  const confirmEdit = () => {
+    if (!editingCell) return;
+    const val = parseFloat(String(editValue).replace(',', '.'));
+    if (!isNaN(val) && val >= 0) {
+      setCustomPrices(prev => ({
+        ...prev,
+        [editingCell.key]: val
+      }));
+    }
+    setEditingCell(null);
+  };
+  const getPrice = (prov, colId, rowIdx, original) => {
+    const key = `${prov}_${colId}_${rowIdx}`;
+    return customPrices[key] ?? original;
+  };
+  const resetPrices = () => {
+    setCustomPrices({});
+    setEditingCell(null);
+  };
+  if (!isOpen) return null;
+  const parse = v => {
+    const n = parseFloat(String(v).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
+  const providerData = psTvProviderData(o2Live);
   const pd = providerData[provider];
   const activeCol = selectedCol || pd.recommended;
   const prevTotal = parse(prevTV) + parse(prevHD) + parse(prevStream);
@@ -24387,11 +24392,107 @@ const PsEmpfehlungDetail = ({
     }
   }, "Gerätepreis laut o2 Shop (ohne Tarif). Monatsrate errechnet: (Gerätepreis − 1 € Anzahlung) ÷ 36 Monate. Verbindlich ist der Preis im Vertrag bzw. in Opus."))), document.body);
 };
+// ═══ TV-Empfehlung über Angebot 3: erscheint automatisch, wenn auf Seite 1 TV und ein TV-Wunsch (Netflix, Disney+ …) gewählt sind ═══
+const PS_TV_HEIMAT = 'o2';
+const psTvName = (k) => (k.label === 'o2 TV' ? 'o2 ' : k.label + ' ') + k.paket;
+const psTvText = (k) => {
+  const inkl = [k.netflix === 'inkl' ? 'Netflix' : '', k.disney === 'inkl' ? 'Disney+' : ''].filter(Boolean);
+  return psTvName(k) + (inkl.length ? ' (' + inkl.join(' + ') + ' inklusive)' : '');
+};
+const psTvEmpfehlung = (wuensche, o2Live) => {
+  const w = Object.fromEntries((wuensche || []).map(x => [x, true]));
+  const alle = psTvProviderData(o2Live);
+  const kand = [];
+  ['o2', 'telekom', 'vodafone'].forEach(id => {
+    const pd = alle[id];
+    if (!pd) return;
+    const totals = {};
+    pd.cols.forEach(col => {
+      totals[col.id] = pd.rows.reduce((s, row, ri) => col.checks[ri] ? s + row.tarif[col.id] : s, 0);
+    });
+    const an = tvAnalyse(id, pd, totals, w, null, null);
+    const bw = an.bew.find(x => x.id === an.rec);
+    if (!bw) return;
+    const sp = an.spezi[bw.id];
+    const col = pd.cols.find(c => c.id === bw.id);
+    kand.push({ id, label: pd.label, color: pd.color, paket: sp.label || col.label, sub: sp.sub || col.sub, preis: totals[bw.id], kosten: bw.kosten, ok: bw.ok, fehlt: bw.fehlt, zeilen: bw.zeilen, netflix: sp.netflix, disney: sp.disney, stand: pd.preisStand || '' });
+  });
+  if (!kand.length) return null;
+  const haupt = kand.find(x => x.id === PS_TV_HEIMAT) || kand[0];
+  return { haupt, andere: kand.filter(x => x !== haupt) };
+};
+const PsTvKarte = ({ tv, td, voll }) => {
+  const [o2Live, setO2Live] = React.useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
+  React.useEffect(() => {
+    const c = window.__o2TvPreise;
+    if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return;
+    let aktiv = true;
+    fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+      if (!d || !d.o2 || !d.o2.preise) return;
+      window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
+      if (aktiv) setO2Live(d.o2);
+    }).catch(() => {});
+    return () => { aktiv = false; };
+  }, []);
+  const wKey = (tv.wuensche || []).join('|');
+  const erg = React.useMemo(() => psTvEmpfehlung(tv.wuensche, o2Live), [wKey, o2Live]);
+  if (!erg) return null;
+  const k = erg.haupt;
+  const text = psTvText(k);
+  const geld = n => n.toFixed(2).replace('.', ',') + ' €';
+  const ist = parseFloat(String(tv.tvIst || '').replace(',', '.')) || 0;
+  const spart = ist > 0 ? ist - k.kosten : 0;
+  const zeilen = k.zeilen.filter(z => z.ok).slice(0, 4);
+  const knopf = nr => {
+    const key = 'offer' + nr;
+    const drin = String(td && td[key] || '').indexOf(text) !== -1;
+    return psH('button', {
+      key: key,
+      type: 'button',
+      disabled: drin,
+      onClick: ev => {
+        ev.stopPropagation();
+        try { tv.onUebernehmen(key, text, k.preis); } catch (err) { try { console.warn('TV-Übernahme fehlgeschlagen:', err); } catch (_) {} }
+      },
+      style: { height: '40px', minWidth: '104px', padding: '0 14px', borderRadius: '12px', border: '1px solid #0f766e', background: drin ? '#e6f4f1' : '#0f766e', color: drin ? '#0f766e' : '#ffffff', fontSize: '14px', fontWeight: 800, cursor: drin ? 'default' : 'pointer', whiteSpace: 'nowrap' }
+    }, (drin ? '✓ ' : '') + 'Angebot ' + nr);
+  };
+  return psH('div', {
+    className: 'ps-emp-karte',
+    style: { gridColumn: voll ? '1 / -1' : '3', background: '#ffffff', border: '2px solid ' + k.color, borderRadius: '16px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 14px ' + k.color + '24' }
+  },
+    psH('div', { style: { fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: k.color } }, (k.ok ? 'TV-Empfehlung' : 'TV: nächstbeste Option') + ' für Angebot 3'),
+    psH('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px 32px' } },
+      psH('div', { style: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' } },
+        psH('div', { style: { fontSize: '20px', fontWeight: 800, color: '#0f172a' } }, psTvName(k)),
+        k.sub && psH('div', { style: { fontSize: '12px', color: '#64748b' } }, k.sub),
+        psH('div', { style: { display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap', marginTop: '2px' } },
+          psH('span', { style: { fontSize: '26px', fontWeight: 900, color: '#0f172a' } }, geld(k.preis)),
+          psH('span', { style: { fontSize: '13px', fontWeight: 700, color: '#475569' } }, '/ Monat · 24 Monate')),
+        k.kosten > k.preis + 0.004 && psH('div', { style: { fontSize: '12px', color: '#92400e', fontWeight: 700 } }, 'mit Netflix / Disney+ nach den Gratis-Monaten ' + geld(k.kosten)),
+        spart > 0.004 && psH('div', { style: { fontSize: '13px', fontWeight: 800, color: '#0f766e' } }, 'Spart ' + geld(spart) + ' im Monat gegenüber heute'),
+        !k.ok && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, 'Fehlt: ' + k.fehlt.join(', '))),
+      psH('div', { style: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' } },
+        psH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } }, zeilen.map(z => psH('span', { key: z.text, style: { fontSize: '12px', fontWeight: 700, color: '#0f766e', background: '#e6f4f1', borderRadius: '999px', padding: '4px 10px' } }, '✓ ' + z.text))),
+        psH('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+          psH('span', { style: { fontSize: '13px', fontWeight: 800, color: '#0f172a' } }, 'Übernehmen in:'),
+          [1, 2, 3].map(knopf)),
+        psH('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' } },
+          psH('span', { style: { fontSize: '12px', color: '#64748b' } }, k.stand ? 'Preise o2online.de, Stand ' + k.stand : 'Preise ohne Gewähr'),
+          psH('button', {
+            type: 'button',
+            onClick: ev => { ev.stopPropagation(); try { tv.onOeffnen(); } catch (_) {} },
+            style: { height: '36px', padding: '0 14px', borderRadius: '10px', border: '1px solid #0f766e', background: '#ffffff', color: '#0f766e', fontSize: '12px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }
+          }, 'Alle Anbieter vergleichen')))),
+    erg.andere.length > 0 && psH('div', { style: { fontSize: '12px', color: '#475569', borderTop: '1px solid #e2e8f0', paddingTop: '6px' } },
+      'Auch geprüft: ' + erg.andere.map(a => a.label + ' ' + a.paket + ' ' + geld(a.kosten) + (a.ok ? '' : ' (passt nicht ganz)')).join(' · ')));
+};
 const PsEmpfehlungLeiste = ({
   td,
   step,
   joined,
-  onUebernehmen
+  onUebernehmen,
+  tv
 }) => {
   const [kat, setKat] = React.useState(window.__psPixelKat ? window.__psPixelKat.daten : null);
   const [offen, setOffen] = React.useState(false);
@@ -24407,8 +24508,9 @@ const PsEmpfehlungLeiste = ({
     };
   }, []);
   const emp = React.useMemo(() => PS_EMPFEHLUNG_AKTIV ? psEmpfehlungBerechnen(td, kat) : null, [td, kat]);
-  if (!emp) return null;
-  if (step > 0) return null; // Schritt-Modus: nur über Angebot 1
+  const pixelSichtbar = !!emp && step <= 0; // Schritt-Modus: Pixel nur über Angebot 1
+  const tvSichtbar = !!(tv && tv.aktiv) && (step === -1 || step === 2); // TV über Angebot 3
+  if (!pixelSichtbar && !tvSichtbar) return null;
   const tipp = () => {
     const jetzt = Date.now();
     if (jetzt - letzterTipp.current < 400) {
@@ -24422,7 +24524,7 @@ const PsEmpfehlungLeiste = ({
   return psH("div", {
     className: "ps-emp-wrap w-full md:grid md:grid-cols-3 gap-6",
     "data-html2canvas-ignore": "true"
-  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}} @media (orientation:portrait){.ps-emp-karte{grid-column:1 / -1!important}} @media screen and (orientation:landscape) and (min-width:768px){body:not(.pdf-share-mode) .ps-emp-wrap{padding-left:24px!important;box-sizing:border-box!important}}"), psH("div", {
+  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}} @media (orientation:portrait){.ps-emp-karte{grid-column:1 / -1!important}} @media screen and (orientation:landscape) and (min-width:768px){body:not(.pdf-share-mode) .ps-emp-wrap{padding-left:24px!important;box-sizing:border-box!important}}"), pixelSichtbar && psH("div", {
     className: 'ps-emp-karte',
     role: 'button',
     tabIndex: 0,
@@ -24527,7 +24629,11 @@ const PsEmpfehlungLeiste = ({
       cursor: 'pointer',
       whiteSpace: 'nowrap'
     }
-  }, "Doppelt tippen · Details"))))), offen && psH(PsEmpfehlungDetail, {
+  }, "Doppelt tippen · Details"))))), tvSichtbar && psH(PsEmpfehlungSchutz, null, psH(PsTvKarte, {
+    tv: tv,
+    td: td,
+    voll: step === 2 || joined
+  })), offen && psH(PsEmpfehlungDetail, {
     emp: emp,
     td: td,
     onUebernehmen: onUebernehmen,
@@ -35020,6 +35126,27 @@ function App() {
     const neu = psParseEuro((packagePrices[offerKey] || {}).einmalig) + PS_EMP_ANZAHLUNG;
     setPackagePriceField(offerKey, 'einmalig', neu.toFixed(2).replace('.', ','));
     triggerToast(text + ' in Angebot ' + offerKey.slice(-1) + ' übernommen · Anzahlung ' + psEmpGeld(PS_EMP_ANZAHLUNG) + ' bei Einmalig');
+  };
+  // TV-Empfehlung -> Angebot: Paket als Text, Monatspreis zu "Monatlich" addiert
+  const psTvUebernehmen = (offerKey, text, preis) => {
+    const alt = String(textData[offerKey] || '');
+    if (alt.indexOf(text) !== -1) return;
+    handleTextChange(offerKey, alt.trim() ? alt.replace(/\s+$/, '') + '\n' + text : text);
+    const sk = psPriceKey(offerKey, 'monatlich');
+    try {
+      digitalTouchedRef.current[sk] = true;
+    } catch (err) {}
+    const neu = psParseEuro((packagePrices[offerKey] || {}).monatlich) + preis;
+    setPackagePriceField(offerKey, 'monatlich', neu.toFixed(2).replace('.', ','));
+    triggerToast(text + ' in Angebot ' + offerKey.slice(-1) + ' übernommen · ' + psEmpGeld(preis) + ' bei Monatlich');
+  };
+  const psTvChips = sitChipsParse(textData);
+  const psTvProps = {
+    aktiv: (psTvChips.tvwichtig || []).length > 0 && (psTvChips.tv || []).some(x => x !== 'Kein TV'),
+    wuensche: psTvChips.tvwichtig || [],
+    tvIst: costState && costState.tv || '',
+    onUebernehmen: psTvUebernehmen,
+    onOeffnen: () => setShowTvModal(true)
   };
   const renderPriceField = (offerKey, field, opts) => {
     const ref = priceFieldRefs[offerKey + '_' + field];
@@ -45899,7 +46026,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     td: textData,
     step: offerLayoutMode === 'step' ? currentOfferStep : -1,
     joined: !!(jEff && jEff.j12 && jEff.j23),
-    onUebernehmen: psEmpUebernehmen
+    onUebernehmen: psEmpUebernehmen,
+    tv: psTvProps
   })), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-6 w-full md:grid md:grid-cols-3 offer-print-grid"
   }, [{
