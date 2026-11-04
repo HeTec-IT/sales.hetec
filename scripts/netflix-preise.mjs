@@ -57,7 +57,7 @@ export function plausibel(p) {
   return p.werbung < p.standard && p.standard < p.premium;
 }
 
-const heute = () => new Date().toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' });
+const heute = () => new Date().toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 function ausschnitte(text, re, n = 12, rand = 110) {
   const out = [];
