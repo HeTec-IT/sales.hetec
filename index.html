@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.127';
+    window.APP_VERSION = '55.128';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18321,8 +18321,8 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
             tvH('span', { style: { fontSize: '12px', fontWeight: 800, color: '#ffffff', background: farbe, borderRadius: '999px', padding: '4px 12px' } }, aktivId !== rec ? 'Gewählt' : keinPaket ? 'Nächstbeste Option' : mitWunsch ? 'Empfehlung' : 'Standard-Empfehlung'),
             tvH('div', { style: { fontSize: '26px', fontWeight: 800, color: '#0f172a', marginTop: '8px' } }, name(aktivId)),
             tvH('div', { style: { fontSize: '13px', color: '#64748b', marginTop: '2px' } }, sub(aktivId))),
-          tvH('div', { style: { textAlign: 'right' } },
-            tvH('div', { style: { fontSize: '34px', fontWeight: 800, color: '#0f172a', lineHeight: 1 } }, tvEuro(totals[aktivId])),
+          tvH('div', { style: { textAlign: 'right', flex: 'none' } },
+            tvH('div', { style: { fontSize: '34px', fontWeight: 800, color: '#0f172a', lineHeight: 1, whiteSpace: 'nowrap' } }, tvEuro(totals[aktivId])),
             tvH('div', { style: { fontSize: '13px', color: '#64748b', marginTop: '4px' } }, 'pro Monat'))),
         keinPaket && aktivId === rec && tvH('div', { style: { background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', fontSize: '14px', fontWeight: 700, color: '#92400e' } }, 'Kein Paket erfüllt alle Wünsche. Fehlt hier: ' + akt.fehlt.join(', ')),
         tvH('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px 16px', fontSize: '14px', color: '#0f172a' } }, akt.zeilen.map(z => tvH('div', { key: z.text, style: { display: 'flex', gap: '9px', alignItems: 'center', color: z.ok ? '#0f172a' : '#64748b' } }, haken(z.ok), z.text))),
@@ -18752,6 +18752,7 @@ const TvPriceModal = ({
     style: {
       width: '40px',
       height: '40px',
+      flexShrink: 0,
       borderRadius: '12px',
       background: 'linear-gradient(135deg,#3b82f6,#6366f1)',
       display: 'flex',
@@ -18823,6 +18824,7 @@ const TvPriceModal = ({
       padding: '12px 24px 0',
       background: '#fafcff',
       flexShrink: 0,
+      overflowX: 'auto',
       borderBottom: '1px solid #f1f5f9'
     }
   }, providers.map(p => /*#__PURE__*/React.createElement("button", {
@@ -18834,6 +18836,8 @@ const TvPriceModal = ({
     },
     style: {
       padding: '8px 20px',
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
       borderRadius: '10px 10px 0 0',
       fontWeight: 800,
       fontSize: '13px',
@@ -18852,6 +18856,8 @@ const TvPriceModal = ({
     style: {
       marginLeft: 'auto',
       alignSelf: 'center',
+      flexShrink: 0,
+      whiteSpace: 'nowrap',
       height: '36px',
       padding: '0 14px',
       borderRadius: '10px',
@@ -24256,7 +24262,8 @@ const PsEmpfehlungLeiste = ({
   return psH("div", {
     className: "ps-emp-wrap w-full md:grid md:grid-cols-3 gap-6",
     "data-html2canvas-ignore": "true"
-  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}}"), psH("div", {
+  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}} @media (max-width:1023px){.ps-emp-karte{grid-column:1 / -1!important}}"), psH("div", {
+    className: 'ps-emp-karte',
     role: 'button',
     tabIndex: 0,
     onClick: tipp,
