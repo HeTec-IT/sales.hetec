@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.125';
+    window.APP_VERSION = '55.126';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10239,9 +10239,9 @@ const SIT_CHIP_BLOCKS = [{
   title: 'Zuhause & TV',
   icon: ICONS.Home,
   cat: 'c3',
-  groups: ['tv', 'wlan', 'geraete'],
-  bars: { tv: 'Fernsehen', wlan: 'WiFi', geraete: 'Weitere Produkte' },
-  price: { tv: ['tv'], wlan: ['landline'], geraete: ['wp'] }
+  groups: ['tv', 'tvwichtig', 'wlan', 'geraete'],
+  bars: { tvwichtig: 'Fernsehen', wlan: 'WiFi', geraete: 'Weitere Produkte' },
+  price: { tvwichtig: ['tv'], wlan: ['landline'], geraete: ['wp'] }
 }];
 // v55.106: Markenfarben der Anbieter-Chips
 const SIT_BRAND = { 'o2': 'o2', 'Telekom': 'tk', 'Vodafone': 'vf', '1&1': 'oo', 'Andere': 'an' };
@@ -10288,6 +10288,9 @@ const SIT_CHIP_GROUPS = [{
 }, {
   id: 'tv', item: 'Fernsehen', label: 'Fernsehen über', multi: true,
   opts: [['Kabel'], ['Sat', 'Satellit'], ['Streaming'], ['Kein TV']]
+}, {
+  id: 'tvwichtig', item: 'Fernsehen', label: 'TV: Was ist wichtig?', multi: true,
+  opts: [['Netflix'], ['Disney+'], ['Werbefrei'], ['Viel Aufnahme', 'Viel Aufnahme (200 Std.)'], ['EU-Ausland', 'TV im EU-Ausland']]
 }, {
   id: 'wlan', item: 'WiFi', label: 'WLAN zufrieden?', multi: false,
   opts: [['Ja', 'WLAN zufrieden'], ['Teilweise', 'WLAN teilweise zufrieden'], ['Nein', 'WLAN nicht zufrieden']]
@@ -10453,6 +10456,8 @@ const sitSentence = (td, itemId) => {
     const TM = { Kabel: 'Kabel', Sat: 'Satellit', Streaming: 'Streaming' };
     if (t.includes('Kein TV')) say('Sie nutzen ', { b: 'kein Fernsehen' }, '.');
     else if (t.length) say('Sie schauen Fernsehen über ', { b: sitJoin(t.map(x => TM[x] || x)) }, '.');
+    const tw = g('tvwichtig').map(x => x === 'Werbefrei' ? 'werbefreies Streaming' : x === 'Viel Aufnahme' ? 'viel Aufnahmespeicher' : x === 'EU-Ausland' ? 'Fernsehen im EU-Ausland' : x);
+    if (tw.length) say(tw.length > 1 ? 'Beim Fernsehen sind Ihnen ' : 'Beim Fernsehen ist Ihnen ', { b: sitJoin(tw) }, ' wichtig.');
   } else if (itemId === 'WiFi') {
     const w = one('wlan');
     const WM = { Ja: 'zufrieden', Teilweise: 'nur teilweise zufrieden', Nein: 'nicht zufrieden' };
@@ -18207,8 +18212,10 @@ class TvAssistentSchutz extends React.Component {
     return this.state.fehler ? null : this.props.children;
   }
 }
-const TvAssistent = ({ pd, totals, heute, onUebernehmen }) => {
-  const [w, setW] = useState({});
+const TvAssistent = ({ pd, totals, heute, onUebernehmen, wuensche, onWunsch }) => {
+  const [wLokal, setWLokal] = useState({});
+  const gesteuert = typeof onWunsch === 'function';
+  const w = gesteuert ? Object.fromEntries((wuensche || []).map(k => [k, true])) : wLokal;
   const [gewaehlt, setGewaehlt] = useState(null);
   const ids = pd.cols.map(c => c.id).filter(id => PS_TV_O2[id] && typeof totals[id] === 'number');
   const bew = ids.map(id => tvBewerten(id, totals[id], w));
@@ -18226,7 +18233,8 @@ const TvAssistent = ({ pd, totals, heute, onUebernehmen }) => {
   const summeHeute = heute.reduce((s, f) => s + tvZahl(f.wert), 0);
   const diff = summeHeute > 0 ? summeHeute - akt.kosten : null;
   const wechseln = k => {
-    setW(prev => ({ ...prev, [k]: !prev[k] }));
+    if (gesteuert) onWunsch(k);
+    else setWLokal(prev => ({ ...prev, [k]: !prev[k] }));
     setGewaehlt(null);
   };
   const haken = ok => tvH('span', {
@@ -18307,7 +18315,10 @@ const TvAssistent = ({ pd, totals, heute, onUebernehmen }) => {
 const TvPriceModal = ({
   isOpen,
   onClose,
-  onUebernehmen
+  onUebernehmen,
+  wuensche,
+  onWunsch,
+  tvIst
 }) => {
   const [provider, setProvider] = useState('o2');
   const [prevTV, setPrevTV] = useState('');
@@ -18323,6 +18334,9 @@ const TvPriceModal = ({
   const [pinLimitHint, setPinLimitHint] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [assistent, setAssistent] = useState(true); // v55.125: Assistent-Ansicht (nur o2 TV)
+  useEffect(() => {
+    if (isOpen && tvIst && !prevTV) setPrevTV(String(tvIst)); // v55.126: heutiger TV-Preis aus Seite 1
+  }, [isOpen]);
   // v55.8.1: o2-TV-Preise automatisch aus tv-preise.json (GitHub Action holt sie täglich von o2online.de).
   // Fehlt die Datei oder ist sie ungültig, gelten die fest hinterlegten Preise unten.
   const [o2Live, setO2Live] = useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
@@ -18882,6 +18896,8 @@ const TvPriceModal = ({
       wert: prevStream,
       setze: setPrevStream
     }],
+    wuensche,
+    onWunsch,
     onUebernehmen
   })), !compareMode && !assistentAn && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -40367,6 +40383,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }), /*#__PURE__*/React.createElement(TvPriceModal, {
     isOpen: showTvModal,
     onClose: () => setShowTvModal(false),
+    wuensche: sitChipsParse(textData).tvwichtig || [],
+    onWunsch: k => toggleSitChip(SIT_CHIP_GROUPS.find(g => g.id === 'tvwichtig'), k),
+    tvIst: costState && costState.tv || '',
     onUebernehmen: snap => {
       // TV-Paket NICHT in Kosten (Ist) übernehmen – das sind Kundenbestandskosten, nicht neue!
       if (typeof snap === 'object') setTvSnapshot(snap);else setTvSnapshot({
