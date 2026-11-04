@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.140';
+    window.APP_VERSION = '55.141';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18449,7 +18449,7 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
     style: { flex: 1, overflowY: 'auto', padding: '16px 24px 20px', display: 'flex', flexDirection: 'column', gap: '14px', background: '#f6f9ff' }
   }, tvH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' } },
     // Links: Fragen + Ausgaben heute
-    tvH('div', { style: { flex: '1 1 250px', maxWidth: '300px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '18px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' } },
+    tvH('div', { style: { flex: '1 1 280px', maxWidth: '360px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '18px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' } },
       tvH('div', null,
         tvH('div', { style: { fontSize: '15px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' } }, 'Was ist dem Kunden wichtig?'),
         tvH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, PS_TV_WUENSCHE.map(k => tvH('button', {
@@ -18980,7 +18980,7 @@ const TvPriceModal = ({
     style: {
       background: '#ffffff',
       width: '100%',
-      maxWidth: '820px',
+      maxWidth: PS_TV_ASSISTENT ? '1180px' : '820px',
       maxHeight: '92vh',
       borderRadius: '24px',
       boxShadow: '0 32px 80px rgba(0,0,0,0.25)',
@@ -19035,11 +19035,11 @@ const TvPriceModal = ({
       color: '#94a3b8',
       fontWeight: 600
     }
-  }, "Anbieter vergleichen · ", /*#__PURE__*/React.createElement("span", {
+  }, ...(assistentAn ? ["Anbieter vergleichen und Kundenersparnis berechnen"] : ["Anbieter vergleichen · ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: '#7c3aed'
     }
-  }, "Lang drücken auf Paket = für Vergleich merken"), " (blendet andere Pakete des Anbieters aus)"))), /*#__PURE__*/React.createElement("div", {
+  }, "Lang drücken auf Paket = für Vergleich merken"), " (blendet andere Pakete des Anbieters aus)"])))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -19107,7 +19107,7 @@ const TvPriceModal = ({
       borderTop: provider === p.id ? '2px solid ' + p.color : '2px solid transparent',
       outline: 'none'
     }
-  }, p.label)), PS_TV_ASSISTENT && !compareMode && /*#__PURE__*/React.createElement("button", {
+  }, p.label)), PS_TV_ASSISTENT && !compareMode && !assistent && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setAssistent(a => !a),
     style: {
