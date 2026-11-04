@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.120';
+    window.APP_VERSION = '55.121';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -23717,7 +23717,7 @@ const PsEmpfehlungDetail = ({
     }
   }, "Im o2 Shop ansehen"));
   const fragen = ['handy', 'wichtig', 'daten', 'alter', 'kost'].map(id => SIT_CHIP_GROUPS.find(g => g.id === id)).filter(Boolean);
-  const status = emp.anzahl > 0 ? 'o2 Shop, Geräte ohne Vertrag: ' + emp.anzahl + ' Pixel-Geräte' + (emp.stand ? ' · Stand ' + emp.stand : '') : 'Gerätedaten vom o2 Shop sind noch nicht geladen. Der tägliche Abruf läuft gegen 12 Uhr.';
+  const status = emp.anzahl > 0 ? 'o2 Shop, Geräte ohne Vertrag (Google): ' + emp.anzahl + ' Modelle gefunden' + (emp.stand ? ' · Stand ' + emp.stand : '') : 'Gerätedaten vom o2 Shop sind noch nicht geladen. Der tägliche Abruf läuft gegen 12 Uhr.';
   return ReactDOM.createPortal(psH("div", {
     className: "ps-emp-wrap",
     "data-html2canvas-ignore": "true",
