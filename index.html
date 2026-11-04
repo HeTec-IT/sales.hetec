@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.142';
+    window.APP_VERSION = '55.143';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -49106,7 +49106,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }, /*#__PURE__*/React.createElement(Icon, {
     d: ICONS.ArrowLeft,
     size: 14
-  }), " Zurück"), /*#__PURE__*/React.createElement("button", {
+  }), " Zurück"), (PS_IS_ADMIN() || CURRENT_SHOP_ID !== 'schwaebisch-hall') && /*#__PURE__*/React.createElement("button", {
     onClick: handleQuickPdf,
     "data-ps-quick-pdf": "1",
     title: "PDF sofort erstellen",
