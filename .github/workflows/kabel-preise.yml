@@ -1,0 +1,41 @@
+name: Kabel-TV-Preis aktualisieren
+
+on:
+  schedule:
+    - cron: '50 11 * * *'   # 12:50 Uhr (Winterzeit), in der Sommerzeit 13:50 Uhr
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/kabel-preise.mjs'
+      - '.github/workflows/kabel-preise.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kabel-preise
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Browser installieren
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Kabel-TV-Preis lesen
+        run: node scripts/kabel-preise.mjs
+      - name: Speichern
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add kabel-preise.json
+          if [ -e kabel-debug.txt ]; then git add kabel-debug.txt; else git rm -q --cached --ignore-unmatch kabel-debug.txt; fi
+          git diff --cached --quiet || (git commit -m "Kabel-TV-Preis aktualisiert" && git pull --rebase && git push)
