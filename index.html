@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.138';
+    window.APP_VERSION = '55.139';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10602,7 +10602,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
       type: 'button',
       className: 'sit-chip' + (g.id === 'anb' ? ' p ' + (SIT_BRAND[o[0]] || '') : '') + (cur.includes(o[0]) ? ' on' : ''),
       onClick: () => onToggle(g, o[0])
-    }, sitT(o[0])))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, sitT('Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.'))) : null, g.id === 'tvwichtig' ? [['nfplan', 'Netflix'], ['dsplan', 'Disney+']].filter(x => cur.includes(x[1])).map(x => { const pg = SIT_CHIP_GROUPS.find(y => y.id === x[0]); const pc = sel[pg.id] || []; return h('div', { key: pg.id }, h('div', { className: 'sit-chip-label' }, sitT(pg.label)), h('div', { className: 'sit-chip-row' }, pg.opts.map(o => h('button', { key: o[0], type: 'button', className: 'sit-chip' + (pc.includes(o[0]) ? ' on' : ''), onClick: () => onToggle(pg, o[0]) }, sitT(o[0]) + psPlanPreisText(pg.id, o[0]))))); }) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, sitT(b.plabel[gid])) : null, prices(b, gid));
+    }, sitT(o[0])))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, sitT('Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.'))) : null, g.id === 'tvwichtig' ? [['nfplan', 'Netflix'], ['dsplan', 'Disney+']].filter(x => cur.includes(x[1])).map(x => { const pg = SIT_CHIP_GROUPS.find(y => y.id === x[0]); const pc = sel[pg.id] || []; return h('div', { key: pg.id }, h('div', { className: 'sit-chip-label' }, sitT(pg.label)), h('div', { className: 'sit-chip-row' }, pg.opts.map(o => h('button', { key: o[0], type: 'button', className: 'sit-chip' + (pc.includes(o[0]) ? ' on' : ''), onClick: () => onToggle(pg, o[0]) }, sitT(o[0]) + psPlanPreisText(pg.id, o[0])))), pc.length ? null : h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, 'Ohne Auswahl rechnet die App mit dem günstigsten Tarif' + psPlanPreisText(pg.id, 'Mit Werbung').replace(' · ', ' (') + (psPlanPreisText(pg.id, 'Mit Werbung') ? ')' : '') + '.'))); }) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, sitT(b.plabel[gid])) : null, prices(b, gid));
   }))), cost && !cost.compact ? h(SitSumBar, { rows: cost.rows, pers: cost.pers }) : null);
 }
 // v55.91: Preisfelder direkt in der jeweiligen Kategorie (Stift schreibt ins Feld = Scribble, Tippen, Ziffernblock)
@@ -18243,16 +18243,16 @@ const psUseStreaming = () => {
   }, []);
   return { nf, ds };
 };
-// Was der Kunde heute für TV zahlt: Fernsehen-Feld + Kabel-TV + Netflix- und Disney+-Tarif (np / dp = gewählte Tarife)
-const psTvHeute = ({ istTv, kabel, kabelPreis, np, dp }) => {
-  const geld = n => n.toFixed(2).replace('.', ',') + ' €';
-  const teile = [];
-  let summe = 0;
-  if (istTv > 0) { summe += istTv; teile.push('Fernsehen ' + geld(istTv)); }
-  if (kabel) { summe += kabelPreis; teile.push('Kabel-TV ' + geld(kabelPreis)); }
-  if (np) { summe += np.preis; teile.push('Netflix ' + np.label + ' ' + geld(np.preis)); }
-  if (dp) { summe += dp.preis; teile.push('Disney+ ' + dp.label + ' ' + geld(dp.preis)); }
-  return { summe, teile };
+// Was der Kunde heute für TV zahlt: Kabel-TV + Netflix + Disney+ (immer vom Einzel-Zugang aus: gewählter bzw. günstigster Tarif) + Fernsehen-Feld
+// np / dp = Netflix- / Disney+-Tarif (null = Kunde hat den Dienst nicht), nfAng / dsAng = Tarif ist nur angenommen (günstigster)
+const psTvHeute = ({ istTv, kabel, kabelPreis, np, dp, nfAng, dsAng }) => {
+  const posten = [];
+  if (kabel) posten.push({ name: 'Kabel-TV', preis: kabelPreis });
+  if (np) posten.push({ name: 'Netflix' + (nfAng ? ' (günstigster Tarif)' : ' ' + np.label), preis: np.preis });
+  if (dp) posten.push({ name: 'Disney+' + (dsAng ? ' (günstigster Tarif)' : ' ' + dp.label), preis: dp.preis });
+  if (istTv > 0) posten.push({ name: 'Fernsehen (Eintrag)', preis: istTv });
+  const summe = Math.round(posten.reduce((s, x) => s + x.preis, 0) * 100) / 100;
+  return { summe, posten };
 };
 const psUseKabelPreis = () => {
   const [preis, setPreis] = React.useState(window.__psKabel ? window.__psKabel.daten.preis : PS_KABEL_FALLBACK.preis);
@@ -24538,7 +24538,7 @@ const psTvEmpfehlung = (wuensche, o2Live, np, dp) => {
       totals[col.id] = pd.rows.reduce((s, row, ri) => col.checks[ri] ? s + row.tarif[col.id] : s, 0);
     });
     const an = tvAnalyse(id, pd, totals, w, np || null, dp || null);
-    const bw = an.bew.find(x => x.id === an.rec);
+    const bw = an.mitWunsch ? an.bew.find(x => x.id === an.rec) : an.bew.slice().sort((a, c) => a.kosten - c.kosten)[0];
     if (!bw) return;
     const sp = an.spezi[bw.id];
     const col = pd.cols.find(c => c.id === bw.id);
@@ -24566,10 +24566,9 @@ const PsTvKarte = ({ tv, td, voll }) => {
   const text = psTvText(k);
   const geld = n => n.toFixed(2).replace('.', ',') + ' €';
   const istTv = parseFloat(String(tv.tvIst || '').replace(',', '.')) || 0;
-  const heute = psTvHeute({ istTv, kabel: tv.kabel, kabelPreis, np, dp });
+  const heute = psTvHeute({ istTv, kabel: tv.kabel, kabelPreis, np, dp, nfAng: tv.nfAngenommen, dsAng: tv.dsAngenommen });
   const ist = heute.summe;
   const spart = ist > 0 ? ist - k.kosten : 0;
-  const fehltPlan = (tv.wuensche || []).indexOf('Netflix') !== -1 && !np || (tv.wuensche || []).indexOf('Disney+') !== -1 && !dp;
   const zeilen = k.zeilen.filter(z => z.ok).slice(0, 4);
   const knopf = nr => {
     const key = 'offer' + nr;
@@ -24598,9 +24597,11 @@ const PsTvKarte = ({ tv, td, voll }) => {
           psH('span', { style: { fontSize: '26px', fontWeight: 900, color: '#0f172a' } }, geld(k.preis)),
           psH('span', { style: { fontSize: '13px', fontWeight: 700, color: '#475569' } }, '/ Monat · 24 Monate')),
         k.kosten > k.preis + 0.004 && psH('div', { style: { fontSize: '12px', color: '#92400e', fontWeight: 700 } }, 'mit Netflix / Disney+ nach den Gratis-Monaten ' + geld(k.kosten)),
-        spart > 0.004 && psH('div', { style: { fontSize: '13px', fontWeight: 800, color: '#0f766e' } }, 'Spart ' + geld(spart) + ' im Monat gegenüber heute'),
-        heute.teile.length > 0 && psH('div', { style: { fontSize: '12px', color: '#475569' } }, 'Heute ' + geld(ist) + ': ' + heute.teile.join(' + ')),
-        fehltPlan && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, 'Netflix-/Disney+-Tarif des Kunden bei den Chips wählen – dann stimmt die Ersparnis.'),
+        spart > 0.004 && psH('div', { style: { background: '#e6f4f1', borderRadius: '10px', padding: '6px 12px', marginTop: '4px' } },
+          psH('div', { style: { fontSize: '12px', fontWeight: 800, color: '#0b5a4a', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Kunde spart'),
+          psH('div', { style: { fontSize: '26px', fontWeight: 900, color: '#0f766e', lineHeight: 1.1 } }, geld(spart) + ' / Monat'),
+          psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#0b5a4a' } }, geld(spart * 24) + ' in 24 Monaten')),
+        heute.posten.length > 0 && psH('div', { style: { fontSize: '12px', color: '#475569' } }, 'Heute ' + geld(ist) + ' = ' + heute.posten.map(x => x.name + ' ' + geld(x.preis)).join(' + ')),
         !k.ok && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, 'Fehlt: ' + k.fehlt.join(', '))),
       psH('div', { style: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' } },
         psH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } }, zeilen.map(z => psH('span', { key: z.text, style: { fontSize: '12px', fontWeight: 700, color: '#0f766e', background: '#e6f4f1', borderRadius: '999px', padding: '4px 10px' } }, '✓ ' + z.text))),
@@ -24618,7 +24619,7 @@ const PsTvKarte = ({ tv, td, voll }) => {
       'Auch geprüft: ' + erg.andere.map(a => a.label + ' ' + a.paket + ' ' + geld(a.kosten) + (a.ok ? '' : ' (passt nicht ganz)')).join(' · ')));
 };
 // ═══ Seite 1: Popup "Kundenersparnis möglich!", sobald TV-Art und ein TV-Wunsch (Netflix, Disney+ …) gewählt sind ═══
-const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, nfPlan, dsPlan, pause, onOeffnen }) => {
+const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, nfPlan, dsPlan, nfAngenommen, dsAngenommen, pause, onOeffnen }) => {
   const kabelPreis = psUseKabelPreis();
   const [zu, setZu] = React.useState(false);
   const [o2Live, setO2Live] = React.useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
@@ -24639,50 +24640,39 @@ const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, nfPlan, dsPlan, pause
   const k = erg.haupt;
   const geld = n => n.toFixed(2).replace('.', ',') + ' €';
   const istTv = parseFloat(String(tvIst || '').replace(',', '.')) || 0;
-  const heute = psTvHeute({ istTv, kabel, kabelPreis, np, dp });
+  const heute = psTvHeute({ istTv, kabel, kabelPreis, np, dp, nfAng: nfAngenommen, dsAng: dsAngenommen });
   const ist = heute.summe;
-  const spart = ist > 0 ? ist - k.kosten : null;
-  const heuteText = heute.teile.join(' + ');
-  const fehltPlan = (wuensche || []).indexOf('Netflix') !== -1 && !np || (wuensche || []).indexOf('Disney+') !== -1 && !dp;
-  const planHinweis = fehltPlan && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, 'Netflix-/Disney+-Tarif des Kunden bei den Chips wählen – dann stimmt die Ersparnis.');
-  // Netflix / Disney+ einzeln beim Anbieter: günstigster Tarif (mit Werbung) und günstigster werbefreier Tarif
-  const einzeln = [];
-  if ((wuensche || []).indexOf('Netflix') !== -1) einzeln.push(nf.tarife);
-  if ((wuensche || []).indexOf('Disney+') !== -1) einzeln.push(ds.tarife);
-  const summe = fn => einzeln.reduce((s, t) => s + fn(t), 0);
-  const ab = summe(t => Math.min(...t.map(x => x.preis)));
-  const frei = summe(t => Math.min(...t.filter(x => x.werbefrei).map(x => x.preis)));
+  const spart = ist > 0 ? Math.round((ist - k.kosten) * 100) / 100 : null;
   const vorteil = spart !== null && spart > 0.004;
   const kopf = spart === null || vorteil ? '💰 Kundenersparnis möglich!' : '📺 TV-Vergleich';
-  const box = { padding: '8px 12px', borderRadius: '12px', fontSize: '13px', lineHeight: 1.35 };
+  const inkl = psTvText(k).replace(psTvName(k), '').replace(/^\s*\(|\)\s*$/g, '') || k.sub;
+  const zeile = (l, r, fett, farbe) => psH('div', { key: l, style: { display: 'flex', justifyContent: 'space-between', gap: '10px', fontWeight: fett ? 800 : 600, color: farbe || '#0f172a' } }, psH('span', null, l), psH('span', { style: { whiteSpace: 'nowrap' } }, r));
   return psH('div', {
     role: 'dialog',
     'aria-label': 'Kundenersparnis',
     className: 'ps-ersparnis-pop',
-    style: { position: 'fixed', right: '16px', bottom: '84px', width: 'min(390px, calc(100vw - 32px))', zIndex: 70, background: '#ffffff', border: '2px solid #0f766e', borderRadius: '18px', boxShadow: '0 18px 48px rgba(15,23,42,0.28)', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px', animation: 'psErsPop .25s ease-out' }
+    style: { position: 'fixed', right: '16px', bottom: '84px', width: 'min(400px, calc(100vw - 32px))', zIndex: 70, background: '#ffffff', border: '2px solid #0f766e', borderRadius: '18px', boxShadow: '0 18px 48px rgba(15,23,42,0.28)', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px', animation: 'psErsPop .25s ease-out' }
   },
     psH('style', null, '@keyframes psErsPop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}} @media print{.ps-ersparnis-pop{display:none!important}}'),
     psH('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
       psH('div', { style: { fontSize: '17px', fontWeight: 900, color: '#0f766e' } }, kopf),
       psH('button', { type: 'button', 'aria-label': 'Schließen', onClick: () => setZu(true), style: { width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: '18px', cursor: 'pointer', lineHeight: 1 } }, '✕')),
-    psH('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } },
+    vorteil && psH('div', { style: { background: '#e6f4f1', borderRadius: '14px', padding: '10px 14px' } },
+      psH('div', { style: { fontSize: '12px', fontWeight: 800, color: '#0b5a4a', textTransform: 'uppercase', letterSpacing: '0.05em' } }, 'Kunde spart'),
+      psH('div', { style: { fontSize: '34px', fontWeight: 900, color: '#0f766e', lineHeight: 1.1 } }, geld(spart) + ' / Monat'),
+      psH('div', { style: { fontSize: '14px', fontWeight: 800, color: '#0b5a4a' } }, geld(spart * 24) + ' in 24 Monaten')),
+    ist > 0 && psH('div', { style: { display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '13px', lineHeight: 1.3, background: '#f8fafc', borderRadius: '12px', padding: '9px 12px' } },
+      psH('div', { style: { fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' } }, 'Kunde zahlt heute'),
+      heute.posten.map(x => zeile(x.name, geld(x.preis))),
+      psH('div', { style: { borderTop: '1px solid #cbd5e1', margin: '3px 0' } }),
+      zeile('Summe heute', geld(ist), true),
+      zeile('Mit ' + psTvName(k), geld(k.kosten), true, '#0f766e'),
+      psH('div', { style: { fontSize: '11px', color: '#64748b' } }, inkl + (k.kosten > k.preis + 0.004 ? ' · Preis nach den Gratis-Monaten' : ''))),
+    !vorteil && spart !== null && psH('div', { style: { padding: '8px 12px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, background: '#fffbeb', color: '#92400e' } }, 'Kein Preisvorteil: Vorteil über die Inhalte erklären.'),
+    ist <= 0 && psH('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } },
       psH('div', { style: { fontSize: '20px', fontWeight: 800, color: '#0f172a' } }, psTvName(k)),
-      psH('div', { style: { display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' } },
-        psH('span', { style: { fontSize: '24px', fontWeight: 900, color: '#0f172a' } }, geld(k.preis)),
-        psH('span', { style: { fontSize: '13px', fontWeight: 700, color: '#475569' } }, '/ Monat · 24 Monate')),
-      psH('div', { style: { fontSize: '12px', color: '#64748b' } }, psTvText(k).replace(psTvName(k), '').replace(/^\s*\(|\)\s*$/g, '') || k.sub)),
-    vorteil
-      ? psH('div', { style: Object.assign({ background: '#e6f4f1', color: '#0b5a4a', fontWeight: 800 }, box) },
-          'Spart ' + geld(spart) + ' im Monat · ' + geld(spart * 24) + ' in 24 Monaten',
-          psH('div', { style: { fontSize: '12px', fontWeight: 600 } }, 'Kunde zahlt heute ' + geld(ist) + ': ' + heuteText),
-          kabel && istTv <= 0 && psH('div', { style: { fontSize: '12px', fontWeight: 600 } }, 'Preis bei „Fernsehen“ eintragen, wenn der Kunde zusätzlich TV zahlt.'),
-          planHinweis)
-      : spart !== null
-        ? psH('div', { style: Object.assign({ background: '#fffbeb', color: '#92400e', fontWeight: 700 }, box) }, 'Kunde zahlt heute ' + geld(ist) + ': ' + heuteText + ' · hier ' + geld(k.kosten) + ' – Vorteil über die Inhalte erklären', planHinweis)
-        : psH('div', { style: Object.assign({ background: '#f1f5f9', color: '#0f172a' }, box) },
-            einzeln.length > 0 && psH('div', null, (wuensche.indexOf('Netflix') !== -1 && wuensche.indexOf('Disney+') !== -1 ? 'Netflix + Disney+' : wuensche.indexOf('Netflix') !== -1 ? 'Netflix' : 'Disney+') + ' einzeln: ab ' + geld(ab) + ' (mit Werbung), werbefrei ' + geld(frei)),
-            psH('div', { style: { fontSize: '12px', color: '#475569', marginTop: '2px' } }, 'Heutigen Preis bei „Fernsehen“ eintragen, dann steht hier die genaue Ersparnis.'),
-            planHinweis),
+      psH('div', { style: { fontSize: '24px', fontWeight: 900, color: '#0f172a' } }, geld(k.preis) + ' / Monat'),
+      psH('div', { style: { fontSize: '12px', color: '#475569' } }, 'Heutigen Preis bei „Fernsehen“ eintragen, dann steht hier die genaue Ersparnis.')),
     psH('button', {
       type: 'button',
       onClick: () => { setZu(true); try { onOeffnen(); } catch (_) {} },
@@ -35348,12 +35338,15 @@ function App() {
   };
   const psTvChips = sitChipsParse(textData);
   const psTvProps = {
-    aktiv: (psTvChips.tvwichtig || []).length > 0 && (psTvChips.tv || []).some(x => x !== 'Kein TV'),
+    aktiv: (psTvChips.tv || []).indexOf('Kabel') !== -1 || (psTvChips.tvwichtig || []).length > 0 && (psTvChips.tv || []).some(x => x !== 'Kein TV'),
     wuensche: psTvChips.tvwichtig || [],
     tvIst: costState && costState.tv || '',
     kabel: (psTvChips.tv || []).indexOf('Kabel') !== -1,
-    nfPlan: (psTvChips.tvwichtig || []).indexOf('Netflix') !== -1 ? PS_PLAN_ID[(psTvChips.nfplan || [])[0]] || null : null,
-    dsPlan: (psTvChips.tvwichtig || []).indexOf('Disney+') !== -1 ? PS_PLAN_ID[(psTvChips.dsplan || [])[0]] || null : null,
+    // Netflix / Disney+ gesetzt = Kunde hat den Dienst: gewählter Tarif, sonst der günstigste (Einzel-Zugang, 'werbung')
+    nfPlan: (psTvChips.tvwichtig || []).indexOf('Netflix') !== -1 ? PS_PLAN_ID[(psTvChips.nfplan || [])[0]] || 'werbung' : null,
+    dsPlan: (psTvChips.tvwichtig || []).indexOf('Disney+') !== -1 ? PS_PLAN_ID[(psTvChips.dsplan || [])[0]] || 'werbung' : null,
+    nfAngenommen: (psTvChips.tvwichtig || []).indexOf('Netflix') !== -1 && !PS_PLAN_ID[(psTvChips.nfplan || [])[0]],
+    dsAngenommen: (psTvChips.tvwichtig || []).indexOf('Disney+') !== -1 && !PS_PLAN_ID[(psTvChips.dsplan || [])[0]],
     onUebernehmen: psTvUebernehmen,
     onOeffnen: () => setShowTvModal(true)
   };
@@ -44023,6 +44016,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     tvIst: psTvProps.tvIst,
     nfPlan: psTvProps.nfPlan,
     dsPlan: psTvProps.dsPlan,
+    nfAngenommen: psTvProps.nfAngenommen,
+    dsAngenommen: psTvProps.dsAngenommen,
     pause: !!showTvModal,
     onOeffnen: psTvProps.onOeffnen
   })), document.body), sitLayoutMode === 'chips' && view === 'situation' && sitPriceSheet && !sitCostOpen && ReactDOM.createPortal((() => {
