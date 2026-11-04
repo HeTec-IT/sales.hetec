@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.133';
+    window.APP_VERSION = '55.134';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -24487,6 +24487,78 @@ const PsTvKarte = ({ tv, td, voll }) => {
     erg.andere.length > 0 && psH('div', { style: { fontSize: '12px', color: '#475569', borderTop: '1px solid #e2e8f0', paddingTop: '6px' } },
       'Auch geprüft: ' + erg.andere.map(a => a.label + ' ' + a.paket + ' ' + geld(a.kosten) + (a.ok ? '' : ' (passt nicht ganz)')).join(' · ')));
 };
+// ═══ Seite 1: Popup "Kundenersparnis möglich!", sobald TV-Art und ein TV-Wunsch (Netflix, Disney+ …) gewählt sind ═══
+const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, onOeffnen }) => {
+  const [zu, setZu] = React.useState(false);
+  const [o2Live, setO2Live] = React.useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
+  const [nf, setNf] = React.useState(window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK);
+  const [ds, setDs] = React.useState(window.__psDisney ? window.__psDisney.daten : PS_DISNEY_FALLBACK);
+  React.useEffect(() => {
+    if (!aktiv) setZu(false);
+  }, [aktiv]);
+  React.useEffect(() => {
+    let a = true;
+    const c = window.__o2TvPreise;
+    if (!(c && Date.now() - c.zeit < 6 * 3600 * 1000)) {
+      fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+        if (!d || !d.o2 || !d.o2.preise) return;
+        window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
+        if (a) setO2Live(d.o2);
+      }).catch(() => {});
+    }
+    psNetflixLaden().then(d => { if (a && d) setNf(d); });
+    psDisneyLaden().then(d => { if (a && d) setDs(d); });
+    return () => { a = false; };
+  }, []);
+  const wKey = (wuensche || []).join('|');
+  const erg = React.useMemo(() => aktiv ? psTvEmpfehlung(wuensche, o2Live) : null, [aktiv, wKey, o2Live]);
+  if (!aktiv || zu || !erg) return null;
+  const k = erg.haupt;
+  const geld = n => n.toFixed(2).replace('.', ',') + ' €';
+  const ist = parseFloat(String(tvIst || '').replace(',', '.')) || 0;
+  const spart = ist > 0 ? ist - k.kosten : null;
+  // Netflix / Disney+ einzeln beim Anbieter: günstigster Tarif (mit Werbung) und günstigster werbefreier Tarif
+  const einzeln = [];
+  if ((wuensche || []).indexOf('Netflix') !== -1) einzeln.push(nf.tarife);
+  if ((wuensche || []).indexOf('Disney+') !== -1) einzeln.push(ds.tarife);
+  const summe = fn => einzeln.reduce((s, t) => s + fn(t), 0);
+  const ab = summe(t => Math.min(...t.map(x => x.preis)));
+  const frei = summe(t => Math.min(...t.filter(x => x.werbefrei).map(x => x.preis)));
+  const vorteil = spart !== null && spart > 0.004;
+  const kopf = spart === null || vorteil ? '💰 Kundenersparnis möglich!' : '📺 TV-Vergleich';
+  const box = { padding: '8px 12px', borderRadius: '12px', fontSize: '13px', lineHeight: 1.35 };
+  return psH('div', {
+    role: 'dialog',
+    'aria-label': 'Kundenersparnis',
+    className: 'ps-ersparnis-pop',
+    style: { position: 'fixed', right: '16px', bottom: '84px', width: 'min(390px, calc(100vw - 32px))', zIndex: 70, background: '#ffffff', border: '2px solid #0f766e', borderRadius: '18px', boxShadow: '0 18px 48px rgba(15,23,42,0.28)', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px', animation: 'psErsPop .25s ease-out' }
+  },
+    psH('style', null, '@keyframes psErsPop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}} @media print{.ps-ersparnis-pop{display:none!important}}'),
+    psH('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' } },
+      psH('div', { style: { fontSize: '17px', fontWeight: 900, color: '#0f766e' } }, kopf),
+      psH('button', { type: 'button', 'aria-label': 'Schließen', onClick: () => setZu(true), style: { width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#475569', fontSize: '18px', cursor: 'pointer', lineHeight: 1 } }, '✕')),
+    psH('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } },
+      psH('div', { style: { fontSize: '20px', fontWeight: 800, color: '#0f172a' } }, psTvName(k)),
+      psH('div', { style: { display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' } },
+        psH('span', { style: { fontSize: '24px', fontWeight: 900, color: '#0f172a' } }, geld(k.preis)),
+        psH('span', { style: { fontSize: '13px', fontWeight: 700, color: '#475569' } }, '/ Monat · 24 Monate')),
+      psH('div', { style: { fontSize: '12px', color: '#64748b' } }, psTvText(k).replace(psTvName(k), '').replace(/^\s*\(|\)\s*$/g, '') || k.sub)),
+    vorteil
+      ? psH('div', { style: Object.assign({ background: '#e6f4f1', color: '#0b5a4a', fontWeight: 800 }, box) },
+          'Spart ' + geld(spart) + ' im Monat · ' + geld(spart * 24) + ' in 24 Monaten',
+          psH('div', { style: { fontSize: '12px', fontWeight: 600 } }, 'Kunde zahlt heute ' + geld(ist) + ' für Fernsehen'))
+      : spart !== null
+        ? psH('div', { style: Object.assign({ background: '#fffbeb', color: '#92400e', fontWeight: 700 }, box) }, 'Kunde zahlt heute ' + geld(ist) + ', hier ' + geld(k.kosten) + ': Vorteil über die Inhalte erklären')
+        : psH('div', { style: Object.assign({ background: '#f1f5f9', color: '#0f172a' }, box) },
+            einzeln.length > 0 && psH('div', null, (wuensche.indexOf('Netflix') !== -1 && wuensche.indexOf('Disney+') !== -1 ? 'Netflix + Disney+' : wuensche.indexOf('Netflix') !== -1 ? 'Netflix' : 'Disney+') + ' einzeln: ab ' + geld(ab) + ' (mit Werbung), werbefrei ' + geld(frei)),
+            kabel && psH('div', null, 'Kabelgebühren entfallen zusätzlich.'),
+            psH('div', { style: { fontSize: '12px', color: '#475569', marginTop: '2px' } }, 'Heutigen Preis bei „Fernsehen“ eintragen, dann steht hier die genaue Ersparnis.')),
+    psH('button', {
+      type: 'button',
+      onClick: () => { setZu(true); try { onOeffnen(); } catch (_) {} },
+      style: { height: '46px', borderRadius: '12px', border: 'none', background: '#0f766e', color: '#ffffff', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }
+    }, 'Vergleich öffnen'));
+};
 const PsEmpfehlungLeiste = ({
   td,
   step,
@@ -43804,7 +43876,13 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         }
       };
     })()
-  }), sitLayoutMode === 'chips' && view === 'situation' && sitPriceSheet && !sitCostOpen && ReactDOM.createPortal((() => {
+  }), sitLayoutMode === 'chips' && view === 'situation' && ReactDOM.createPortal(psH(PsEmpfehlungSchutz, null, psH(PsErsparnisPopup, {
+    aktiv: psTvProps.aktiv,
+    wuensche: psTvProps.wuensche,
+    kabel: (psTvChips.tv || []).indexOf('Kabel') !== -1,
+    tvIst: psTvProps.tvIst,
+    onOeffnen: psTvProps.onOeffnen
+  })), document.body), sitLayoutMode === 'chips' && view === 'situation' && sitPriceSheet && !sitCostOpen && ReactDOM.createPortal((() => {
     const row = sitCostRows(textData, costState).find(r => r.k === sitPriceSheet.k);
     if (!row) return null;
     const co = sitCostGet(textData);
