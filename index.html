@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.123';
+    window.APP_VERSION = '55.124';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -23574,12 +23574,27 @@ const psGeraetBlock = (g, gross) => psH("div", {
   }
 }, 'Gerätepreis ' + psEmpGeld(g.preis) + ' · 24 Monate: ' + psEmpGeld(psEmpRate(g.preis, 24)) + ' / Monat')));
 const psEmpText = g => g.name + (g.speicher ? ' ' + g.speicher : '');
-// Knopf "In Angebot n übernehmen": Gerät als Text ins Angebot, Anzahlung zu "Einmalig" (Monatlich bleibt frei)
-const psUebernehmenKnopf = (td, onUebernehmen, g, nr) => {
+// Zeile "Übernehmen in: Angebot 1 | 2 | 3": Gerät als Text ins gewählte Angebot, Anzahlung zu "Einmalig" (Monatlich bleibt frei)
+const psUebernehmenZeile = (td, onUebernehmen, g) => psH("div", {
+  key: 'uebernehmen',
+  onClick: ev => ev.stopPropagation(),
+  style: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap'
+  }
+}, psH("span", {
+  style: {
+    fontSize: '13px',
+    fontWeight: 800,
+    color: '#0f172a'
+  }
+}, 'Übernehmen in:'), [1, 2, 3].map(nr => {
   const key = 'offer' + nr;
   const drin = String(td && td[key] || '').indexOf(psEmpText(g)) !== -1;
   return psH("button", {
-    key: 'uebernehmen' + nr,
+    key: key,
     type: 'button',
     disabled: drin,
     onClick: ev => {
@@ -23593,9 +23608,9 @@ const psUebernehmenKnopf = (td, onUebernehmen, g, nr) => {
       }
     },
     style: {
-      alignSelf: 'flex-start',
-      height: '44px',
-      padding: '0 18px',
+      height: '40px',
+      minWidth: '104px',
+      padding: '0 14px',
       borderRadius: '12px',
       border: '1px solid #0f766e',
       background: drin ? '#e6f4f1' : '#0f766e',
@@ -23605,8 +23620,8 @@ const psUebernehmenKnopf = (td, onUebernehmen, g, nr) => {
       cursor: drin ? 'default' : 'pointer',
       whiteSpace: 'nowrap'
     }
-  }, drin ? '✓ In Angebot ' + nr + ' übernommen' : 'In Angebot ' + nr + ' übernehmen');
-};
+  }, (drin ? '✓ ' : '') + 'Angebot ' + nr);
+}));
 const psPixelKatalogLaden = () => {
   const c = window.__psPixelKat;
   if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return Promise.resolve(c.daten);
@@ -23792,7 +23807,7 @@ const PsEmpfehlungDetail = ({
       fontWeight: 800,
       color: '#0f172a'
     }
-  }, 'Google ' + e.stufeName), e.gruende.map(t => haken(t, e.stufe + t)), e.geraet && onUebernehmen && psUebernehmenKnopf(td, onUebernehmen, e.geraet, nr), haupt && e.geraet && e.geraet.url && psH("button", {
+  }, 'Google ' + e.stufeName), e.gruende.map(t => haken(t, e.stufe + t)), e.geraet && onUebernehmen && psUebernehmenZeile(td, onUebernehmen, e.geraet), haupt && e.geraet && e.geraet.url && psH("button", {
     type: 'button',
     onClick: () => {
       try {
@@ -24035,7 +24050,7 @@ const PsEmpfehlungLeiste = ({
       fontWeight: 800,
       color: '#0f172a'
     }
-  }, 'Google ' + emp.stufeName), psH("div", {
+  }, 'Google ' + emp.stufeName), emp.geraet && onUebernehmen && psUebernehmenZeile(td, onUebernehmen, emp.geraet), psH("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -24048,7 +24063,7 @@ const PsEmpfehlungLeiste = ({
       fontSize: '12px',
       color: '#64748b'
     }
-  }, emp.geraet ? 'o2 Shop' : 'Gerätedaten werden täglich geladen'), emp.geraet && onUebernehmen && psUebernehmenKnopf(td, onUebernehmen, emp.geraet, 1), psH("button", {
+  }, emp.geraet ? 'o2 Shop' : 'Gerätedaten werden täglich geladen'), psH("button", {
     type: 'button',
     onClick: e => {
       e.stopPropagation();
