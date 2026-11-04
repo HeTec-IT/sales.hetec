@@ -1,0 +1,10 @@
+{
+  "quelle": "https://www.disneyplus.com/de-de",
+  "geprueft": "04.11.2026",
+  "hinweis": "Startwerte (Regelpreise pro Monat, ohne Sparpreis-Aktion) von der Disney+-Seite, bis der Bot sie erfolgreich gelesen hat.",
+  "tarife": [
+    { "id": "werbung", "label": "Mit Werbung", "preis": 6.99, "werbefrei": false },
+    { "id": "standard", "label": "Standard", "preis": 10.99, "werbefrei": true },
+    { "id": "premium", "label": "Premium", "preis": 15.99, "werbefrei": true }
+  ]
+}
