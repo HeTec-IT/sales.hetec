@@ -31,8 +31,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Pixel-Geräte vom o2 Shop holen
         run: node scripts/pixel-geraete.mjs
-        env:
-          PIXEL_DEBUG: '1'   # Diagnose (pixel-debug.txt) mitschreiben; nach der Testphase entfernen
+        # Bei Problemen testweise PIXEL_DEBUG: '1' als env setzen -> Diagnose landet in pixel-debug.txt
       - name: Speichern
         if: always()
         run: |
