@@ -99,8 +99,9 @@ async function mitBrowser(quelle) {
   const br = await chromium.launch();
   try {
     const page = await (await br.newContext({ userAgent: UA, locale: 'de-DE' })).newPage();
-    await page.goto(quelle, { waitUntil: 'networkidle', timeout: 45000 });
-    await page.waitForTimeout(3000);
+    // Disney+ lädt dauerhaft nach -> nicht auf "networkidle" warten
+    await page.goto(quelle, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(9000);
     return { text: await page.evaluate(() => document.body.innerText), html: await page.content() };
   } catch (e) {
     console.log('Browser-Abruf fehlgeschlagen:', e.message);
@@ -119,6 +120,10 @@ async function lesen(quelle, diag) {
     diag.push(quelle + ' | einfacher Abruf: HTTP ' + r.status + ', ' + html.length + ' Zeichen');
     p = preiseAusText(html, false);
     if (!plausibel(p)) p = preiseAusText(html, true);
+    if (!plausibel(p)) {
+      const roh = textAusHtml(html, true);
+      diag.push('  Einfacher Abruf, Gelesen: ' + JSON.stringify(p), '  Stellen mit Euro:', ...ausschnitte(roh, '[0-9],[0-9]{2}\\s?(?:€|EUR)', 8), '  Stellen mit "mit Werbung":', ...ausschnitte(roh, 'mit Werbung', 4));
+    }
   } catch (e) {
     console.log('nicht erreichbar:', quelle, e.message);
     diag.push(quelle + ' | einfacher Abruf fehlgeschlagen: ' + e.message);
