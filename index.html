@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.124';
+    window.APP_VERSION = '55.125';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18141,6 +18141,169 @@ class AdminSafeBoundary extends React.Component {
     }, "Schließen")));
   }
 }
+// ═══════════════════════════════════════════════════════════════════
+// TV-Assistent (Beta): Kunden fragen -> sofort eine Empfehlung. Nur für o2 TV.
+// Abschalten: PS_TV_ASSISTENT = false (dann bleibt nur die klassische Tabelle).
+// ═══════════════════════════════════════════════════════════════════
+const PS_TV_ASSISTENT = true;
+const PS_TV_O2 = {
+  classic: { std: 100, eu: false, netflix: 'gratis', disney: null, werbefrei: false },
+  smart: { std: 150, eu: true, netflix: 'gratis', disney: 'gratis', werbefrei: false },
+  prem: { std: 200, eu: true, netflix: 'inkl', disney: 'inkl', werbefrei: false },
+  prempro: { std: 200, eu: true, netflix: 'inkl', disney: 'inkl', werbefrei: true }
+};
+const PS_TV_EXTRA = 4.99; // Netflix bzw. Disney+ nach den 3 Gratis-Monaten (Classic/Smart)
+const PS_TV_WUENSCHE = ['Netflix', 'Disney+', 'Werbefrei', 'Viel Aufnahme', 'EU-Ausland'];
+const tvH = React.createElement;
+const tvEuro = n => n.toFixed(2).replace('.', ',') + ' €';
+const tvZahl = v => {
+  const n = parseFloat(String(v == null ? '' : v).replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+// Ein Paket gegen die Kundenwünsche prüfen: passt es, was kostet es wirklich (inkl. Netflix/Disney+ nach den Gratis-Monaten)?
+const tvBewerten = (id, basis, w) => {
+  const i = PS_TV_O2[id];
+  const zeilen = [];
+  const fehlt = [];
+  let extra = 0;
+  if (i.netflix === 'inkl') zeilen.push({ ok: true, text: i.werbefrei ? 'Netflix inklusive, werbefrei' : 'Netflix dauerhaft inklusive (mit Werbung)' });
+  else {
+    zeilen.push({ ok: true, text: 'Netflix 3 Monate gratis, danach +' + tvEuro(PS_TV_EXTRA) });
+    if (w.Netflix) extra += PS_TV_EXTRA;
+  }
+  if (i.disney === 'inkl') zeilen.push({ ok: true, text: i.werbefrei ? 'Disney+ inklusive, werbefrei' : 'Disney+ dauerhaft inklusive (mit Werbung)' });
+  else if (i.disney === 'gratis') {
+    zeilen.push({ ok: true, text: 'Disney+ 3 Monate gratis, danach +' + tvEuro(PS_TV_EXTRA) });
+    if (w['Disney+']) extra += PS_TV_EXTRA;
+  } else {
+    zeilen.push({ ok: false, text: 'Disney+ nicht enthalten' });
+    if (w['Disney+']) fehlt.push('Disney+ nicht enthalten');
+  }
+  zeilen.push({ ok: i.std >= 200 || !w['Viel Aufnahme'], text: i.std + ' Std. Aufnahme' });
+  if (w['Viel Aufnahme'] && i.std < 200) fehlt.push('nur ' + i.std + ' Std. Aufnahme');
+  zeilen.push({ ok: i.eu, text: i.eu ? 'Zuhause & EU-Ausland' : 'Nur Zuhause im WLAN' });
+  if (w['EU-Ausland'] && !i.eu) fehlt.push('nur Zuhause nutzbar');
+  if (w.Werbefrei && !i.werbefrei) fehlt.push('Streaming mit Werbung');
+  return { id, ok: fehlt.length === 0, fehlt, extra, kosten: basis + extra, zeilen };
+};
+// Fehlerschutz: ein Fehler im Assistenten schaltet auf die klassische Tabelle zurück
+class TvAssistentSchutz extends React.Component {
+  constructor(p) {
+    super(p);
+    this.state = { fehler: false };
+  }
+  static getDerivedStateFromError() {
+    return { fehler: true };
+  }
+  componentDidCatch(e) {
+    try {
+      console.warn('TV-Assistent ausgeblendet:', e);
+    } catch (_) {}
+    try {
+      if (this.props.onFehler) this.props.onFehler();
+    } catch (_) {}
+  }
+  render() {
+    return this.state.fehler ? null : this.props.children;
+  }
+}
+const TvAssistent = ({ pd, totals, heute, onUebernehmen }) => {
+  const [w, setW] = useState({});
+  const [gewaehlt, setGewaehlt] = useState(null);
+  const ids = pd.cols.map(c => c.id).filter(id => PS_TV_O2[id] && typeof totals[id] === 'number');
+  const bew = ids.map(id => tvBewerten(id, totals[id], w));
+  const mitWunsch = PS_TV_WUENSCHE.some(k => w[k]);
+  let rec = pd.recommended;
+  if (mitWunsch) {
+    const passend = bew.filter(b => b.ok).slice().sort((a, b) => a.kosten - b.kosten);
+    if (passend.length) rec = passend[0].id;
+  }
+  if (!ids.includes(rec)) rec = ids[0];
+  const aktivId = gewaehlt && ids.includes(gewaehlt) ? gewaehlt : rec;
+  const akt = bew.find(b => b.id === aktivId);
+  const col = pd.cols.find(c => c.id === aktivId);
+  if (!akt || !col) return null;
+  const summeHeute = heute.reduce((s, f) => s + tvZahl(f.wert), 0);
+  const diff = summeHeute > 0 ? summeHeute - akt.kosten : null;
+  const wechseln = k => {
+    setW(prev => ({ ...prev, [k]: !prev[k] }));
+    setGewaehlt(null);
+  };
+  const haken = ok => tvH('span', {
+    'aria-hidden': 'true',
+    style: { width: '20px', height: '20px', borderRadius: '50%', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 900, color: ok ? '#ffffff' : '#64748b', background: ok ? '#0f766e' : '#e2e8f0' }
+  }, ok ? '✓' : '–');
+  const farbe = pd.color;
+  return tvH('div', {
+    style: { flex: 1, overflowY: 'auto', padding: '16px 24px 20px', display: 'flex', flexDirection: 'column', gap: '14px', background: '#f6f9ff' }
+  }, tvH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-start' } },
+    // Links: Fragen + Ausgaben heute
+    tvH('div', { style: { flex: '1 1 250px', maxWidth: '300px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '18px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' } },
+      tvH('div', null,
+        tvH('div', { style: { fontSize: '15px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' } }, 'Was ist dem Kunden wichtig?'),
+        tvH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px' } }, PS_TV_WUENSCHE.map(k => tvH('button', {
+          key: k,
+          type: 'button',
+          'aria-pressed': !!w[k],
+          onClick: () => wechseln(k),
+          style: { height: '44px', padding: '0 16px', borderRadius: '999px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', border: w[k] ? '1px solid ' + farbe : '1px solid #cbd5e1', background: w[k] ? farbe : '#ffffff', color: w[k] ? '#ffffff' : '#0f172a' }
+        }, k)))),
+      tvH('div', { style: { borderTop: '1px solid #e2e8f0', paddingTop: '14px' } },
+        tvH('div', { style: { fontSize: '15px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' } }, 'Zahlt heute (€ pro Monat)'),
+        tvH('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }, heute.map(f => tvH('label', { key: f.label, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', fontSize: '14px', color: '#475569' } },
+          f.label,
+          tvH('input', {
+            type: 'text',
+            inputMode: 'decimal',
+            value: f.wert,
+            placeholder: '0',
+            onChange: e => f.setze(e.target.value),
+            style: { width: '96px', height: '42px', boxSizing: 'border-box', textAlign: 'right', padding: '0 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '16px', fontWeight: 700, color: '#0f172a', background: '#ffffff' }
+          })))),
+        tvH('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid #e2e8f0', marginTop: '10px', paddingTop: '8px', fontSize: '16px', fontWeight: 800, color: '#0f172a' } },
+          tvH('span', null, 'Summe'), tvH('span', null, tvEuro(summeHeute))))),
+    // Rechts: eine Empfehlung + Alternativen
+    tvH('div', { style: { flex: '2 1 340px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' } },
+      tvH('div', { style: { background: '#ffffff', border: '2px solid ' + farbe, borderRadius: '20px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 8px 24px ' + farbe + '2e' } },
+        tvH('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' } },
+          tvH('div', null,
+            tvH('span', { style: { fontSize: '12px', fontWeight: 800, color: '#ffffff', background: farbe, borderRadius: '999px', padding: '4px 12px' } }, aktivId === rec ? (mitWunsch ? 'Empfehlung' : 'Standard-Empfehlung') : 'Gewählt'),
+            tvH('div', { style: { fontSize: '26px', fontWeight: 800, color: '#0f172a', marginTop: '8px' } }, col.label),
+            tvH('div', { style: { fontSize: '13px', color: '#64748b', marginTop: '2px' } }, col.sub)),
+          tvH('div', { style: { textAlign: 'right' } },
+            tvH('div', { style: { fontSize: '34px', fontWeight: 800, color: '#0f172a', lineHeight: 1 } }, tvEuro(totals[aktivId])),
+            tvH('div', { style: { fontSize: '13px', color: '#64748b', marginTop: '4px' } }, 'pro Monat'))),
+        tvH('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px 16px', fontSize: '14px', color: '#0f172a' } }, akt.zeilen.map(z => tvH('div', { key: z.text, style: { display: 'flex', gap: '9px', alignItems: 'center', color: z.ok ? '#0f172a' : '#64748b' } }, haken(z.ok), z.text))),
+        akt.extra > 0 && tvH('div', { style: { background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', fontSize: '14px', fontWeight: 700, color: '#92400e' } }, 'Mit Netflix / Disney+ nach den Gratis-Monaten: ' + tvEuro(akt.kosten) + ' im Monat'),
+        diff !== null && diff > 0.004 && tvH('div', { style: { background: '#e6f4f1', borderRadius: '12px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' } },
+          tvH('span', { style: { fontSize: '16px', fontWeight: 800, color: '#0b5a4a' } }, 'Spart ' + tvEuro(diff) + ' im Monat gegenüber heute'),
+          tvH('span', { style: { fontSize: '13px', color: '#0b5a4a' } }, tvEuro(diff * 24) + ' in 24 Monaten')),
+        diff !== null && diff <= 0.004 && tvH('div', { style: { background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '10px 14px', fontSize: '14px', fontWeight: 700, color: '#92400e' } }, 'Kunde zahlt heute ' + (diff < -0.004 ? tvEuro(-diff) + ' weniger' : 'genauso viel') + ' – Mehrwert über Inhalte erklären'),
+        diff === null && tvH('div', { style: { fontSize: '13px', color: '#64748b' } }, 'Tipp: Links eintragen, was der Kunde heute zahlt – dann siehst du die Ersparnis.'),
+        tvH('button', {
+          type: 'button',
+          onClick: () => {
+            if (onUebernehmen) onUebernehmen({ price: totals[aktivId].toFixed(2), provider: 'o2', providerLabel: pd.label, packageLabel: col.label, packageSub: col.sub, color: pd.color });
+          },
+          style: { height: '52px', borderRadius: '14px', border: 'none', background: farbe, color: '#ffffff', fontSize: '16px', fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 14px ' + farbe + '44' }
+        }, '✓ ' + tvEuro(totals[aktivId]) + ' übernehmen')),
+      tvH('div', { style: { fontSize: '12px', fontWeight: 800, letterSpacing: '0.08em', color: '#64748b' } }, 'AUCH MÖGLICH'),
+      tvH('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' } }, bew.filter(b => b.id !== aktivId).map(b => {
+        const c = pd.cols.find(x => x.id === b.id);
+        return tvH('div', { key: b.id, style: { background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px', opacity: b.ok ? 1 : 0.8 } },
+          tvH('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' } },
+            tvH('span', { style: { fontSize: '15px', fontWeight: 800, color: '#0f172a' } }, c.label),
+            tvH('span', { style: { fontSize: '16px', fontWeight: 800, color: '#0f172a' } }, tvEuro(totals[b.id]))),
+          tvH('div', { style: { fontSize: '12px', color: b.ok ? '#475569' : '#b45309', minHeight: '32px' } },
+            !b.ok ? 'Passt nicht: ' + b.fehlt.join(', ') : b.extra > 0 ? 'Mit Netflix / Disney+ nach den Gratis-Monaten ' + tvEuro(b.kosten) : c.sub),
+          tvH('button', {
+            type: 'button',
+            onClick: () => setGewaehlt(b.id),
+            style: { marginTop: 'auto', height: '44px', borderRadius: '12px', border: '1px solid ' + farbe, background: '#ffffff', color: farbe, fontSize: '14px', fontWeight: 700, cursor: 'pointer' }
+          }, 'Stattdessen wählen'));
+      })))),
+    tvH('div', { style: { fontSize: '11px', color: '#64748b' } }, 'Gratis-Aktionen gelten je 1× pro Kunde · danach ' + tvEuro(PS_TV_EXTRA) + ' pro Monat je Dienst, kündbar · ' + (pd.preisStand ? 'Preise o2online.de, Stand ' + pd.preisStand : 'Preise ohne Gewähr')));
+};
 const TvPriceModal = ({
   isOpen,
   onClose,
@@ -18159,6 +18322,7 @@ const TvPriceModal = ({
   const [pinned, setPinned] = useState([]);
   const [pinLimitHint, setPinLimitHint] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [assistent, setAssistent] = useState(true); // v55.125: Assistent-Ansicht (nur o2 TV)
   // v55.8.1: o2-TV-Preise automatisch aus tv-preise.json (GitHub Action holt sie täglich von o2online.de).
   // Fehlt die Datei oder ist sie ungültig, gelten die fest hinterlegten Preise unten.
   const [o2Live, setO2Live] = useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
@@ -18474,6 +18638,7 @@ const TvPriceModal = ({
   const pinnedHere = pinned.find(p => p.provider === provider);
   const pinnedFiltered = pinnedHere ? pd.cols.filter(c => provider + '_' + c.id === pinnedHere.id) : pd.cols;
   const visibleCols = pinnedFiltered.length > 0 ? pinnedFiltered : pd.cols;
+  const assistentAn = PS_TV_ASSISTENT && assistent && provider === 'o2' && !compareMode;
   const providers = [{
     id: 'o2',
     label: 'o2 TV',
@@ -18626,7 +18791,23 @@ const TvPriceModal = ({
       borderTop: provider === p.id ? '2px solid ' + p.color : '2px solid transparent',
       outline: 'none'
     }
-  }, p.label))), !compareMode && pinned.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, p.label)), PS_TV_ASSISTENT && provider === 'o2' && !compareMode && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setAssistent(a => !a),
+    style: {
+      marginLeft: 'auto',
+      alignSelf: 'center',
+      height: '36px',
+      padding: '0 14px',
+      borderRadius: '10px',
+      border: '1px solid #cbd5e1',
+      background: '#ffffff',
+      color: '#475569',
+      fontSize: '12px',
+      fontWeight: 700,
+      cursor: 'pointer'
+    }
+  }, assistent ? 'Klassische Tabelle' : 'Assistent')), !compareMode && pinned.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -18683,7 +18864,26 @@ const TvPriceModal = ({
       color: '#fff',
       cursor: 'pointer'
     }
-  }, "Vergleichen →")), !compareMode && /*#__PURE__*/React.createElement("div", {
+  }, "Vergleichen →")), assistentAn && tvH(TvAssistentSchutz, {
+    onFehler: () => setAssistent(false)
+  }, tvH(TvAssistent, {
+    pd,
+    totals: dynamicTotals,
+    heute: [{
+      label: 'TV / Anschluss',
+      wert: prevTV,
+      setze: setPrevTV
+    }, {
+      label: 'Streaming 1',
+      wert: prevHD,
+      setze: setPrevHD
+    }, {
+      label: 'Streaming 2',
+      wert: prevStream,
+      setze: setPrevStream
+    }],
+    onUebernehmen
+  })), !compareMode && !assistentAn && /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       overflowY: 'auto',
@@ -19420,7 +19620,7 @@ const TvPriceModal = ({
       color: '#94a3b8',
       fontWeight: 500
     }
-  }, "Preise ohne Gewähr · Stand März 2026"), /*#__PURE__*/React.createElement("button", {
+  }, 'Preise ohne Gewähr · Stand ' + (pd.preisStand || 'März 2026')), /*#__PURE__*/React.createElement("button", {
     onClick: onClose,
     style: {
       padding: '7px 18px',
