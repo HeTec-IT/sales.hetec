@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.118';
+    window.APP_VERSION = '55.119';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -23472,6 +23472,499 @@ function forceRedrawCanvas(canvas, strokes, scaleFactor, key) {
     window.__activeDrawingCanvas = prevActive;
   }
 }
+// ═══════════════════════════════════════════════════════════════════
+// v55.119 (Beta): Pixel-Empfehlung über Angebot 1 (nur Android-Kunden: Samsung, Pixel, Xiaomi).
+// Geräte: pixel-geraete.json – die GitHub Action "Pixel-Geräte aktualisieren" holt sie täglich gegen
+// 12 Uhr aus dem o2 Shop ("Google, ohne Tarif"). Fehlt die Datei oder ist sie leer, erscheint die Empfehlung
+// ohne Gerätename und Preis. Antworten kommen aus der Schnellauswahl (textData._sitChips).
+// Doppeltippen auf die Leiste (oder "Details") öffnet alle Empfehlungen. Abschalten: PS_EMPFEHLUNG_AKTIV = false.
+// ═══════════════════════════════════════════════════════════════════
+const PS_EMPFEHLUNG_AKTIV = true;
+const PS_EMP_ANDROID = ['Samsung', 'Pixel', 'Xiaomi'];
+const PS_EMP_REIHE = ['basis', 'pro', 'a', 'pro-xl'];
+const PS_EMP_STUFEN = {
+  basis: 'Pixel',
+  a: 'Pixel a',
+  pro: 'Pixel Pro',
+  'pro-xl': 'Pixel Pro XL'
+};
+const psH = React.createElement;
+const psEmpPreis = n => n.toLocaleString('de-DE', {
+  minimumFractionDigits: n % 1 ? 2 : 0,
+  maximumFractionDigits: 2
+}) + ' €';
+const psPixelKatalogLaden = () => {
+  const c = window.__psPixelKat;
+  if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return Promise.resolve(c.daten);
+  return fetch('pixel-geraete.json?t=' + Date.now(), {
+    cache: 'no-store'
+  }).then(r => r.ok ? r.json() : null).then(d => {
+    const daten = d && Array.isArray(d.geraete) ? d : {
+      geraete: []
+    };
+    window.__psPixelKat = {
+      zeit: Date.now(),
+      daten
+    };
+    return daten;
+  }).catch(() => c ? c.daten : {
+    geraete: []
+  });
+};
+// Regeln: aus den Antworten der Schnellauswahl die passende Pixel-Stufe + das neueste Gerät dieser Stufe wählen.
+const psEmpfehlungBerechnen = (td, kat) => {
+  const sel = sitChipsParse(td);
+  const eins = id => (sel[id] || [])[0] || '';
+  const handy = eins('handy');
+  if (!PS_EMP_ANDROID.includes(handy)) return null; // iPhone oder noch nichts gewählt: keine Pixel-Empfehlung
+  const wichtig = sel.wichtig || [];
+  const daten = eins('daten');
+  const kost = eins('kost');
+  const pt = {
+    basis: 1,
+    a: 0,
+    pro: 0,
+    'pro-xl': 0
+  };
+  const gr = {
+    basis: [],
+    a: [],
+    pro: [],
+    'pro-xl': []
+  };
+  const plus = (s, n, text) => {
+    pt[s] += n;
+    if (text) gr[s].push(text);
+  };
+  if (wichtig.includes('Kamera')) {
+    plus('pro', 3, 'Stärkste Kamera der Pixel-Reihe');
+    plus('pro-xl', 1, 'Stärkste Kamera der Pixel-Reihe');
+    plus('basis', 1, 'Starke Kamera');
+    plus('a', 0, 'Gute Kamera zum fairen Preis');
+  }
+  if (wichtig.includes('Games') || wichtig.includes('Streaming')) {
+    plus('pro-xl', 2, 'Größtes Display für Games und Streaming');
+    plus('pro', 1, 'Großes, helles Display');
+  }
+  if (daten === 'Unlimited' || daten === '50–100 GB') plus('pro', 1);
+  if (daten === '< 10 GB') plus('a', 1);
+  if (kost === '< 30 €') plus('a', 3, 'Günstiger Einstieg');
+  if (kost === '> 80 €') plus('pro', 1);
+  const geraete = ((kat && kat.geraete) || []).filter(g => g && g.preis > 0 && g.stufe && g.stufe !== 'fold');
+  const vorhanden = geraete.length ? PS_EMP_REIHE.filter(s => geraete.some(g => g.stufe === s)) : PS_EMP_REIHE;
+  const sortiert = vorhanden.slice().sort((a, b) => pt[b] - pt[a] || PS_EMP_REIHE.indexOf(a) - PS_EMP_REIHE.indexOf(b));
+  const geraetFuer = s => {
+    const liste = geraete.filter(g => g.stufe === s);
+    if (!liste.length) return null;
+    const gen = Math.max(...liste.map(g => g.gen || 0));
+    const neu = liste.filter(g => (g.gen || 0) === gen).sort((a, b) => (a.speicherGb || 0) - (b.speicherGb || 0));
+    if (wichtig.includes('Viel Speicher')) {
+      const gross = neu.filter(g => g.speicherGb >= 256);
+      return gross.length ? gross[0] : neu[neu.length - 1];
+    }
+    return neu[0];
+  };
+  const plattform = handy === 'Pixel' ? 'Bleibt beim Pixel' : 'Android bleibt vertraut';
+  const gruendeFuer = (s, g) => {
+    const out = [plattform, ...gr[s]];
+    if (wichtig.includes('Viel Speicher') && g && g.speicherGb >= 256) out.push(g.speicher + ' Speicher');
+    return out.filter((t, i) => out.indexOf(t) === i).slice(0, 4);
+  };
+  const best = sortiert[0];
+  const g0 = geraetFuer(best);
+  return {
+    stufe: best,
+    stufeName: PS_EMP_STUFEN[best],
+    geraet: g0,
+    gruende: gruendeFuer(best, g0),
+    alternativen: sortiert.slice(1, 3).map(s => {
+      const g = geraetFuer(s);
+      return {
+        stufe: s,
+        stufeName: PS_EMP_STUFEN[s],
+        geraet: g,
+        gruende: gruendeFuer(s, g).slice(0, 3)
+      };
+    }),
+    antworten: sel,
+    stand: kat && kat.stand || '',
+    anzahl: geraete.length
+  };
+};
+const PsEmpfehlungDetail = ({
+  emp,
+  onClose
+}) => {
+  const chip = (txt, fg, bg, key) => psH("span", {
+    key: key || txt,
+    style: {
+      fontSize: '13px',
+      fontWeight: 700,
+      color: fg,
+      background: bg,
+      borderRadius: '999px',
+      padding: '5px 12px'
+    }
+  }, txt);
+  const haken = (txt, key) => psH("div", {
+    key: key || txt,
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      fontSize: '15px',
+      color: '#0f172a'
+    }
+  }, psH("span", {
+    style: {
+      width: '22px',
+      height: '22px',
+      borderRadius: '50%',
+      background: '#0f766e',
+      color: '#ffffff',
+      fontSize: '13px',
+      fontWeight: 900,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: '0 0 auto'
+    }
+  }, "✓"), txt);
+  const kachel = (e, haupt) => psH("div", {
+    key: e.stufe,
+    style: {
+      background: '#ffffff',
+      border: haupt ? '2px solid #0f766e' : '1px solid #e2e8f0',
+      borderRadius: haupt ? '18px' : '14px',
+      padding: haupt ? '18px' : '12px 16px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: haupt ? '12px' : '6px',
+      boxShadow: haupt ? '0 8px 24px rgba(15,118,110,0.16)' : 'none'
+    }
+  }, haupt && psH("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    }
+  }, chip('Beste Wahl für Angebot 1', '#ffffff', '#0f766e')), psH("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      gap: '12px'
+    }
+  }, psH("div", {
+    style: {
+      fontSize: haupt ? '22px' : '16px',
+      fontWeight: 800,
+      color: '#0f172a'
+    }
+  }, e.geraet ? e.geraet.name : 'Google ' + e.stufeName), e.geraet && psH("div", {
+    style: {
+      fontSize: haupt ? '20px' : '15px',
+      fontWeight: 800,
+      color: '#0f172a',
+      whiteSpace: 'nowrap'
+    }
+  }, psEmpPreis(e.geraet.preis))), e.geraet && e.geraet.speicher && psH("div", {
+    style: {
+      fontSize: '13px',
+      color: '#64748b',
+      marginTop: '-6px'
+    }
+  }, e.geraet.speicher + ' · ohne Tarif'), e.gruende.map(t => haken(t, e.stufe + t)), haupt && e.geraet && e.geraet.url && psH("button", {
+    type: 'button',
+    onClick: () => {
+      try {
+        window.open(e.geraet.url, '_blank', 'noopener');
+      } catch (_) {}
+    },
+    style: {
+      alignSelf: 'flex-start',
+      height: '44px',
+      padding: '0 18px',
+      borderRadius: '12px',
+      border: '1px solid #94a3b8',
+      background: '#ffffff',
+      color: '#0f172a',
+      fontSize: '14px',
+      fontWeight: 700,
+      cursor: 'pointer'
+    }
+  }, "Im o2 Shop ansehen"));
+  const fragen = ['handy', 'wichtig', 'daten', 'alter', 'kost'].map(id => SIT_CHIP_GROUPS.find(g => g.id === id)).filter(Boolean);
+  const status = emp.anzahl > 0 ? 'o2 Shop, Geräte ohne Vertrag: ' + emp.anzahl + ' Pixel-Geräte' + (emp.stand ? ' · Stand ' + emp.stand : '') : 'Gerätedaten vom o2 Shop sind noch nicht geladen. Der tägliche Abruf läuft gegen 12 Uhr.';
+  return ReactDOM.createPortal(psH("div", {
+    className: "ps-emp-wrap",
+    "data-html2canvas-ignore": "true",
+    onClick: onClose,
+    style: {
+      position: 'fixed',
+      inset: 0,
+      zIndex: 100000,
+      background: 'rgba(15,23,42,0.55)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px'
+    }
+  }, psH("div", {
+    role: 'dialog',
+    'aria-label': 'Alle Empfehlungen',
+    onClick: e => e.stopPropagation(),
+    style: {
+      width: 'min(1060px, 100%)',
+      maxHeight: '92vh',
+      overflow: 'auto',
+      background: '#f1f5f9',
+      borderRadius: '22px',
+      boxShadow: '0 24px 60px rgba(0,0,0,0.35)',
+      fontFamily: 'system-ui,-apple-system,Segoe UI,Arial,sans-serif'
+    }
+  }, psH("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '16px 22px',
+      background: '#ffffff',
+      borderBottom: '1px solid #e2e8f0'
+    }
+  }, psH("div", null, psH("div", {
+    style: {
+      fontSize: '20px',
+      fontWeight: 800,
+      color: '#0f172a'
+    }
+  }, "Alle Empfehlungen"), psH("div", {
+    style: {
+      fontSize: '13px',
+      color: '#64748b',
+      marginTop: '2px'
+    }
+  }, "Zu Angebot 1 · passend zu den Antworten aus Seite 1")), psH("button", {
+    type: 'button',
+    onClick: onClose,
+    style: {
+      height: '44px',
+      padding: '0 22px',
+      borderRadius: '12px',
+      border: '1px solid #94a3b8',
+      background: '#ffffff',
+      color: '#0f172a',
+      fontSize: '15px',
+      fontWeight: 700,
+      cursor: 'pointer'
+    }
+  }, "Schließen")), psH("div", {
+    style: {
+      padding: '12px 22px',
+      background: '#e6f4f1',
+      color: '#0f766e',
+      fontSize: '14px',
+      fontWeight: 700
+    }
+  }, status), psH("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gap: '20px',
+      padding: '20px 22px'
+    }
+  }, psH("div", {
+    style: {
+      background: '#ffffff',
+      border: '1px solid #e2e8f0',
+      borderRadius: '18px',
+      padding: '18px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px'
+    }
+  }, fragen.map(g => psH("div", {
+    key: g.id,
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '6px'
+    }
+  }, psH("div", {
+    style: {
+      fontSize: '14px',
+      fontWeight: 800,
+      color: '#0f172a'
+    }
+  }, g.label), psH("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px'
+    }
+  }, (emp.antworten[g.id] || []).length ? emp.antworten[g.id].map(v => chip(v, '#ffffff', '#2563eb', g.id + v)) : chip('keine Angabe', '#64748b', '#f1f5f9', g.id + '-leer')))), psH("div", {
+    style: {
+      fontSize: '12px',
+      color: '#64748b'
+    }
+  }, "Antworten ändern: zurück auf Seite 1. Das Ergebnis aktualisiert sich sofort.")), psH("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '14px'
+    }
+  }, kachel(emp, true), emp.alternativen.length > 0 && psH("div", {
+    style: {
+      fontSize: '12px',
+      fontWeight: 800,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      color: '#64748b'
+    }
+  }, "Weitere Treffer"), emp.alternativen.map(a => kachel(a, false)))), psH("div", {
+    style: {
+      padding: '0 22px 18px',
+      fontSize: '12px',
+      color: '#64748b'
+    }
+  }, "Preise ohne Tarif, ca.-Angaben aus dem o2 Shop. Verbindlich ist der Preis im Vertrag bzw. in Opus."))), document.body);
+};
+const PsEmpfehlungLeiste = ({
+  td,
+  step,
+  joined
+}) => {
+  const [kat, setKat] = React.useState(window.__psPixelKat ? window.__psPixelKat.daten : null);
+  const [offen, setOffen] = React.useState(false);
+  const letzterTipp = React.useRef(0);
+  React.useEffect(() => {
+    if (!PS_EMPFEHLUNG_AKTIV) return;
+    let aktiv = true;
+    psPixelKatalogLaden().then(d => {
+      if (aktiv) setKat(d);
+    });
+    return () => {
+      aktiv = false;
+    };
+  }, []);
+  const emp = React.useMemo(() => PS_EMPFEHLUNG_AKTIV ? psEmpfehlungBerechnen(td, kat) : null, [td, kat]);
+  if (!emp) return null;
+  if (step > 0) return null; // Schritt-Modus: nur über Angebot 1
+  const tipp = () => {
+    const jetzt = Date.now();
+    if (jetzt - letzterTipp.current < 400) {
+      letzterTipp.current = 0;
+      setOffen(true);
+    } else {
+      letzterTipp.current = jetzt;
+    }
+  };
+  const voll = step === 0 || joined;
+  return psH("div", {
+    className: "ps-emp-wrap w-full md:grid md:grid-cols-3 gap-6",
+    "data-html2canvas-ignore": "true"
+  }, psH("style", null, "@media print{.ps-emp-wrap{display:none!important}}"), psH("div", {
+    role: 'button',
+    tabIndex: 0,
+    onClick: tipp,
+    onDoubleClick: () => setOffen(true),
+    onKeyDown: e => {
+      if (e.key === 'Enter') setOffen(true);
+    },
+    style: {
+      gridColumn: voll ? '1 / -1' : '1',
+      background: '#ffffff',
+      border: '2px solid #0f766e',
+      borderRadius: '16px',
+      padding: '12px 14px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      cursor: 'pointer',
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+      touchAction: 'manipulation',
+      boxShadow: '0 4px 14px rgba(15,118,110,0.14)'
+    }
+  }, psH("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: 800,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      color: '#0f766e'
+    }
+  }, "Empfehlung für Angebot 1"), psH("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px'
+    }
+  }, emp.gruende.map(t => psH("span", {
+    key: t,
+    style: {
+      fontSize: '12px',
+      fontWeight: 700,
+      color: '#0f766e',
+      background: '#e6f4f1',
+      borderRadius: '999px',
+      padding: '4px 10px'
+    }
+  }, "✓ " + t))), psH("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: '10px'
+    }
+  }, psH("div", {
+    style: {
+      fontSize: '18px',
+      fontWeight: 800,
+      color: '#0f172a'
+    }
+  }, emp.geraet ? emp.geraet.name : 'Google ' + emp.stufeName), emp.geraet && psH("div", {
+    style: {
+      fontSize: '15px',
+      fontWeight: 800,
+      color: '#0f172a',
+      whiteSpace: 'nowrap'
+    }
+  }, psEmpPreis(emp.geraet.preis))), psH("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px'
+    }
+  }, psH("span", {
+    style: {
+      fontSize: '12px',
+      color: '#64748b'
+    }
+  }, emp.geraet ? (emp.geraet.speicher ? emp.geraet.speicher + ' · ' : '') + 'ohne Tarif · o2 Shop' : 'Gerätedaten werden täglich geladen'), psH("button", {
+    type: 'button',
+    onClick: e => {
+      e.stopPropagation();
+      setOffen(true);
+    },
+    style: {
+      height: '36px',
+      padding: '0 14px',
+      borderRadius: '10px',
+      border: '1px solid #0f766e',
+      background: '#ffffff',
+      color: '#0f766e',
+      fontSize: '12px',
+      fontWeight: 800,
+      cursor: 'pointer',
+      whiteSpace: 'nowrap'
+    }
+  }, "Doppelt tippen · Details"))), offen && psH(PsEmpfehlungDetail, {
+    emp: emp,
+    onClose: () => setOffen(false)
+  }));
+};
 const OfferCanvas = React.memo(({
   canvasRef,
   label,
@@ -44816,7 +45309,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       boxShadow: currentOfferStep === s.i ? '0 2px 8px rgba(37,99,235,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
       transition: 'all 0.15s'
     }
-  }, s.l))), /*#__PURE__*/React.createElement("div", {
+  }, s.l))), /*#__PURE__*/React.createElement(PsEmpfehlungLeiste, {
+    td: textData,
+    step: offerLayoutMode === 'step' ? currentOfferStep : -1,
+    joined: !!(jEff && jEff.j12 && jEff.j23)
+  }), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-6 w-full md:grid md:grid-cols-3 offer-print-grid"
   }, [{
     key: 'offer1',
