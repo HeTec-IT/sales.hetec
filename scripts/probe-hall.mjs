@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 const BASE = 'https://hetec-it.github.io/PS-Dashboard/';
 const TK = 'https://hetec-it.github.io/PS-Dashboard-Telekom/';
 const O2 = {
-  'index.html': 'f2588fd2e4597f1e6d011a552809f7784f634a7181b551ee133f5a653742840c',
+  'index.html': '4f43381ce692e78f9654cde8c14cd16bb791649f331cd8af15056b225b1bbba4',
   'index-neu.html': '7644f17c8a3fb01c0d15227864b477a2acc7963865db261fb16f7ef671cf5b29',
   'rollout.json': 'f8c66e364c433e9f741869ccf9dd990c543402bf3cec04fd33249702fc19e3c7',
   'sw.js': '641349f858e9a4ec6a2f8c4b79332b87617588457483d1a5968bef66338374f0',
