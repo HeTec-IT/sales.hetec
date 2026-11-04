@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.139';
+    window.APP_VERSION = '55.140';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10292,12 +10292,6 @@ const SIT_CHIP_GROUPS = [{
   id: 'tvwichtig', item: 'Fernsehen', label: 'TV: Was ist wichtig?', multi: true,
   opts: [['Netflix'], ['Disney+'], ['Werbefrei'], ['Viel Aufnahme', 'Viel Aufnahme (200 Std.)'], ['EU-Ausland', 'TV im EU-Ausland']]
 }, {
-  id: 'nfplan', item: 'Fernsehen', label: 'Netflix-Tarif des Kunden', multi: false,
-  opts: [['Mit Werbung', 'Netflix mit Werbung'], ['Standard', 'Netflix Standard'], ['Premium', 'Netflix Premium']]
-}, {
-  id: 'dsplan', item: 'Fernsehen', label: 'Disney+-Tarif des Kunden', multi: false,
-  opts: [['Mit Werbung', 'Disney+ mit Werbung'], ['Standard', 'Disney+ Standard'], ['Premium', 'Disney+ Premium']]
-}, {
   id: 'wlan', item: 'WiFi', label: 'WLAN zufrieden?', multi: false,
   opts: [['Ja', 'WLAN zufrieden'], ['Teilweise', 'WLAN teilweise zufrieden'], ['Nein', 'WLAN nicht zufrieden']]
 }, {
@@ -10602,7 +10596,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
       type: 'button',
       className: 'sit-chip' + (g.id === 'anb' ? ' p ' + (SIT_BRAND[o[0]] || '') : '') + (cur.includes(o[0]) ? ' on' : ''),
       onClick: () => onToggle(g, o[0])
-    }, sitT(o[0])))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, sitT('Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.'))) : null, g.id === 'tvwichtig' ? [['nfplan', 'Netflix'], ['dsplan', 'Disney+']].filter(x => cur.includes(x[1])).map(x => { const pg = SIT_CHIP_GROUPS.find(y => y.id === x[0]); const pc = sel[pg.id] || []; return h('div', { key: pg.id }, h('div', { className: 'sit-chip-label' }, sitT(pg.label)), h('div', { className: 'sit-chip-row' }, pg.opts.map(o => h('button', { key: o[0], type: 'button', className: 'sit-chip' + (pc.includes(o[0]) ? ' on' : ''), onClick: () => onToggle(pg, o[0]) }, sitT(o[0]) + psPlanPreisText(pg.id, o[0])))), pc.length ? null : h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, 'Ohne Auswahl rechnet die App mit dem günstigsten Tarif' + psPlanPreisText(pg.id, 'Mit Werbung').replace(' · ', ' (') + (psPlanPreisText(pg.id, 'Mit Werbung') ? ')' : '') + '.'))); }) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, sitT(b.plabel[gid])) : null, prices(b, gid));
+    }, sitT(o[0])))), g.id === 'tv' && cur.includes('Kabel') ? h('div', { className: 'sit-hint' }, h('i', null, 'i'), h('span', null, sitT('Kabel zahlt der Kunde in der Regel separat (Kabelgebühren). Das spart er ggf., wenn er bei uns einen Vertrag abschließt.'))) : null, b.bars[gid] ? bar(b.bars[gid]) : null, b.plabel && b.plabel[gid] ? h('div', { className: 'sit-chip-label sit-hh' }, sitT(b.plabel[gid])) : null, prices(b, gid));
   }))), cost && !cost.compact ? h(SitSumBar, { rows: cost.rows, pers: cost.pers }) : null);
 }
 // v55.91: Preisfelder direkt in der jeweiligen Kategorie (Stift schreibt ins Feld = Scribble, Tippen, Ziffernblock)
@@ -18225,13 +18219,8 @@ const psKabelLaden = () => {
     })
     .catch(() => null);
 };
-// Netflix-/Disney+-Tarif des Kunden (Chips auf Seite 1): Chip-Text -> Tarif-ID, Preis aus den Bot-Dateien
-const PS_PLAN_ID = { 'Mit Werbung': 'werbung', 'Standard': 'standard', 'Premium': 'premium' };
-const psPlanPreisText = (gid, key) => {
-  const d = gid === 'nfplan' ? (window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK) : (window.__psDisney ? window.__psDisney.daten : PS_DISNEY_FALLBACK);
-  const t = d.tarife.find(x => x.id === PS_PLAN_ID[key]);
-  return t ? ' · ' + t.preis.toFixed(2).replace('.', ',') + ' €' : '';
-};
+// Seite 1 geht davon aus: Kunde hat Kabel, Netflix und Disney+ im Standard-Tarif ('werbung' = günstigster Tarif). Genaue Tarife im Vergleichsfenster.
+const PS_STREAM_ANNAHME = 'standard';
 const psUseStreaming = () => {
   const [nf, setNf] = React.useState(window.__psNetflix ? window.__psNetflix.daten : PS_NETFLIX_FALLBACK);
   const [ds, setDs] = React.useState(window.__psDisney ? window.__psDisney.daten : PS_DISNEY_FALLBACK);
@@ -18248,8 +18237,8 @@ const psUseStreaming = () => {
 const psTvHeute = ({ istTv, kabel, kabelPreis, np, dp, nfAng, dsAng }) => {
   const posten = [];
   if (kabel) posten.push({ name: 'Kabel-TV', preis: kabelPreis });
-  if (np) posten.push({ name: 'Netflix' + (nfAng ? ' (günstigster Tarif)' : ' ' + np.label), preis: np.preis });
-  if (dp) posten.push({ name: 'Disney+' + (dsAng ? ' (günstigster Tarif)' : ' ' + dp.label), preis: dp.preis });
+  if (np) posten.push({ name: 'Netflix ' + np.label, preis: np.preis });
+  if (dp) posten.push({ name: 'Disney+ ' + dp.label, preis: dp.preis });
   if (istTv > 0) posten.push({ name: 'Fernsehen (Eintrag)', preis: istTv });
   const summe = Math.round(posten.reduce((s, x) => s + x.preis, 0) * 100) / 100;
   return { summe, posten };
@@ -24526,7 +24515,10 @@ const psTvText = (k) => {
   const inkl = [k.netflix === 'inkl' ? 'Netflix' : '', k.disney === 'inkl' ? 'Disney+' : ''].filter(Boolean);
   return psTvName(k) + (inkl.length ? ' (' + inkl.join(' + ') + ' inklusive)' : '');
 };
-const psTvEmpfehlung = (wuensche, o2Live, np, dp) => {
+const psTvEmpfehlung = (wuensche, o2Live, np, dp, nfAng, dsAng) => {
+  // Angenommener Tarif: Werbefreiheit zählt nur, wenn der Wunsch "Werbefrei" gesetzt ist
+  const npA = np && nfAng ? Object.assign({}, np, { werbefrei: false }) : np;
+  const dpA = dp && dsAng ? Object.assign({}, dp, { werbefrei: false }) : dp;
   const w = Object.fromEntries((wuensche || []).map(x => [x, true]));
   const alle = psTvProviderData(o2Live);
   const kand = [];
@@ -24537,7 +24529,7 @@ const psTvEmpfehlung = (wuensche, o2Live, np, dp) => {
     pd.cols.forEach(col => {
       totals[col.id] = pd.rows.reduce((s, row, ri) => col.checks[ri] ? s + row.tarif[col.id] : s, 0);
     });
-    const an = tvAnalyse(id, pd, totals, w, np || null, dp || null);
+    const an = tvAnalyse(id, pd, totals, w, npA || null, dpA || null);
     const bw = an.mitWunsch ? an.bew.find(x => x.id === an.rec) : an.bew.slice().sort((a, c) => a.kosten - c.kosten)[0];
     if (!bw) return;
     const sp = an.spezi[bw.id];
@@ -24560,7 +24552,7 @@ const PsTvKarte = ({ tv, td, voll }) => {
   const wKey = (tv.wuensche || []).join('|');
   const np = nf.tarife.find(t => t.id === tv.nfPlan) || null;
   const dp = ds.tarife.find(t => t.id === tv.dsPlan) || null;
-  const erg = React.useMemo(() => psTvEmpfehlung(tv.wuensche, o2Live, np, dp), [wKey, o2Live, np, dp]);
+  const erg = React.useMemo(() => psTvEmpfehlung(tv.wuensche, o2Live, np, dp, tv.nfAngenommen, tv.dsAngenommen), [wKey, o2Live, np, dp, tv.nfAngenommen, tv.dsAngenommen]);
   if (!erg) return null;
   const k = erg.haupt;
   const text = psTvText(k);
@@ -24601,7 +24593,8 @@ const PsTvKarte = ({ tv, td, voll }) => {
           psH('div', { style: { fontSize: '12px', fontWeight: 800, color: '#0b5a4a', textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Kunde spart'),
           psH('div', { style: { fontSize: '26px', fontWeight: 900, color: '#0f766e', lineHeight: 1.1 } }, geld(spart) + ' / Monat'),
           psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#0b5a4a' } }, geld(spart * 24) + ' in 24 Monaten')),
-        heute.posten.length > 0 && psH('div', { style: { fontSize: '12px', color: '#475569' } }, 'Heute ' + geld(ist) + ' = ' + heute.posten.map(x => x.name + ' ' + geld(x.preis)).join(' + ')),
+        heute.posten.length > 0 && psH('div', { style: { fontSize: '12px', color: '#475569' } }, 'Heute ' + geld(ist) + ' = ' + heute.posten.map(x => x.name + ' ' + geld(x.preis)).join(' + ') + ' (Annahme: Standard-Tarife)'),
+        tv.kabel && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, '⚠ Kabel-TV kündigen, sobald TV bei uns läuft – sonst zahlt der Kunde die Kabelgebühr weiter.'),
         !k.ok && psH('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309' } }, 'Fehlt: ' + k.fehlt.join(', '))),
       psH('div', { style: { flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' } },
         psH('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px' } }, zeilen.map(z => psH('span', { key: z.text, style: { fontSize: '12px', fontWeight: 700, color: '#0f766e', background: '#e6f4f1', borderRadius: '999px', padding: '4px 10px' } }, '✓ ' + z.text))),
@@ -24635,7 +24628,7 @@ const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, nfPlan, dsPlan, nfAng
   const wKey = (wuensche || []).join('|');
   const np = nf.tarife.find(t => t.id === nfPlan) || null;
   const dp = ds.tarife.find(t => t.id === dsPlan) || null;
-  const erg = React.useMemo(() => aktiv ? psTvEmpfehlung(wuensche, o2Live, np, dp) : null, [aktiv, wKey, o2Live, np, dp]);
+  const erg = React.useMemo(() => aktiv ? psTvEmpfehlung(wuensche, o2Live, np, dp, nfAngenommen, dsAngenommen) : null, [aktiv, wKey, o2Live, np, dp, nfAngenommen, dsAngenommen]);
   if (!aktiv || zu || pause || !erg) return null;
   const k = erg.haupt;
   const geld = n => n.toFixed(2).replace('.', ',') + ' €';
@@ -24667,7 +24660,9 @@ const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, nfPlan, dsPlan, nfAng
       psH('div', { style: { borderTop: '1px solid #cbd5e1', margin: '3px 0' } }),
       zeile('Summe heute', geld(ist), true),
       zeile('Mit ' + psTvName(k), geld(k.kosten), true, '#0f766e'),
-      psH('div', { style: { fontSize: '11px', color: '#64748b' } }, inkl + (k.kosten > k.preis + 0.004 ? ' · Preis nach den Gratis-Monaten' : ''))),
+      psH('div', { style: { fontSize: '11px', color: '#64748b' } }, inkl + (k.kosten > k.preis + 0.004 ? ' · Preis nach den Gratis-Monaten' : '')),
+      psH('div', { style: { fontSize: '11px', color: '#64748b' } }, 'Annahme: Standard-Tarife · genaue Werte im Vergleich eingeben')),
+    kabel && psH('div', { style: { padding: '6px 10px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: '#fffbeb', color: '#b45309' } }, '⚠ Kabel-TV kündigen, sobald TV bei uns läuft – sonst zahlt der Kunde die Kabelgebühr weiter.'),
     !vorteil && spart !== null && psH('div', { style: { padding: '8px 12px', borderRadius: '12px', fontSize: '13px', fontWeight: 700, background: '#fffbeb', color: '#92400e' } }, 'Kein Preisvorteil: Vorteil über die Inhalte erklären.'),
     ist <= 0 && psH('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } },
       psH('div', { style: { fontSize: '20px', fontWeight: 800, color: '#0f172a' } }, psTvName(k)),
@@ -33435,11 +33430,7 @@ function App() {
       let arr = (cur[g.id] || []).slice();
       const i = arr.indexOf(label);
       if (i >= 0) arr.splice(i, 1);
-      if (i >= 0 && g.id === 'tvwichtig') {
-        if (label === 'Netflix') delete cur.nfplan;
-        if (label === 'Disney+') delete cur.dsplan;
-      }
-      if (i >= 0) {} else if (g.id === 'tv') arr = label === 'Kein TV' ? [label] : arr.filter(x => x !== 'Kein TV').concat(label);
+      else if (g.id === 'tv') arr = label === 'Kein TV' ? [label] : arr.filter(x => x !== 'Kein TV').concat(label);
       else if (g.multi) arr.push(label);
       else arr = [label];
       if (arr.length) cur[g.id] = arr;
@@ -35342,11 +35333,11 @@ function App() {
     wuensche: psTvChips.tvwichtig || [],
     tvIst: costState && costState.tv || '',
     kabel: (psTvChips.tv || []).indexOf('Kabel') !== -1,
-    // Netflix / Disney+ gesetzt = Kunde hat den Dienst: gewählter Tarif, sonst der günstigste (Einzel-Zugang, 'werbung')
-    nfPlan: (psTvChips.tvwichtig || []).indexOf('Netflix') !== -1 ? PS_PLAN_ID[(psTvChips.nfplan || [])[0]] || 'werbung' : null,
-    dsPlan: (psTvChips.tvwichtig || []).indexOf('Disney+') !== -1 ? PS_PLAN_ID[(psTvChips.dsplan || [])[0]] || 'werbung' : null,
-    nfAngenommen: (psTvChips.tvwichtig || []).indexOf('Netflix') !== -1 && !PS_PLAN_ID[(psTvChips.nfplan || [])[0]],
-    dsAngenommen: (psTvChips.tvwichtig || []).indexOf('Disney+') !== -1 && !PS_PLAN_ID[(psTvChips.dsplan || [])[0]],
+    // Netflix / Disney+ gesetzt = Kunde hat den Dienst (Annahme: Standard-Tarif, Details im Vergleichsfenster)
+    nfPlan: (psTvChips.tvwichtig || []).indexOf('Netflix') !== -1 ? PS_STREAM_ANNAHME : null,
+    dsPlan: (psTvChips.tvwichtig || []).indexOf('Disney+') !== -1 ? PS_STREAM_ANNAHME : null,
+    nfAngenommen: true,
+    dsAngenommen: true,
     onUebernehmen: psTvUebernehmen,
     onOeffnen: () => setShowTvModal(true)
   };
