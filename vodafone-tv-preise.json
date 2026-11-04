@@ -5,6 +5,13 @@
     "s": 9.99,
     "m": 14.99,
     "monate": 6,
-    "netflix": 4.99
-  }
+    "netflix": 4.99,
+    "internetRabatt": 5,
+    "netflixPreise": {
+      "werbung": 4.99,
+      "standard": 13.99,
+      "premium": 19.99
+    }
+  },
+  "geaendertAm": "04.11.2026"
 }
