@@ -39,35 +39,36 @@ const hoechsterPreis = stueck => {
   return max;
 };
 
-const alle = (t, re) => {
-  const out = [];
-  let m;
-  const r = new RegExp(re, 'gi');
-  while ((m = r.exec(t))) out.push(m.index);
-  return out;
-};
-
-// Reihenfolge auf der Seite: Standard mit Werbung -> Standard -> Premium
+// Die Seite nennt die Pakete in wechselnder Reihenfolge (Karten: Premium, Standard, Standard mit Werbung; Fußnoten anders).
+// Darum: jeden Tarifnamen finden, das Textstück bis zum nächsten Tarifnamen lesen und per Mehrheit abstimmen.
+// Bei "Sparpreis ... danach X" zählt X (= Regelpreis) dreifach, sonst der höchste Preis im Stück.
 export function preiseAusText(html, mitSkripten = false) {
   const t = textAusHtml(html, mitSkripten);
-  const W = alle(t, 'Standard\\s+mit\\s+Werbung');
-  const S = alle(t, 'Standard(?!\\s+mit\\s+Werbung)');
-  const P = alle(t, 'Premium');
-  let beste = { werbung: null, standard: null, premium: null };
-  for (const pw of W) {
-    const ps = S.find(x => x > pw);
-    if (ps === undefined) continue;
-    const pp = P.find(x => x > ps);
-    if (pp === undefined) continue;
-    const p = {
-      werbung: hoechsterPreis(t.slice(pw, Math.min(ps, pw + 300))),
-      standard: hoechsterPreis(t.slice(ps, Math.min(pp, ps + 300))),
-      premium: hoechsterPreis(t.slice(pp, pp + 300))
-    };
-    if (plausibel(p)) return p;
-    beste = p;
-  }
-  return beste;
+  const marken = [];
+  const sammle = (art, re) => {
+    let m;
+    const r = new RegExp(re, 'gi');
+    while ((m = r.exec(t))) marken.push({ art, pos: m.index, ende: m.index + m[0].length });
+  };
+  sammle('werbung', 'Standard\\s+mit\\s+Werbung');
+  sammle('standard', 'Standard(?!\\s+mit\\s+Werbung)');
+  sammle('premium', 'Premium');
+  marken.sort((x, y) => x.pos - y.pos);
+  const stimmen = { werbung: new Map(), standard: new Map(), premium: new Map() };
+  marken.forEach((m, i) => {
+    const bis = Math.min(i + 1 < marken.length ? marken[i + 1].pos : t.length, m.ende + 260);
+    const stueck = t.slice(m.ende, bis);
+    const danach = /danach\s+(\d{1,2},\d{2})\s?(?:€|EUR)/i.exec(stueck);
+    const wert = danach ? zahl(danach[1]) : hoechsterPreis(stueck);
+    if (wert === null) return;
+    stimmen[m.art].set(wert, (stimmen[m.art].get(wert) || 0) + (danach ? 3 : 1));
+  });
+  const sieger = map => {
+    let best = null;
+    for (const [wert, n] of map) if (!best || n > best.n || (n === best.n && wert > best.wert)) best = { wert, n };
+    return best ? best.wert : null;
+  };
+  return { werbung: sieger(stimmen.werbung), standard: sieger(stimmen.standard), premium: sieger(stimmen.premium) };
 }
 
 export function plausibel(p) {
