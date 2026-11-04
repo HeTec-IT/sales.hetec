@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.136';
+    window.APP_VERSION = '55.137';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -18505,7 +18505,23 @@ const TvAssistent = ({ providerId, pd, totals, heute, onUebernehmen, wuensche, o
         }, 'Stattdessen wählen')))))),
     tvH('div', { style: { fontSize: '11px', color: '#64748b' } }, hinweis + (pd.preisStand ? 'Preise o2online.de, Stand ' + pd.preisStand : 'Preise ohne Gewähr')));
 };
-// Preisdaten aller TV-Anbieter (o2 mit Live-Preisen aus tv-preise.json) – vom Modal und von der Empfehlungskarte genutzt
+// Live-Preise aller TV-Anbieter: o2 (tv-preise.json), MagentaTV (telekom-tv-preise.json), Giga TV (vodafone-tv-preise.json) – täglich per Bot.
+// Ergebnis: o2-Daten + Schlüssel telekom / vodafone. Fehlt eine Datei, gelten für diesen Anbieter die fest hinterlegten Preise.
+const psTvLiveLaden = () => {
+  const c = window.__o2TvPreise;
+  if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return Promise.resolve(c.daten);
+  const holen = datei => fetch(datei + '?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
+  return Promise.all([holen('tv-preise.json'), holen('telekom-tv-preise.json'), holen('vodafone-tv-preise.json')]).then(([o, t, v]) => {
+    const o2 = o && o.o2 && o.o2.preise ? o.o2 : null;
+    const tk = t && t.preise ? t : null;
+    const vf = v && v.preise ? v : null;
+    if (!o2 && !tk && !vf) return null;
+    const daten = Object.assign({}, o2 || {}, { telekom: tk, vodafone: vf });
+    window.__o2TvPreise = { zeit: Date.now(), daten };
+    return daten;
+  });
+};
+// Preisdaten aller TV-Anbieter (o2 / MagentaTV / Giga TV mit Live-Preisen aus den Bot-Dateien) – vom Modal und von der Empfehlungskarte genutzt
 const psTvProviderData = o2Live => {
   const providerData = {
     o2: {
@@ -18594,7 +18610,7 @@ const psTvProviderData = o2Live => {
         range: '11 – 30 €',
         tarif: {
           smart: 11,
-          stream: 17,
+          stream: 20,
           mega: 30
         }
       }, {
@@ -18643,7 +18659,7 @@ const psTvProviderData = o2Live => {
       }, {
         id: 'stream',
         label: 'SmartStream',
-        sub: '6 Mon. gratis, dann 17 €',
+        sub: '6 Mon. gratis, dann 20 €',
         checks: [true, true, true, true, false],
         badge: null
       }, {
@@ -18655,7 +18671,7 @@ const psTvProviderData = o2Live => {
       }],
       totals: {
         smart: 11,
-        stream: 17,
+        stream: 20,
         mega: 30
       },
       recommended: 'smart',
@@ -18734,6 +18750,43 @@ const psTvProviderData = o2Live => {
       if (o2Live.geprueft) o2d.preisStand = o2Live.geprueft;
     }
   }
+  const fmtP = n => Math.abs(n - Math.round(n)) < 0.005 ? String(Math.round(n)) : n.toFixed(2).replace('.', ',');
+  // MagentaTV: Preise nach den 6 Gratis-Monaten
+  const lt = o2Live && o2Live.telekom && o2Live.telekom.preise;
+  if (lt && [['smart', 5, 20], ['stream', 8, 35], ['mega', 15, 60]].every(([k, a, z]) => typeof lt[k] === 'number' && lt[k] >= a && lt[k] <= z) && lt.smart < lt.stream && lt.stream < lt.mega) {
+    const td = providerData.telekom;
+    ['smart', 'stream', 'mega'].forEach(k => {
+      td.rows[0].tarif[k] = lt[k];
+      td.totals[k] = lt[k];
+      const c = td.cols.find(x => x.id === k);
+      if (c) c.sub = '6 Mon. gratis, dann ' + fmtP(lt[k]) + ' €';
+    });
+    td.rows[0].range = fmtP(lt.smart) + ' – ' + fmtP(lt.mega) + ' €';
+    if (o2Live.telekom.geprueft) td.preisStand = o2Live.telekom.geprueft;
+  }
+  // Giga TV: Home in den ersten Monaten (s) und danach (m), Netflix-Angebotspreis; Vodafone Premium bleibt fest
+  const lv = o2Live && o2Live.vodafone && o2Live.vodafone.preise;
+  if (lv && typeof lv.s === 'number' && typeof lv.m === 'number' && lv.s >= 3 && lv.s <= 20 && lv.m >= 5 && lv.m <= 30 && lv.s < lv.m) {
+    const vd = providerData.vodafone;
+    const mon = typeof lv.monate === 'number' && lv.monate >= 1 && lv.monate <= 24 ? lv.monate : 6;
+    const nf = typeof lv.netflix === 'number' && lv.netflix >= 2 && lv.netflix <= 12 ? lv.netflix : vd.rows[2].tarif.xl;
+    const prem = vd.rows[1].tarif.xl;
+    vd.rows[0].tarif.s = lv.s;
+    vd.rows[0].tarif.m = lv.m;
+    vd.rows[0].tarif.xl = lv.m;
+    vd.rows[0].range = fmtP(lv.s) + ' – ' + fmtP(lv.m) + ' €';
+    vd.rows[2].tarif.xl = nf;
+    vd.rows[2].range = 'ab ' + fmtP(nf) + ' €';
+    vd.totals.s = lv.s;
+    vd.totals.m = lv.m;
+    vd.totals.xl = Math.round((lv.m + prem + nf) * 100) / 100;
+    vd.cols[0].sub = '1.–' + mon + '. Monat';
+    vd.cols[1].sub = 'ab ' + (mon + 1) + '. Monat';
+    const sp = PS_TV_PAKETE.vodafone.m;
+    sp.phase1 = { monate: mon, preis: lv.s };
+    sp.sub = fmtP(lv.s) + ' € in den ersten ' + mon + ' Monaten, danach ' + fmtP(lv.m) + ' €';
+    if (o2Live.vodafone.geprueft) vd.preisStand = o2Live.vodafone.geprueft;
+  }
   return providerData;
 };
 const TvPriceModal = ({
@@ -18782,17 +18835,8 @@ const TvPriceModal = ({
   const [o2Live, setO2Live] = useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
   useEffect(() => {
     if (!isOpen) return;
-    const c = window.__o2TvPreise;
-    if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return;
     let aktiv = true;
-    fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d || !d.o2 || !d.o2.preise) return;
-        window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
-        if (aktiv) setO2Live(d.o2);
-      })
-      .catch(() => {});
+    psTvLiveLaden().then(d => { if (aktiv && d) setO2Live(d); });
     return () => { aktiv = false; };
   }, [isOpen]);
   const longPressTimer = React.useRef(null);
@@ -24457,14 +24501,8 @@ const PsTvKarte = ({ tv, td, voll }) => {
   const kabelPreis = psUseKabelPreis();
   const [o2Live, setO2Live] = React.useState(window.__o2TvPreise ? window.__o2TvPreise.daten : null);
   React.useEffect(() => {
-    const c = window.__o2TvPreise;
-    if (c && Date.now() - c.zeit < 6 * 3600 * 1000) return;
     let aktiv = true;
-    fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
-      if (!d || !d.o2 || !d.o2.preise) return;
-      window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
-      if (aktiv) setO2Live(d.o2);
-    }).catch(() => {});
+    psTvLiveLaden().then(d => { if (aktiv && d) setO2Live(d); });
     return () => { aktiv = false; };
   }, []);
   const wKey = (tv.wuensche || []).join('|');
@@ -24534,14 +24572,7 @@ const PsErsparnisPopup = ({ aktiv, wuensche, kabel, tvIst, onOeffnen }) => {
   }, [aktiv]);
   React.useEffect(() => {
     let a = true;
-    const c = window.__o2TvPreise;
-    if (!(c && Date.now() - c.zeit < 6 * 3600 * 1000)) {
-      fetch('tv-preise.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
-        if (!d || !d.o2 || !d.o2.preise) return;
-        window.__o2TvPreise = { zeit: Date.now(), daten: d.o2 };
-        if (a) setO2Live(d.o2);
-      }).catch(() => {});
-    }
+    psTvLiveLaden().then(d => { if (a && d) setO2Live(d); });
     psNetflixLaden().then(d => { if (a && d) setNf(d); });
     psDisneyLaden().then(d => { if (a && d) setDs(d); });
     return () => { a = false; };
