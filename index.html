@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.144';
+    window.APP_VERSION = '55.145';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4301,6 +4301,21 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-ink-wrap{ position:relative; display:inline-block; }
 .sit-price-tot{ text-align:right; font-size:13px; font-weight:700; color:#475569; }
 .sit-price-tot b{ font-size:18px; font-weight:800; color:#1d4ed8; }
+.sit-price-ft{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.sit-price-ft .sit-price-tot{ margin-left:auto; }
+.sit-price-split{ height:34px; padding:0 12px; border-radius:999px; border:1.5px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; font-size:12.5px; font-weight:800; font-family:inherit; cursor:pointer; touch-action:manipulation; white-space:nowrap; }
+.sit-price-split.on{ background:#2563eb; border-color:#2563eb; color:#fff; }
+.sit-vps{ display:flex; flex-direction:column; gap:5px; }
+.sit-vp{ display:flex; align-items:center; gap:8px; padding:3px 6px; border-radius:13px; border:1.5px solid transparent; }
+.sit-vp.act{ border-color:#93c5fd; background:#eff6ff; }
+.sit-vp .l{ flex:0 0 auto; min-width:64px; font-size:12px; font-weight:800; color:#475569; white-space:nowrap; }
+.sit-vp.act .l{ color:#1d4ed8; }
+.sit-vp .sit-bx{ height:46px; font-size:21px; }
+.sit-vp .sit-price-in.big{ font-size:18px; padding:6px 10px; }
+.sit-price-c .nx.op{ cursor:pointer; text-decoration:underline dotted; }
+.sit-price-sheet .sit-vps{ gap:3px; }
+.sit-price-sheet .sit-vp{ padding:1px 6px; }
+.sit-price-sheet .sit-vp .sit-bx{ height:40px; font-size:19px; }
 .sit-sum{ grid-column:1 / -1; position:sticky; bottom:2px; z-index:3; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:10px 18px; border-radius:16px; background:#f8fafc; border:1.5px solid #e2e8f0; box-shadow:0 6px 18px rgba(15,23,42,.10); }
 .sit-sum.has{ background:#eff6ff; border-color:#93c5fd; }
 .sit-sum .l{ font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#475569; }
@@ -4412,7 +4427,7 @@ body.pdf-share-mode .sit-chips-panel, body.pdf-share-mode .sit-seg{ display:none
 body.pdf-share-mode .sit-answer-tags:has(.sit-answer-sent) .sit-answer-tag{ display:none!important; }
 body.pdf-share-mode .sit-answer-sent{ display:block!important; }
 /* v55.100: Gesamtkosten im Kunden-PDF – Zeilen zweispaltig, Summe ueber volle Breite, mehr Platz in der Kachel */
-.sit-as-row.sum{ grid-column:1 / -1; }
+.sit-as-row.sum, .sit-as-row.long{ grid-column:1 / -1; }
 @media print{
   .sit-answer-tags .sit-answer-sent.sit-as-grid{ display:grid!important; grid-template-columns:1fr 1fr; column-gap:14px; row-gap:0; font-size:10.5px; line-height:1.25; }
   .sit-card-grid > div:has(.sit-as-grid) > div.sit-card-canvas{ flex:0 0 auto!important; min-height:22px!important; height:22px!important; }
@@ -10215,6 +10230,8 @@ Object.keys(SIT_I18N_VALS).forEach(l => {
 });
 const SIT_I18N_X = {"en": {"Verträge": "Contracts", "wie Personen": "same as persons"}, "tr": {"Verträge": "Hatlar", "wie Personen": "kişi sayısı kadar"}, "ru": {"Verträge": "Договоры", "wie Personen": "как людей"}, "ar": {"Verträge": "العقود", "wie Personen": "بعدد الأشخاص"}, "pl": {"Verträge": "Umowy", "wie Personen": "tyle co osób"}, "ro": {"Verträge": "Contracte", "wie Personen": "cât persoanele"}, "es": {"Verträge": "Contratos", "wie Personen": "igual que personas"}, "it": {"Verträge": "Contratti", "wie Personen": "come le persone"}, "pt": {"Verträge": "Contratos", "wie Personen": "igual às pessoas"}, "el": {"Verträge": "Συμβόλαια", "wie Personen": "όσα τα άτομα"}, "uk": {"Verträge": "Договори", "wie Personen": "за кількістю людей"}};
 Object.keys(SIT_I18N_X).forEach(l => { Object.assign(SIT_I18N[l] || (SIT_I18N[l] = {}), SIT_I18N_X[l]); });
+const SIT_I18N_Y = {"en": {"Preise einzeln": "Price per contract", "Vertrag": "Contract"}, "tr": {"Preise einzeln": "Hat başına fiyat", "Vertrag": "Hat"}, "ru": {"Preise einzeln": "Цена по договорам", "Vertrag": "Договор"}, "ar": {"Preise einzeln": "سعر كل عقد", "Vertrag": "عقد"}, "pl": {"Preise einzeln": "Cena za umowę", "Vertrag": "Umowa"}, "ro": {"Preise einzeln": "Preț pe contract", "Vertrag": "Contract"}, "es": {"Preise einzeln": "Precio por contrato", "Vertrag": "Contrato"}, "it": {"Preise einzeln": "Prezzo per contratto", "Vertrag": "Contratto"}, "pt": {"Preise einzeln": "Preço por contrato", "Vertrag": "Contrato"}, "el": {"Preise einzeln": "Τιμή ανά σύμβαση", "Vertrag": "Σύμβαση"}, "uk": {"Preise einzeln": "Ціна за договором", "Vertrag": "Договір"}};
+Object.keys(SIT_I18N_Y).forEach(l => { Object.assign(SIT_I18N[l] || (SIT_I18N[l] = {}), SIT_I18N_Y[l]); });
 const sitT = str => {
   if (__sitLang === 'de') return str;
   const d = SIT_I18N[__sitLang];
@@ -10326,17 +10343,43 @@ const sitCostGet = td => {
   }
 };
 // Zeilen mit Anzahl / Einzelpreis / Summe (costState ist fuer Mobil/Festnetz/TV die Wahrheit)
+// v55.145: Mobilfunk "Preise einzeln" – rec.ps = Preis je Vertrag; gilt nur, solange die Summe zur Gesamtsumme passt
+const sitCostPs = (rec, n, tot) => {
+  if (!rec || !Array.isArray(rec.ps) || n < 2 || rec.ps.length !== n) return null;
+  const s = rec.ps.reduce((a, x) => a + sitCostNum(x), 0);
+  if (sitCostFmt(s) !== sitCostFmt(tot)) return null;
+  return rec.ps.map(x => sitCostNum(x) > 0 ? sitCostFmt(sitCostNum(x)) : '');
+};
+// "29,99 + 14,99 + 9,99 = 54,97 €" bzw. "3 × 14,99 € = 44,97 €"
+const sitCostBreak = (n, tot, ps) => {
+  if (ps) {
+    const v = ps.filter(Boolean);
+    return (v.length > 1 ? v.join(' + ') + ' = ' : '') + sitCostFmt(tot) + ' €';
+  }
+  return (n > 1 ? n + ' × ' + sitCostFmt(tot / n) + ' € = ' : '') + sitCostFmt(tot) + ' €';
+};
 const sitCostRows = (td, cs) => {
   const o = sitCostGet(td);
   return SIT_COST_ROWS.map(r => {
     const rec = o.r && o.r[r.k] || {};
     const total = r.cs ? sitCostNum(cs && cs[r.k]) : sitCostNum(o.t && o.t[r.k]);
     const n = r.k === 'mobile' && o.v > 0 ? o.v : rec.n > 0 ? rec.n : 1;
+    const ps = r.k === 'mobile' ? sitCostPs(rec, n, total) : null;
     let price = rec.p || '';
-    if (!(total > 0)) price = '';
+    if (!(total > 0) || ps) price = '';
     else if (sitCostFmt(sitCostNum(price) * n) !== sitCostFmt(total)) price = sitCostFmt(total / n);
-    return { ...r, n, price, total };
+    return { ...r, n, price, total, ps, ind: !!ps };
   });
+};
+// Zeile fuer das Eingabefenster: 'mobile#1' = Preis des 2. Vertrags (Preise einzeln)
+const sitCostRowFor = (rows, k) => {
+  const m = /^mobile#(\d+)$/.exec(k || '');
+  if (!m) return rows.find(r => r.k === k);
+  const bs = rows.find(r => r.k === 'mobile');
+  const i = +m[1];
+  if (!bs || !bs.ps || i >= bs.ps.length) return null;
+  const p = bs.ps[i];
+  return { ...bs, k, ind: true, n: 1, label: bs.label + ' · ' + sitT('Vertrag') + ' ' + (i + 1), price: p, total: sitCostNum(p), ps: null };
 };
 // Druck-/Auswertungstexte fuer die Karten "Gesamtkosten" und "Haushalt"
 const sitCostTags = (td, itemId) => {
@@ -10355,7 +10398,7 @@ const sitCostTags = (td, itemId) => {
     sum += tot;
     const rec = o.r && o.r[r.k] || {};
     const n = r.k === 'mobile' && o.v > 0 ? o.v : rec.n > 0 ? rec.n : 1;
-    out.push(r.print + ' ' + (n > 1 ? n + ' × ' + sitCostFmt(tot / n) + ' € = ' : '') + sitCostFmt(tot) + ' €');
+    out.push(r.print + ' ' + sitCostBreak(n, tot, r.k === 'mobile' ? sitCostPs(rec, n, tot) : null));
   });
   if (sum > 0) {
     out.push('Summe ' + sitCostFmt(sum) + ' € / Monat');
@@ -10483,7 +10526,7 @@ const sitSentence = (td, itemId) => {
     const o = sitCostGet(td);
     if (rows.length) {
       const sum = rows.reduce((a, r) => a + r.total, 0);
-      rows.forEach(r => out.push({ row: true, l: sitT(r.print), v: (r.n > 1 ? r.n + ' × ' + sitCostFmt(r.total / r.n) + ' € = ' : '') + sitCostFmt(r.total) + ' €' }));
+      rows.forEach(r => { const vt = sitCostBreak(r.n, r.total, r.ps); out.push({ row: true, long: vt.length > 24, l: sitT(r.print), v: vt }); });
       out.push({ row: true, sum: true, l: sitT('Gesamt pro Monat'), v: sitCostFmt(sum) + ' €' + (o.p > 0 ? ' · ' + sitCostFmt(sum / o.p) + ' € ' + sitT('pro Person') : '') });
     } else {
       const k = one('kost');
@@ -10496,7 +10539,7 @@ const sitSentenceEl = (td, itemId) => {
   const h = React.createElement;
   const lines = sitSentence(td, itemId);
   if (!lines.length) return null;
-  return h('div', { className: 'sit-answer-sent' + (lines.some(l => l.row) ? ' sit-as-grid' : ''), dir: 'auto' }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
+  return h('div', { className: 'sit-answer-sent' + (lines.some(l => l.row) ? ' sit-as-grid' : ''), dir: 'auto' }, lines.map((ln, i) => ln.row ? h('div', { key: i, className: 'sit-as-row' + (ln.sum ? ' sum' : '') + (ln.long ? ' long' : '') }, h('span', null, ln.l), h('b', null, ln.v)) : h('span', { key: i }, ln.map((pt, j) => typeof pt === 'string' ? pt : h('b', { key: j }, pt.b)), ' ')));
 };
 // Für Auswertung/Statistik: Chips zählen wie getippter Text (nur wenn Feld sonst leer)
 const sitTextWithChips = td => {
@@ -10599,7 +10642,7 @@ function SitChipsPanel({ sel, onToggle, onNote, custom, ink, cost }) {
   const prices = (b, gid) => !cost || !b.price || !b.price[gid] ? null : b.price[gid].map(k => {
     if (k === 'pers') return h(SitPersRow, { key: 'pers', pers: cost.pers, onPers: cost.onPers });
     const row = cost.rows.find(r => r.k === k);
-    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, pers: cost.pers, onVert: cost.onVert, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen, kbd: cost.kbd }) : null;
+    return row ? h(SitPriceRow, { key: k, row, vert: cost.vert, pers: cost.pers, onVert: cost.onVert, onSplit: cost.onSplit, onApply: cost.onApply, onPad: cost.onPad, compact: cost.compact, onOpen: cost.onOpen, kbd: cost.kbd }) : null;
   });
   return h('div', { className: 'sit-chips-panel custom-scrollbar' }, SIT_CHIP_BLOCKS.map(b => h('div', { key: b.title, className: 'sit-chip-block ' + (b.cat || '') }, h('div', { className: 'sit-chip-title' }, h('i', null, h(Icon, { d: b.icon, size: 15 })), sitT(b.title)), b.groups.map(gid => {
     const g = SIT_CHIP_GROUPS.find(x => x.id === gid);
@@ -11285,30 +11328,30 @@ function SitPriceInput({ row, n, onApply, big }) {
     }
   });
 }
-function SitPriceRow({ row, vert, pers, onVert, onApply, onPad, compact, onOpen, onEnter, autoFocus, kbd }) {
+function SitPriceRow({ row, vert, pers, onVert, onSplit, onApply, onPad, compact, onOpen, onEnter, autoFocus, kbd }) {
   const h = React.createElement;
   const isM = row.k === 'mobile';
   const n = row.n || 1;
   const has = row.total > 0;
   const quick = SIT_QUICK[row.k] || [];
   const cur = has ? sitCostFmt(sitCostNum(row.price)) : '';
-  if (compact && compact !== 'inner' && isM) return h(React.Fragment, null, h(SitVertRow, { vert, pers, onVert, compact: true }), h(SitPriceRow, { row, vert, pers, onVert, onApply, onPad, compact: 'inner', onOpen, onEnter, autoFocus, kbd }));
-  if (compact && kbd) return h('label', {
+  if (compact && compact !== 'inner' && isM) return h(React.Fragment, null, h(SitVertRow, { vert, pers, onVert, compact: true }), h(SitPriceRow, { row, vert, pers, onVert, onSplit, onApply, onPad, compact: 'inner', onOpen, onEnter, autoFocus, kbd }));
+  if (compact && kbd && !row.ind) return h('label', {
     className: 'sit-price-c kb' + (has ? ' has' : ''),
     'data-price': row.k
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), n > 1 && has ? h('span', { className: 'nx' }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), n > 1 && has ? h('span', { className: 'nx' + (isM && onOpen ? ' op' : ''), onClick: isM && onOpen ? e => { e.preventDefault(); onOpen(row.k, e.currentTarget); } : undefined }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
   if (compact) return h('button', {
     type: 'button',
     className: 'sit-price-c' + (has ? ' has' : ''),
     'data-price': row.k,
     onClick: e => onOpen(row.k, e.currentTarget)
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
-  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h(SitVertRow, { vert, pers, onVert }) : null, quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (row.ind ? 'Σ ' + sitCostFmt(row.total) + ' €' : n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
+  return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h(SitVertRow, { vert, pers, onVert }) : null, row.ind ? h(SitVertPrices, { row, onApply, onPad, onEnter, autoFocus, kbd }) : quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
     key: q,
     type: 'button',
     className: cur === q ? 'on' : '',
     onClick: () => onApply(row.k, n, cur === q ? '' : q)
-  }, q))) : null, h('div', { className: 'sit-price-line' }, kbd ? h(SitPriceInput, { row, n, onApply, big: true }) : h(SitBoxPrice, {
+  }, q))) : null, row.ind ? null : h('div', { className: 'sit-price-line' }, kbd ? h(SitPriceInput, { row, n, onApply, big: true }) : h(SitBoxPrice, {
     row,
     onSet: v => onApply(row.k, n, v),
     onPad,
@@ -11319,7 +11362,43 @@ function SitPriceRow({ row, vert, pers, onVert, onApply, onPad, compact, onOpen,
     className: 'sit-price-kb',
     'aria-label': row.label + ' – Ziffernblock',
     onClick: e => onPad(row.k, e.currentTarget)
-  }, h(Icon, { d: ICONS.Keyboard, size: 18 }))), n > 1 && has ? h('div', { className: 'sit-price-tot' }, n + ' × ' + cur + ' € = ', h('b', null, sitCostFmt(row.total) + ' €')) : null);
+  }, h(Icon, { d: ICONS.Keyboard, size: 18 }))), isM && n > 1 && onSplit ? h('div', { className: 'sit-price-ft' }, h('button', { type: 'button', className: 'sit-price-split' + (row.ind ? ' on' : ''), 'aria-pressed': !!row.ind, onClick: () => onSplit(!row.ind) }, sitT('Preise einzeln')), has ? h('div', { className: 'sit-price-tot' }, row.ind ? (row.ps.filter(Boolean).length > 1 ? row.ps.filter(Boolean).join(' + ') + ' = ' : '') : n + ' × ' + cur + ' € = ', h('b', null, sitCostFmt(row.total) + ' €')) : null) : n > 1 && has ? h('div', { className: 'sit-price-tot' }, n + ' × ' + cur + ' € = ', h('b', null, sitCostFmt(row.total) + ' €')) : null);
+}
+// v55.145: Mobilfunk "Preise einzeln" – je Vertrag eine Zeile (gleiche Schnellpreise + Ziffernkaestchen); die Schnellpreise gelten fuer die markierte Zeile und springen zur naechsten
+function SitVertPrices({ row, onApply, onPad, onEnter, autoFocus, kbd }) {
+  const h = React.createElement;
+  const ps = row.ps || [];
+  const [act, setAct] = React.useState(() => {
+    const e = ps.findIndex(x => !x);
+    return e < 0 ? 0 : e;
+  });
+  const a = Math.max(0, Math.min(act, ps.length - 1));
+  const cur = ps[a] || '';
+  const quick = SIT_QUICK.mobile || [];
+  return h(React.Fragment, null, h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
+    key: q,
+    type: 'button',
+    className: cur === q ? 'on' : '',
+    onClick: () => {
+      onApply('mobile#' + a, 1, cur === q ? '' : q);
+      if (cur !== q && a < ps.length - 1) setAct(a + 1);
+    }
+  }, q))), h('div', { className: 'sit-vps' }, ps.map((p, i) => {
+    const sub = { k: 'mobile#' + i, label: sitT('Vertrag') + ' ' + (i + 1), price: p };
+    return h('div', {
+      key: i,
+      className: 'sit-vp' + (i === a ? ' act' : ''),
+      'data-vp': i,
+      onPointerDownCapture: () => setAct(i),
+      onFocusCapture: () => setAct(i)
+    }, h('span', { className: 'l' }, sub.label), kbd ? h(SitPriceInput, { row: sub, n: 1, onApply, big: true }) : h(SitBoxPrice, {
+      row: sub,
+      onSet: v => onApply(sub.k, 1, v),
+      onPad,
+      onEnter,
+      autoFocus: !!autoFocus && i === a
+    }));
+  })));
 }
 function SitSumBar({ rows, pers }) {
   const h = React.createElement;
@@ -11345,7 +11424,7 @@ function SitCostPopover({ row, anchor, onClose, onApply, inkMode }) {
   });
   const price = sitCostNum(inp);
   const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'];
-  return h('div', { className: 'sit-pop-back', onClick: e => { if (e.target === e.currentTarget) onClose(); } }, h('div', { className: 'sit-pop', style: anchor }, h('div', { className: 'sit-pop-hd' }, h('span', { className: 'ic' }, h(Icon, { d: row.icon, size: 18 })), h('div', null, h('div', { className: 't' }, row.label), h('div', { className: 's' }, 'Was zahlt der Kunde heute pro Monat?')), h('button', { type: 'button', className: 'sit-x', 'aria-label': 'Schließen', onClick: onClose }, h(Icon, { d: SIT_ICO_CLOSE, size: 18 }))), h('div', { className: 'sit-pop-row' }, h('div', { className: 'sit-pop-ms' }, h('button', { type: 'button', 'aria-label': 'Weniger', onClick: () => setN(v => Math.max(1, v - 1)) }, '−'), h('b', null, n), h('button', { type: 'button', 'aria-label': 'Mehr', onClick: () => setN(v => Math.min(20, v + 1)) }, '+')), h('span', { className: 'sit-pop-lbl' }, n === 1 ? 'Vertrag ×' : 'Verträge ×'), h('span', { className: 'sit-ink-wrap' }, h('input', {
+  return h('div', { className: 'sit-pop-back', onClick: e => { if (e.target === e.currentTarget) onClose(); } }, h('div', { className: 'sit-pop', style: anchor }, h('div', { className: 'sit-pop-hd' }, h('span', { className: 'ic' }, h(Icon, { d: row.icon, size: 18 })), h('div', null, h('div', { className: 't' }, row.label), h('div', { className: 's' }, 'Was zahlt der Kunde heute pro Monat?')), h('button', { type: 'button', className: 'sit-x', 'aria-label': 'Schließen', onClick: onClose }, h(Icon, { d: SIT_ICO_CLOSE, size: 18 }))), h('div', { className: 'sit-pop-row' }, row.ind ? null : h('div', { className: 'sit-pop-ms' }, h('button', { type: 'button', 'aria-label': 'Weniger', onClick: () => setN(v => Math.max(1, v - 1)) }, '−'), h('b', null, n), h('button', { type: 'button', 'aria-label': 'Mehr', onClick: () => setN(v => Math.min(20, v + 1)) }, '+')), row.ind ? null : h('span', { className: 'sit-pop-lbl' }, n === 1 ? 'Vertrag ×' : 'Verträge ×'), h('span', { className: 'sit-ink-wrap' }, h('input', {
     ref: pInpRef,
     className: 'sit-pop-inp',
     inputMode: 'decimal',
@@ -33526,7 +33605,17 @@ function App() {
     if (field === 'v') {
       const rec = o.r && o.r.mobile;
       const price = sitCostNum(rec && rec.p);
-      if (val > 0 && price > 0) {
+      if (val > 0 && rec && Array.isArray(rec.ps) && sitCostPs(rec, o.v > 0 ? o.v : rec.n, sitCostNum(o.t && o.t.mobile))) {
+        // Preise einzeln: Vertragszahl geaendert -> neue Vertraege leer, Summe neu
+        const ps = rec.ps.slice(0, val);
+        while (ps.length < val) ps.push('');
+        const sum = ps.reduce((a, x) => a + sitCostNum(x), 0);
+        const total = sum > 0 ? sitCostFmt(sum) : '';
+        const first = ps.find(x => sitCostNum(x) > 0) || '';
+        next.r = { ...(o.r || {}), mobile: val > 1 ? { n: val, p: first, ps } : { n: val, p: first } };
+        next.t = { ...(o.t || {}), mobile: total };
+        setCostState(prev => ({ ...prev, mobile: total }));
+      } else if (val > 0 && price > 0) {
         const total = sitCostFmt(price * val);
         next.r = { ...(o.r || {}), mobile: { n: val, p: rec.p } };
         next.t = { ...(o.t || {}), mobile: total };
@@ -33536,6 +33625,25 @@ function App() {
     setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify(next) }));
   };
   const applySitCost = (k, n, priceStr) => {
+    const mi = /^mobile#(\d+)$/.exec(k);
+    if (mi) {
+      // Preise einzeln: Preis eines einzelnen Mobilfunkvertrags
+      const o1 = sitCostGet(textData);
+      const rec1 = o1.r && o1.r.mobile || {};
+      const cnt = o1.v > 0 ? o1.v : rec1.n > 0 ? rec1.n : 1;
+      const i = +mi[1];
+      if (i >= cnt) return;
+      const ps = Array.isArray(rec1.ps) && rec1.ps.length === cnt ? rec1.ps.slice() : Array(cnt).fill('');
+      const q = sitCostNum(priceStr);
+      ps[i] = q > 0 ? sitCostFmt(q) : '';
+      const sum = ps.reduce((a, x) => a + sitCostNum(x), 0);
+      const tot = sum > 0 ? sitCostFmt(sum) : '';
+      const first = ps.find(x => sitCostNum(x) > 0) || '';
+      setCostState(prev => ({ ...prev, mobile: tot }));
+      setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify({ ...o1, v: cnt, r: { ...(o1.r || {}), mobile: { n: cnt, p: first, ps } }, t: { ...(o1.t || {}), mobile: tot } }) }));
+      setSitCostOpen(null);
+      return;
+    }
     const price = sitCostNum(priceStr);
     const total = price > 0 ? sitCostFmt(price * n) : '';
     if (k === 'mobile' || k === 'landline' || k === 'tv') setCostState(prev => ({ ...prev, [k]: total }));
@@ -33544,6 +33652,24 @@ function App() {
     if (k === 'mobile') next.v = n;
     setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify(next) }));
     setSitCostOpen(null);
+  };
+  // Mobilfunk: "Preise einzeln" ein-/ausschalten (ein: alle Vertraege starten mit dem bisherigen Preis; aus: Preis des ersten Vertrags fuer alle)
+  const splitSitCost = on => {
+    const o = sitCostGet(textData);
+    const rec = o.r && o.r.mobile || {};
+    const n = o.v > 0 ? o.v : rec.n > 0 ? rec.n : 1;
+    if (n < 2) return;
+    if (on) {
+      const m = sitCostRows(textData, costState).find(r => r.k === 'mobile');
+      const pq = m && m.total > 0 && m.price ? sitCostNum(m.price) : 0;
+      const p = pq > 0 ? sitCostFmt(pq) : '';
+      const tot = pq > 0 ? sitCostFmt(pq * n) : '';
+      setCostState(prev => ({ ...prev, mobile: tot }));
+      setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify({ ...o, v: n, r: { ...(o.r || {}), mobile: { n, p, ps: Array(n).fill(p) } }, t: { ...(o.t || {}), mobile: tot } }) }));
+    } else {
+      const first = Array.isArray(rec.ps) ? rec.ps.find(x => sitCostNum(x) > 0) : '';
+      applySitCost('mobile', n, first || '');
+    }
   };
   // Seitenleiste "Kosten (Ist)" und Kosten-Leiste bleiben deckungsgleich (Druck/Auswertung lesen _sitCost)
   useEffect(() => {
@@ -44014,6 +44140,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         vert: co.v || 0,
         onPers: d => stepSitCost('p', d),
         onVert: d => stepSitCost('v', d),
+        onSplit: splitSitCost,
         onApply: applySitCost,
         onPad: openSitPad,
         inkMode: sitInkMode,
@@ -44060,6 +44187,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       vert: co.v || 0,
       pers: co.p || 0,
       onVert: d => stepSitCost('v', d),
+      onSplit: splitSitCost,
       onApply: applySitCost,
       onEnter: () => setSitPriceSheet(null),
       autoFocus: true,
@@ -44076,7 +44204,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       size: 18
     }), "Fertig")));
   })(), document.body), sitLayoutMode === 'chips' && view === 'situation' && sitCostOpen && ReactDOM.createPortal((() => {
-    const row = sitCostRows(textData, costState).find(r => r.k === sitCostOpen);
+    const row = sitCostRowFor(sitCostRows(textData, costState), sitCostOpen);
     if (!row) return null;
     const sr = sitPadRect;
     const left = sr ? Math.max(8, Math.min(window.innerWidth - 556, sr.right - 540)) : 40;
