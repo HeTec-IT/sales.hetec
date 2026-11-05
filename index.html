@@ -11,7 +11,6 @@
     var m = /[?&]dl=([a-f0-9]{32})(?:&|$)/.exec(location.search);
     if (!m) return;
     var id = m[1];
-    var cfg = { apiKey: "AIzaSyD0z1CX9vcdRQPtIo9pCjZ7Xs1h6dLl_8w", authDomain: "o2-pencil-selling.firebaseapp.com", projectId: "o2-pencil-selling", storageBucket: "o2-pencil-selling.firebasestorage.app", messagingSenderId: "347119579425", appId: "1:347119579425:web:afbb0b60fe6a266627ce60" };
     var page = '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Ihr Formular – Download</title>' +
       '<style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f0f6ff;color:#0b1e42;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}' +
       '.c{background:#fff;border-radius:18px;box-shadow:0 8px 30px rgba(0,30,90,.15);padding:28px 24px;max-width:420px;width:100%;text-align:center}' +
@@ -19,12 +18,11 @@
       'a.b{display:block;background:#0b3ccf;color:#fff;text-decoration:none;font-weight:800;padding:16px;border-radius:12px;font-size:16px;margin:10px 0}a.s{background:#fff;color:#0b3ccf;border:2px solid #0b3ccf}' +
       'body>:not(.c):not(script){display:none!important}.e{color:#b91c1c;font-weight:700}.sp{width:36px;height:36px;border:4px solid #dbeafe;border-top-color:#0b3ccf;border-radius:50%;animation:r 1s linear infinite;margin:14px auto}@keyframes r{to{transform:rotate(360deg)}}</style></head>' +
       '<body><div class="c"><h1>Ihr ausgefülltes Formular</h1><p>Interne Rufnummernmitnahme</p><div id="o"><div class="sp"></div><p>Wird geladen …</p></div></div>' +
-      '<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"><\/script>' +
-      '<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"><\/script>' +
       '<script>(async function(){var o=document.getElementById("o");function err(t){o.innerHTML=\'<p class="e">\'+t+"</p>"}' +
-      'try{var app=firebase.initializeApp(' + JSON.stringify(cfg) + ',"dl");var db=firebase.firestore(app);var id=' + JSON.stringify(id) + ';' +
-      'var first=await db.collection("portierung_files").doc(id+"-0").get();if(!first.exists){return err("Dieser Link ist abgelaufen oder wurde gelöscht. Bitte lassen Sie sich den Code im Shop neu erstellen.")}' +
-      'var f=first.data(),n=f.n||1,parts=[f.d];for(var i=1;i<n;i++){var s=await db.collection("portierung_files").doc(id+"-"+i).get();if(!s.exists){return err("Datei unvollständig – bitte Code neu erstellen lassen.")}parts.push(s.data().d)}' +
+      'async function g(k){var r=await fetch("/api/db",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({op:"get",c:"portierung_files",id:k})});var j=await r.json();if(!j||j.ok!==true)throw 0;return j.doc?j.doc.data:null}' +
+      'try{var id=' + JSON.stringify(id) + ';' +
+      'var f=await g(id+"-0");if(!f){return err("Dieser Link ist abgelaufen oder wurde gelöscht. Bitte lassen Sie sich den Code im Shop neu erstellen.")}' +
+      'var n=f.n||1,parts=[f.d];for(var i=1;i<n;i++){var s=await g(id+"-"+i);if(!s){return err("Datei unvollständig – bitte Code neu erstellen lassen.")}parts.push(s.d)}' +
       'var bin=atob(parts.join(""));var u=new Uint8Array(bin.length);for(var k=0;k<bin.length;k++)u[k]=bin.charCodeAt(k);' +
       'var blob=new Blob([u],{type:"application/pdf"});var url=URL.createObjectURL(blob);' +
       'o.innerHTML=\'<a class="b" href="\'+url+\'" download="Rufnummernmitnahme.pdf">⬇ PDF herunterladen</a><a class="b s" href="\'+url+\'" target="_blank" rel="noopener">👁 PDF ansehen</a><p>Der Link ist 24 Stunden gültig.</p>\';' +
@@ -1185,17 +1183,15 @@
     <!-- Performance: CDN preconnect + preload critical scripts -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="dns-prefetch" href="https://www.gstatic.com">
     <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin>
     <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase für Aktionsmappe-Verknüpfung -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <!-- Eigene Datenschicht + Microsoft-Login (ersetzt Firebase) - alles von der eigenen Domain -->
+    <script src="vendor/msal-browser.min.js"></script>
+    <script src="ps-config.js"></script>
+    <script src="ps-backend.js"></script>
     <!-- pdf-lib: Unterschrift in bestehendes Angebots-PDF stempeln (v51.4 "PDF finalisieren") -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
     <!-- pdf.js: PDF-Vorschau vor der Unterschrift (v51.5) -->
@@ -8086,10 +8082,10 @@ function psPortExtractSim(txt, strict) {
   if (strict) return '';
   return cands.find(s => s.length === 18 || s.length === 19) || '';
 }
-// ── QR-Download: PDF kurz in Firebase Storage legen, Link als QR-Code zeigen ──
+// ── QR-Download: PDF 24 h auf dem eigenen Server ablegen, Link als QR-Code zeigen ──
 function psPortDb() {
   const app = window.__psGetBetaApp && window.__psGetBetaApp();
-  if (!app || !window.firebase) throw new Error('Firebase nicht verfügbar');
+  if (!app || !window.firebase) throw new Error('Datenverbindung nicht verfügbar');
   return { app, db: window.firebase.firestore(app) };
 }
 async function psPortDelete(ids) {
@@ -8103,13 +8099,13 @@ function psPortCleanup() {
     localStorage.setItem('ps_port_uploads', JSON.stringify(keep));
   } catch (e) {}
 }
-// PDF in Firestore ablegen (Teilstücke à 600 KB), Kunde lädt per Link ?dl=ID
+// PDF auf dem eigenen Server ablegen (Teilstücke à 150 KB), Kunde lädt per Link ?dl=ID
 async function psPortUpload(blob) {
   const { app, db } = psPortDb();
   if (!app.auth().currentUser) throw new Error('Nicht angemeldet');
   const buf = new Uint8Array(await blob.arrayBuffer());
   let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-  const b64 = btoa(bin), CH = 600000, n = Math.ceil(b64.length / CH);
+  const b64 = btoa(bin), CH = 150000, n = Math.ceil(b64.length / CH);
   const rnd = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(rnd);
   const id = Array.from(rnd).map(x => ('0' + x.toString(16)).slice(-2)).join('');
   const ids = [];
@@ -8960,19 +8956,12 @@ const STATS_PASSWORD = (() => {
   }
 })();
 
-// ── Firebase Hauptprojekt: identisch mit Admin und Firestore-Regeln ──
+// ── Datenverbindung: eigene Schnittstelle (Azure), Regeln liegen serverseitig in api/ ──
 // WICHTIG: Anmeldung, Benutzerprofile, Statistik, News und gespeicherte
 // Angebote müssen aus demselben Projekt kommen. Das frühere
 // "beta-pencil-selling" führte nach erfolgreichem Login zur sofortigen
 // Sicherheits-Abmeldung, weil users/{uid} im Admin-Projekt nicht gefunden wurde.
-const STATS_FB_CONFIG = {
-  apiKey: "AIzaSyD0z1CX9vcdRQPtIo9pCjZ7Xs1h6dLl_8w",
-  authDomain: "o2-pencil-selling.firebaseapp.com",
-  projectId: "o2-pencil-selling",
-  storageBucket: "o2-pencil-selling.firebasestorage.app",
-  messagingSenderId: "347119579425",
-  appId: "1:347119579425:web:afbb0b60fe6a266627ce60"
-};
+const STATS_FB_CONFIG = { backend: 'eigene-api' }; // eigene Schnittstelle /api/db (siehe ps-backend.js)
 
 // ── Firebase Stats DB singleton ──
 const getStatsDb = () => {
@@ -9312,7 +9301,7 @@ const loadNewsTicker = async (brand = CURRENT_BRAND) => {
 // News speichern (nur Admin) – je Marke
 const saveNewsTicker = async (items, brand = CURRENT_BRAND) => {
   const db = getStatsDb();
-  if (!db) throw new Error('Keine Firebase-Verbindung');
+  if (!db) throw new Error('Keine Server-Verbindung');
   const clean = (Array.isArray(items) ? items : []).filter(it => it && String(it.text || '').trim()).slice(0, NEWS_MAX).map(it => ({
     text: String(it.text).trim().slice(0, 300),
     bis: (it.bis || '').toString().slice(0, 10) // optionales Ablaufdatum
@@ -9573,7 +9562,7 @@ const pushRowToFirebase = async row => {
   };
   try {
     const db = getStatsDb();
-    if (!db) throw new Error('Keine Firebase-Verbindung');
+    if (!db) throw new Error('Keine Server-Verbindung');
     if (!normalized.userUid) throw new Error('Keine Benutzer-UID');
     await db.collection('analytics').doc(normalized.id).set(normalized);
     return true;
@@ -22005,7 +21994,7 @@ const StatsModal = ({
       fontWeight: 500,
       marginTop: '1px'
     }
-  }, employeeMode ? fbLoading ? '⏳ Lade meine Daten...' : fbRows !== null ? `🔥 Deine Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Firebase-Berechtigung' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Firebase nicht erreichbar' : fbLoading ? '⏳ Lade Daten...' : fbRows !== null ? `🔥 ${rows.length} Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Firebase-Berechtigung' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Firebase nicht erreichbar'))), /*#__PURE__*/React.createElement("div", {
+  }, employeeMode ? fbLoading ? '⏳ Lade meine Daten...' : fbRows !== null ? `🔥 Deine Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Berechtigung' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Server nicht erreichbar' : fbLoading ? '⏳ Lade Daten...' : fbRows !== null ? `🔥 ${rows.length} Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Berechtigung' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Server nicht erreichbar'))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -22239,7 +22228,7 @@ const StatsModal = ({
       fontSize: '14px',
       fontWeight: 600
     }
-  }, "⏳ Firebase Daten werden geladen..."), !fbLoading && /*#__PURE__*/React.createElement(React.Fragment, null, activeTab === 'uebersicht' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "⏳ Daten werden geladen..."), !fbLoading && /*#__PURE__*/React.createElement(React.Fragment, null, activeTab === 'uebersicht' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: 'repeat(3,1fr)',
@@ -30129,14 +30118,7 @@ function App() {
   }, [textData.AgentName]);
 
   // ── Firebase Config (gleich wie Aktionsmappe) ──
-  const AM_FB_CONFIG = {
-    apiKey: "AIzaSyCjYCn-X694K1xoUULAin_zDta1r-dSh7Y",
-    authDomain: "verkaufsmappe-7d917.firebaseapp.com",
-    projectId: "verkaufsmappe-7d917",
-    storageBucket: "verkaufsmappe-7d917.firebasestorage.app",
-    messagingSenderId: "916375365270",
-    appId: "1:916375365270:web:5b6bfbc37a4d0be1a004b7"
-  };
+  const AM_FB_CONFIG = { backend: 'eigene-api' };
 
   // Firebase einmalig initialisieren
   const getAmDb = React.useCallback(() => {
@@ -50034,143 +50016,41 @@ function __psShopOptionsHtml() {
 }
 
 function __psRenderAuth(mode, prefill) {
-  prefill = prefill || {};
-  var isRegister = mode === 'register';
-  function tabBtn(m, label) {
-    var active = m === mode;
-    return '<button data-mode="' + m + '" class="ps-tab flex-1 py-2 text-sm font-semibold rounded-lg ' +
-      (active ? 'bg-blue-600 text-white' : 'text-slate-500') + '">' + label + '</button>';
-  }
-  var formHtml = isRegister ? (
-    '<select id="ps-gate-anrede" class="w-full mb-2 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">' +
-      '<option value="">Anrede wählen…</option>' +
-      '<option value="Herr"' + (prefill.anrede === 'Herr' ? ' selected' : '') + '>Herr</option>' +
-      '<option value="Frau"' + (prefill.anrede === 'Frau' ? ' selected' : '') + '>Frau</option>' +
-      '<option value="Divers"' + (prefill.anrede === 'Divers' ? ' selected' : '') + '>Divers</option>' +
-    '</select>' +
-    '<input id="ps-gate-vorname" type="text" placeholder="Vorname (optional)" value="' + __psEscapeHtml(prefill.vorname || '') + '" class="w-full mb-2 px-3 py-2 border border-slate-300 rounded-lg text-sm" />' +
-    '<input id="ps-gate-nachname" type="text" placeholder="Nachname" value="' + __psEscapeHtml(prefill.nachname || '') + '" class="w-full mb-2 px-3 py-2 border border-slate-300 rounded-lg text-sm" />' +
-    '<input id="ps-gate-email" type="email" placeholder="E-Mail (@hetec-gmbh.de)" value="' + __psEscapeHtml(prefill.email || '') + '" class="w-full mb-2 px-3 py-2 border border-slate-300 rounded-lg text-sm" />' +
-    '<input id="ps-gate-pw" type="password" placeholder="Passwort" class="w-full mb-2 px-3 py-2 border border-slate-300 rounded-lg text-sm" />' +
-    '<select id="ps-gate-shop" class="w-full mb-4 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">' + __psShopOptionsHtml() + '</select>' +
-    '<button id="ps-gate-submit" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm">Konto erstellen</button>'
-  ) : (
-    '<input id="ps-gate-email" type="email" placeholder="E-Mail" value="' + __psEscapeHtml(prefill.email || '') + '" class="w-full mb-3 px-3 py-2 border border-slate-300 rounded-lg text-sm" />' +
-    '<input id="ps-gate-pw" type="password" placeholder="Passwort" class="w-full mb-3 px-3 py-2 border border-slate-300 rounded-lg text-sm" />' +
-    '<label class="flex items-center gap-2 mb-4 text-sm text-slate-600 cursor-pointer select-none">' +
-      '<input id="ps-gate-remember" type="checkbox" checked class="w-4 h-4" /> Zugangsdaten dauerhaft merken' +
-    '</label>' +
-    '<button id="ps-gate-submit" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm mb-2">Anmelden</button>' +
-    '<button id="ps-gate-reset-btn" class="w-full text-blue-600 text-xs py-1">Passwort vergessen?</button>'
-  );
-
+  // Konten, Passwoerter, Rollen und Standorte verwaltet Microsoft Entra (Azure) - hier nur noch die Anmeldung.
+  var auth = __psGetAuth();
+  var lastErr = auth && auth.lastError;
   __psGateRender(
     '<div class="min-h-screen flex items-center justify-center bg-slate-100 p-4">' +
-      '<div class="w-full max-w-sm bg-white rounded-2xl shadow-lg p-6">' +
-        '<h1 class="text-xl font-bold text-slate-800 mb-4">Pencil Selling</h1>' +
-        '<div class="flex gap-1 bg-slate-100 rounded-lg p-1 mb-4">' + tabBtn('login', 'Anmelden') + tabBtn('register', 'Registrieren') + '</div>' +
-        '<div id="ps-gate-msg" class="hidden text-sm text-red-600 bg-red-50 rounded-lg p-2 mb-3"></div>' +
-        formHtml +
+      '<div class="w-full max-w-sm bg-white rounded-2xl shadow-lg p-6 text-center">' +
+        '<h1 class="text-xl font-bold text-slate-800 mb-1">Pencil Selling</h1>' +
+        '<p class="text-sm text-slate-500 mb-5">Anmeldung mit deinem HeTec-Microsoft-Konto</p>' +
+        '<div id="ps-gate-msg" class="hidden text-sm text-red-600 bg-red-50 rounded-lg p-2 mb-3 text-left"></div>' +
+        '<button id="ps-gate-submit" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg text-sm">Mit Microsoft anmelden</button>' +
+        '<p class="text-xs text-slate-400 mt-4">Zugang, Rollen und Standorte werden zentral in Microsoft Entra verwaltet.</p>' +
       '</div>' +
     '</div>'
   );
+  if (lastErr && lastErr.message) __psShowError(lastErr.message);
+  document.getElementById('ps-gate-submit').onclick = function () {
+    var btn = document.getElementById('ps-gate-submit');
+    if (!auth || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = 'Weiterleitung zu Microsoft…';
+    auth.signInWithMicrosoft().catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = 'Mit Microsoft anmelden';
+      __psShowError('Anmeldung fehlgeschlagen: ' + (e && e.message || e));
+    });
+  };
+}
 
-  Array.prototype.forEach.call(document.querySelectorAll('.ps-tab'), function (btn) {
-    btn.onclick = function () {
-      var vals = {
-        anrede: (document.getElementById('ps-gate-anrede') || {}).value,
-        vorname: (document.getElementById('ps-gate-vorname') || {}).value,
-        nachname: (document.getElementById('ps-gate-nachname') || {}).value,
-        email: (document.getElementById('ps-gate-email') || {}).value
-      };
-      __psRenderAuth(btn.getAttribute('data-mode'), vals);
-    };
-  });
-
-  if (isRegister) {
-    document.getElementById('ps-gate-submit').onclick = function () {
-      var btn = document.getElementById('ps-gate-submit');
-      // v55.4.0: Schutz gegen Doppel-Klick/-Tap – ohne diesen Guard feuerte
-      // ein zweiter Klick während der ersten Anfrage noch läuft eine zweite
-      // createUserWithEmailAndPassword-Anfrage; das erste Konto wurde echt
-      // angelegt, das zweite schlug mit "E-Mail bereits verwendet" fehl.
-      if (btn.disabled) return;
-      var anrede = document.getElementById('ps-gate-anrede').value;
-      var vorname = document.getElementById('ps-gate-vorname').value.trim();
-      var nachname = document.getElementById('ps-gate-nachname').value.trim();
-      var email = document.getElementById('ps-gate-email').value.trim().toLowerCase();
-      var pw = document.getElementById('ps-gate-pw').value;
-      var shopId = document.getElementById('ps-gate-shop').value;
-      if (!anrede || !nachname || !email || !pw) { __psShowError('Bitte Anrede, Nachname, E-Mail und Passwort ausfüllen.'); return; }
-      if (!/@hetec-gmbh\.de$/.test(email)) { __psShowError('Nur E-Mail-Adressen mit @hetec-gmbh.de erlaubt.'); return; }
-      if (pw.length < 6) { __psShowError('Passwort braucht mind. 6 Zeichen.'); return; }
-      var displayName = vorname ? (vorname + ' ' + nachname).trim() : nachname;
-      var auth = __psGetAuth();
-      var createdUser = null;
-      var btnLabel = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Erstelle Konto…';
-      function __psResetSubmitBtn(){ btn.disabled = false; btn.textContent = btnLabel; }
-      auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).then(function () {
-        return auth.createUserWithEmailAndPassword(email, pw);
-      }).then(function (cred) {
-        createdUser = cred.user;
-        // Profil zuerst anlegen. Scheitert das, wird das soeben erzeugte
-        // Auth-Konto wieder entfernt – kein unbrauchbares "E-Mail belegt"-Konto.
-        return __psGetBetaDb().collection('users').doc(cred.user.uid).set({
-          email: email,
-          anrede: anrede,
-          vorname: vorname,
-          nachname: nachname,
-          name: displayName,
-          shopId: shopId,
-          shop: (SHOPS[shopId] && SHOPS[shopId].name) || '',
-          role: 'verkaeufer',
-          status: 'pending',
-          active: false,
-          isTestUser: false,
-          createdAt: Date.now()
-        }).catch(function (profileError) {
-          return cred.user.delete().catch(function () {}).then(function () { throw profileError; });
-        }).then(function () {
-          // Kann die Mail vorübergehend nicht versendet werden, bleibt das
-          // korrekte Profil bestehen. Auf der Bestätigungsseite kann erneut
-          // gesendet oder der Zugang durch den Admin freigegeben werden.
-          return cred.user.sendEmailVerification().catch(function (mailError) {
-            console.warn('Bestätigungsmail konnte nicht sofort gesendet werden:', mailError);
-          });
-        });
-      }).then(function () {
-        __psResetSubmitBtn();
-      }).catch(function (e) {
-        __psResetSubmitBtn();
-        __psShowError('Fehler: ' + (e && e.message || e));
-      });
-    };
-  } else {
-    document.getElementById('ps-gate-submit').onclick = function () {
-      var email = document.getElementById('ps-gate-email').value.trim().toLowerCase();
-      var pw = document.getElementById('ps-gate-pw').value;
-      var remember = document.getElementById('ps-gate-remember').checked;
-      if (!email || !pw) { __psShowError('Bitte E-Mail und Passwort eingeben.'); return; }
-      var auth = __psGetAuth();
-      var persistence = remember ? window.firebase.auth.Auth.Persistence.LOCAL : window.firebase.auth.Auth.Persistence.SESSION;
-      auth.setPersistence(persistence).then(function () {
-        return auth.signInWithEmailAndPassword(email, pw);
-      }).catch(function (e) {
-        __psShowError('Anmeldung fehlgeschlagen: ' + (e && e.message || e));
-      });
-    };
-    document.getElementById('ps-gate-reset-btn').onclick = function () {
-      var email = document.getElementById('ps-gate-email').value.trim();
-      if (!email) { __psShowError('Bitte zuerst E-Mail eingeben.'); return; }
-      __psGetAuth().sendPasswordResetEmail(email).then(function () {
-        __psShowError('E-Mail zum Zurücksetzen wurde verschickt.');
-      }).catch(function (e) {
-        __psShowError('Fehler: ' + (e && e.message || e));
-      });
-    };
-  }
+// Meldung, wenn der Server das Konto nicht freigibt (Gruppen kommen aus Microsoft Entra).
+function __psNoAccessMessage(d) {
+  var st = d && d.status;
+  if (st === 'no-group') return 'Dein Microsoft-Konto ist noch keiner Pencil-Selling-Gruppe (Standort) zugeordnet. Bitte wende dich an einen Administrator.';
+  if (st === 'domain') return 'Dieses Konto ist für Pencil Selling nicht zugelassen (nur @hetec-gmbh.de).';
+  if (st === 'groups-overage') return 'Deine Gruppenzugehörigkeit konnte nicht gelesen werden (zu viele Gruppen). Bitte wende dich an einen Administrator.';
+  return 'Dein Zugang ist nicht mehr vorhanden oder wurde gesperrt. Bitte wende dich an einen Administrator.';
 }
 
 function __psRenderWait(kind) {
@@ -50199,7 +50079,7 @@ function __psRenderWait(kind) {
     };
   }
   document.getElementById('ps-gate-logout').onclick = function () {
-    __psGetAuth().signOut().then(function () { location.reload(); });
+    __psGetAuth().signOut({ full: true }).then(function () { location.reload(); });
   };
 }
 
@@ -50307,7 +50187,7 @@ function __psAddFloatingLogout() {
       btn.onmouseleave = function () { btn.style.background = 'transparent'; btn.style.color = '#94a3b8'; };
       btn.onclick = function () {
         if (!window.confirm('Wirklich abmelden?')) return;
-        __psGetAuth().signOut().then(function () { location.reload(); });
+        __psGetAuth().signOut({ full: true }).then(function () { location.reload(); });
       };
       header.appendChild(btn);
     }
@@ -50344,7 +50224,7 @@ function __PS_startAuthGate(startAppFn) {
   );
   var auth = __psGetAuth();
   if (!auth) {
-    __psGateRender('<div class="min-h-screen flex items-center justify-center bg-red-50 p-4 text-center"><div class="max-w-sm"><h1 class="text-lg font-bold text-red-800 mb-2">Anmeldung konnte nicht geladen werden</h1><p class="text-sm text-red-700">Bitte Seite neu laden. Aus Sicherheitsgründen wird Pencil Selling ohne Firebase-Anmeldung nicht geöffnet.</p></div></div>');
+    __psGateRender('<div class="min-h-screen flex items-center justify-center bg-red-50 p-4 text-center"><div class="max-w-sm"><h1 class="text-lg font-bold text-red-800 mb-2">Anmeldung konnte nicht geladen werden</h1><p class="text-sm text-red-700">Bitte Seite neu laden. Aus Sicherheitsgründen wird Pencil Selling ohne Anmeldung nicht geöffnet.</p></div></div>');
     return;
   }
   var appStarted = false;
@@ -50483,7 +50363,7 @@ function __PS_startAuthGate(startAppFn) {
     var r = document.getElementById('ps-gate-retry');
     if (r) r.onclick = function () { location.reload(); };
     var l = document.getElementById('ps-gate-logout2');
-    if (l) l.onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+    if (l) l.onclick = function () { auth.signOut({ full: true }).then(function () { location.reload(); }); };
   }
 
   // SICHERHEITSFIX: ersetzt das bisherige renderCompleteProfile(), das bei
@@ -50656,7 +50536,7 @@ function __PS_startAuthGate(startAppFn) {
             // active:false mit status:'approved' (z.B. Deaktivierung) -
             // niemals Zugriff erlauben, sofort abmelden.
             if (unsubscribeUserDoc) { try { unsubscribeUserDoc(); } catch (e) {} }
-            __psDenyAccess('Dein Zugang ist nicht mehr vorhanden oder wurde gesperrt. Bitte wende dich an einen Administrator.', false);
+            __psDenyAccess(__psNoAccessMessage(d), false);
           }
         }, function (err) { showFatal(err); });
       }).catch(showFatal);

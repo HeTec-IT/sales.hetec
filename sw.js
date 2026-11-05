@@ -1,7 +1,7 @@
 // Pencil Selling – o2 – Service Worker
 // Beim Update NUR diese Versionsnummer hochzählen -> alte Caches werden entfernt.
-const CACHE = "pencil-o2-v27";
-const SHELL = ["./", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+const CACHE = "pencil-o2-v28";
+const SHELL = ["./", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./ps-config.js", "./ps-backend.js", "./vendor/msal-browser.min.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -15,13 +15,13 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Firebase-/Google-API-Anfragen (Firestore-Streaming, Auth, Token) gehen NIE durch den
-// Service Worker: Das Klonen/Zwischenspeichern langlaufender Antworten kann Verbindungen
-// nach dem Zurückkehren aus dem Hintergrund verzögern. Google Fonts bleiben cachebar.
+// Anfragen an die eigene Schnittstelle (/api/...) und an Microsoft (Anmeldung/Token) gehen NIE durch
+// den Service Worker: Antworten dürfen nie zwischengespeichert oder verzögert werden.
+// Google Fonts bleiben cachebar.
 function bypass(url) {
   const h = url.hostname;
-  if (h === "fonts.googleapis.com") return false;
-  return h.endsWith(".googleapis.com") || h.endsWith(".firebaseio.com");
+  if (url.pathname.startsWith("/api/")) return true;
+  return h.endsWith(".microsoftonline.com") || h.endsWith(".microsoft.com") || h.endsWith(".msauth.net");
 }
 
 // Nur der EIGENE Cache wird gelesen (kein caches.match über alle Caches der Domain),

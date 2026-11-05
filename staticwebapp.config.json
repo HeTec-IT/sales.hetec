@@ -1,0 +1,16 @@
+{
+  "platform": { "apiRuntime": "node:20" },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin"
+  },
+  "routes": [
+    { "route": "/", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/index.html", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/sw.js", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/ps-config.js", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/ps-backend.js", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/manifest.webmanifest", "headers": { "Cache-Control": "no-cache" } }
+  ],
+  "mimeTypes": { ".webmanifest": "application/manifest+json" }
+}
