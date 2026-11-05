@@ -174,9 +174,9 @@
   };
 
   /* ---------------------------------------------------- 2) Anfragen --- */
-  function post(body, token) {
+  function post(body, token, ms) {
     var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 45000) : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, ms || 45000) : null;
     var headers = { 'Content-Type': 'application/json' };
     if (token) headers['x-ps-token'] = token;
     return fetch(API_URL, { method: 'POST', headers: headers, body: JSON.stringify(body), cache: 'no-store', signal: ctl ? ctl.signal : undefined })
@@ -196,14 +196,22 @@
       }, function (e) { if (timer) clearTimeout(timer); throw e; });
   }
 
-  function call(body) {
+  // Token holen; ist Microsoft nicht erreichbar (kein Netz), gilt das wie "Server nicht erreichbar" (-> Offline-Verhalten der App)
+  function tokenOrOffline(force) {
+    return getIdToken(force).catch(function (err) {
+      if (err && err.code === 'auth/network-request-failed') throw makeErr('unavailable', 'Keine Verbindung zur Anmeldung.');
+      throw err;
+    });
+  }
+
+  function call(body, ms) {
     var user = currentUser;
-    if (!user) return post(body, '');
-    return getIdToken(false).then(function (tok) {
-      return post(body, tok).catch(function (err) {
+    if (!user) return post(body, '', ms);
+    return tokenOrOffline(false).then(function (tok) {
+      return post(body, tok, ms).catch(function (err) {
         if (err.code !== 'unauthenticated') throw err;
         // Token vom Server abgelehnt (z. B. gerade abgelaufen): einmal frisch holen und wiederholen
-        return getIdToken(true).then(function (t2) { return post(body, t2); });
+        return tokenOrOffline(true).then(function (t2) { return post(body, t2, ms); });
       });
     });
   }
@@ -233,23 +241,38 @@
   QuerySnap.prototype.forEach = function (fn, thisArg) { this.docs.forEach(fn, thisArg); };
 
   function profileKey(uid) { return 'ps_profile_cache_' + uid; }
+  var profileDownAt = 0;                       // Zeitpunkt, an dem das eigene Profil zuletzt nicht ladbar war
+  window.addEventListener('online', function () { profileDownAt = 0; });
 
   function DocRef(db, coll, id) { this.owner = db; this.parentName = coll; this.id = id; this.path = coll + '/' + id; }
   DocRef.prototype.get = function () {
     var self = this;
-    return call({ op: 'get', c: this.parentName, id: this.id }).then(function (r) {
+    // Eigenes Profil: ist der Server erkennbar nicht erreichbar (Verbindungsprüfung der App oder letzter Versuch
+    // gerade gescheitert), sofort die gemerkte Kopie nehmen statt zu warten; sonst nach 8 s umschalten.
+    var own = this.parentName === 'users' && currentUser && this.id === currentUser.uid;
+    function cachedProfile() {
+      try {
+        var c = JSON.parse(localStorage.getItem(profileKey(self.id)) || 'null');
+        return c ? new DocSnap(self, c, true) : null;
+      } catch (e) { return null; }
+    }
+    if (own && (Date.now() - profileDownAt < 60000 || (window.__psIsOffline && window.__psIsOffline()))) {
+      var quick = cachedProfile();
+      if (quick) return Promise.resolve(quick);
+    }
+    return call({ op: 'get', c: this.parentName, id: this.id }, own ? 8000 : undefined).then(function (r) {
       var data = r.doc ? r.doc.data : null;
-      if (self.parentName === 'users' && currentUser && self.id === currentUser.uid && data) {
+      if (own) profileDownAt = 0;
+      if (own && data) {
         try { localStorage.setItem(profileKey(self.id), JSON.stringify(data)); } catch (e) {}
       }
       return new DocSnap(self, data, false);
     }, function (err) {
       // Offline: zuletzt bekanntes eigenes Profil weiterverwenden (Offline-Arbeiten wie bisher)
-      if (err.code === 'unavailable' && self.parentName === 'users' && currentUser && self.id === currentUser.uid) {
-        try {
-          var c = JSON.parse(localStorage.getItem(profileKey(self.id)) || 'null');
-          if (c) return new DocSnap(self, c, true);
-        } catch (e) {}
+      if (err.code === 'unavailable' && own) {
+        profileDownAt = Date.now();
+        var c = cachedProfile();
+        if (c) return c;
       }
       throw err;
     });
