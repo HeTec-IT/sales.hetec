@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.145';
+    window.APP_VERSION = '55.146';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4313,6 +4313,9 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-vp .sit-bx{ height:46px; font-size:21px; }
 .sit-vp .sit-price-in.big{ font-size:18px; padding:6px 10px; }
 .sit-price-c .nx.op{ cursor:pointer; text-decoration:underline dotted; }
+.sit-price-cw{ display:flex; align-items:flex-end; gap:6px; }
+.sit-price-cw .sit-price-c{ flex:1; min-width:0; width:auto; }
+.sit-price-split.sm{ height:auto; min-height:44px; padding:0 10px; border-radius:12px; flex-shrink:0; }
 .sit-price-sheet .sit-vps{ gap:3px; }
 .sit-price-sheet .sit-vp{ padding:1px 6px; }
 .sit-price-sheet .sit-vp .sit-bx{ height:40px; font-size:19px; }
@@ -4402,6 +4405,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-price-hd{ min-height:30px; font-size:12.5px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block .sit-stp-r button{ width:34px; height:34px; font-size:19px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-c{ margin-top:calc(5px + var(--k)*0.02); min-height:calc(32px + var(--k)*0.05); }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-price-split.sm{ min-height:calc(32px + var(--k)*0.05); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-pers{ margin-top:calc(4px + var(--k)*0.02); padding-top:1px; padding-bottom:1px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-pers .sit-pp{ height:calc(28px + var(--k)*0.04); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-pers.vr{ margin-top:calc(4px + var(--k)*0.02); }
@@ -10230,7 +10234,7 @@ Object.keys(SIT_I18N_VALS).forEach(l => {
 });
 const SIT_I18N_X = {"en": {"Verträge": "Contracts", "wie Personen": "same as persons"}, "tr": {"Verträge": "Hatlar", "wie Personen": "kişi sayısı kadar"}, "ru": {"Verträge": "Договоры", "wie Personen": "как людей"}, "ar": {"Verträge": "العقود", "wie Personen": "بعدد الأشخاص"}, "pl": {"Verträge": "Umowy", "wie Personen": "tyle co osób"}, "ro": {"Verträge": "Contracte", "wie Personen": "cât persoanele"}, "es": {"Verträge": "Contratos", "wie Personen": "igual que personas"}, "it": {"Verträge": "Contratti", "wie Personen": "come le persone"}, "pt": {"Verträge": "Contratos", "wie Personen": "igual às pessoas"}, "el": {"Verträge": "Συμβόλαια", "wie Personen": "όσα τα άτομα"}, "uk": {"Verträge": "Договори", "wie Personen": "за кількістю людей"}};
 Object.keys(SIT_I18N_X).forEach(l => { Object.assign(SIT_I18N[l] || (SIT_I18N[l] = {}), SIT_I18N_X[l]); });
-const SIT_I18N_Y = {"en": {"Preise einzeln": "Price per contract", "Vertrag": "Contract"}, "tr": {"Preise einzeln": "Hat başına fiyat", "Vertrag": "Hat"}, "ru": {"Preise einzeln": "Цена по договорам", "Vertrag": "Договор"}, "ar": {"Preise einzeln": "سعر كل عقد", "Vertrag": "عقد"}, "pl": {"Preise einzeln": "Cena za umowę", "Vertrag": "Umowa"}, "ro": {"Preise einzeln": "Preț pe contract", "Vertrag": "Contract"}, "es": {"Preise einzeln": "Precio por contrato", "Vertrag": "Contrato"}, "it": {"Preise einzeln": "Prezzo per contratto", "Vertrag": "Contratto"}, "pt": {"Preise einzeln": "Preço por contrato", "Vertrag": "Contrato"}, "el": {"Preise einzeln": "Τιμή ανά σύμβαση", "Vertrag": "Σύμβαση"}, "uk": {"Preise einzeln": "Ціна за договором", "Vertrag": "Договір"}};
+const SIT_I18N_Y = {"en": {"Preise einzeln": "Price per contract", "Vertrag": "Contract", "Einzeln": "Individual"}, "tr": {"Preise einzeln": "Hat başına fiyat", "Vertrag": "Hat", "Einzeln": "Tek tek"}, "ru": {"Preise einzeln": "Цена по договорам", "Vertrag": "Договор", "Einzeln": "По одному"}, "ar": {"Preise einzeln": "سعر كل عقد", "Vertrag": "عقد", "Einzeln": "منفصل"}, "pl": {"Preise einzeln": "Cena za umowę", "Vertrag": "Umowa", "Einzeln": "Osobno"}, "ro": {"Preise einzeln": "Preț pe contract", "Vertrag": "Contract", "Einzeln": "Separat"}, "es": {"Preise einzeln": "Precio por contrato", "Vertrag": "Contrato", "Einzeln": "Por separado"}, "it": {"Preise einzeln": "Prezzo per contratto", "Vertrag": "Contratto", "Einzeln": "Singoli"}, "pt": {"Preise einzeln": "Preço por contrato", "Vertrag": "Contrato", "Einzeln": "Separados"}, "el": {"Preise einzeln": "Τιμή ανά σύμβαση", "Vertrag": "Σύμβαση", "Einzeln": "Ξεχωριστά"}, "uk": {"Preise einzeln": "Ціна за договором", "Vertrag": "Договір", "Einzeln": "Окремо"}};
 Object.keys(SIT_I18N_Y).forEach(l => { Object.assign(SIT_I18N[l] || (SIT_I18N[l] = {}), SIT_I18N_Y[l]); });
 const sitT = str => {
   if (__sitLang === 'de') return str;
@@ -11336,16 +11340,25 @@ function SitPriceRow({ row, vert, pers, onVert, onSplit, onApply, onPad, compact
   const quick = SIT_QUICK[row.k] || [];
   const cur = has ? sitCostFmt(sitCostNum(row.price)) : '';
   if (compact && compact !== 'inner' && isM) return h(React.Fragment, null, h(SitVertRow, { vert, pers, onVert, compact: true }), h(SitPriceRow, { row, vert, pers, onVert, onSplit, onApply, onPad, compact: 'inner', onOpen, onEnter, autoFocus, kbd }));
-  if (compact && kbd && !row.ind) return h('label', {
+  const cw = el => isM && n > 1 && onSplit ? h('div', { className: 'sit-price-cw' }, el, h('button', {
+    type: 'button',
+    className: 'sit-price-split sm' + (row.ind ? ' on' : ''),
+    'aria-pressed': !!row.ind,
+    onClick: e => {
+      onSplit(!row.ind);
+      if (!row.ind && onOpen) onOpen(row.k, e.currentTarget.parentNode);
+    }
+  }, sitT('Einzeln'))) : el;
+  if (compact && kbd && !row.ind) return cw(h('label', {
     className: 'sit-price-c kb' + (has ? ' has' : ''),
     'data-price': row.k
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), n > 1 && has ? h('span', { className: 'nx' + (isM && onOpen ? ' op' : ''), onClick: isM && onOpen ? e => { e.preventDefault(); onOpen(row.k, e.currentTarget); } : undefined }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€'));
-  if (compact) return h('button', {
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), n > 1 && has ? h('span', { className: 'nx' + (isM && onOpen ? ' op' : ''), onClick: isM && onOpen ? e => { e.preventDefault(); onOpen(row.k, e.currentTarget); } : undefined }, n + ' ×') : null, h(SitPriceInput, { row, n, onApply }), h('span', { className: 'eu' }, '€')));
+  if (compact) return cw(h('button', {
     type: 'button',
     className: 'sit-price-c' + (has ? ' has' : ''),
     'data-price': row.k,
     onClick: e => onOpen(row.k, e.currentTarget)
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (row.ind ? 'Σ ' + sitCostFmt(row.total) + ' €' : n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 })));
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (row.ind ? 'Σ ' + sitCostFmt(row.total) + ' €' : n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 }))));
   return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h(SitVertRow, { vert, pers, onVert }) : null, row.ind ? h(SitVertPrices, { row, onApply, onPad, onEnter, autoFocus, kbd }) : quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
     key: q,
     type: 'button',
