@@ -1,0 +1,71 @@
+name: Hetzner-Paket
+
+# Testet die Schnittstelle (PHP + MariaDB) und baut das Upload-Paket fuer FileZilla/SFTP.
+# Download: Actions > dieser Lauf > Artefakt "ps-hetzner-upload".
+on:
+  push:
+    branches: [main, hetzner-migration]
+    paths:
+      - 'api/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'vendor/**'
+      - 'index.html'
+      - 'sw.js'
+      - 'ps-backend.js'
+      - 'ps-config.js'
+      - 'manifest.webmanifest'
+      - '.htaccess'
+      - '.github/workflows/hetzner-paket.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paket:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      db:
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=24
+    env:
+      PS_TEST_DB_HOST: 127.0.0.1
+      PS_TEST_DB_PORT: '3306'
+      PS_TEST_DB_USER: root
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, curl, openssl, mbstring
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: PHP-Syntax pruefen
+        run: |
+          set -e
+          for f in api/*.php api/lib/*.php; do php -l "$f"; done
+      - name: Tests (Schnittstelle + Client-Schicht)
+        run: node --test --test-concurrency=1 tests/api.test.js tests/client.test.js
+      - name: Upload-Paket bauen
+        env:
+          PS_TENANT_ID: ${{ vars.PS_TENANT_ID }}
+          PS_CLIENT_ID: ${{ vars.PS_CLIENT_ID }}
+        run: node tools/build-hetzner.mjs
+      - name: Paket gegen die Tests pruefen (genau das, was hochgeladen wird)
+        env:
+          PS_TEST_ROOT: ${{ github.workspace }}/dist-hetzner
+        run: node --test --test-concurrency=1 tests/api.test.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ps-hetzner-upload
+          path: hetzner-upload.zip
+          retention-days: 30

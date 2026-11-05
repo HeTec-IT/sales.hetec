@@ -1,24 +1,16 @@
 'use strict';
-// Prueft die Firestore-kompatible Client-Schicht (ps-backend.js) gegen die ECHTE
-// Server-Logik + Azurite: Browser-Umgebung und Microsoft-Bibliothek sind nachgebaut.
+// Prueft die Firestore-kompatible Client-Schicht (ps-backend.js) gegen die ECHTE PHP-Schnittstelle
+// (php -S + MariaDB): Browser-Umgebung und Microsoft-Bibliothek sind nachgebaut, alles andere ist echt.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { startAzurite, testConfig, makeKeys, G } = require('./helpers');
-const { createApp } = require('../src/lib/app');
-const { createVerifier } = require('../src/lib/auth');
-const { Store } = require('../src/lib/store');
+const { startStack, G } = require('./helpers');
 
-let az, keys, core;
-test.before(async () => {
-  az = await startAzurite();
-  keys = await makeKeys();
-  const cfg = testConfig('c' + Date.now());
-  core = createApp({ cfg, verify: createVerifier(cfg, keys.resolver), store: Store.fromConfig(cfg) });
-});
-test.after(() => az && az.stop());
+let S, keys;
+test.before(async () => { S = await startStack(); keys = S.keys; });
+test.after(() => S && S.stop());
 
 // Baut eine Browser-Umgebung und laedt ps-backend.js hinein.
 async function boot(opts) {
@@ -35,7 +27,7 @@ async function boot(opts) {
     setActiveAccount() {}
     async acquireTokenSilent(req) {
       if (opts.expired) { const e = new Error('x'); e.errorCode = 'interaction_required'; throw e; }
-      const idToken = await keys.token({ oid: acc.localAccountId, preferred_username: acc.username, name: acc.name, groups: opts.groups || [G.aalen] });
+      const idToken = keys.token({ oid: acc.localAccountId, preferred_username: acc.username, name: acc.name, groups: opts.groups || [G.aalen] });
       return { idToken, account: acc };
     }
     async loginRedirect() { events.loginRedirect++; }
@@ -58,14 +50,13 @@ async function boot(opts) {
     fetch: async (url, init) => {
       events.fetches++;
       if (opts.offline) throw new Error('offline');
-      assert.equal(url, '/api/db');
-      const res = await core.handle(init.headers['x-ps-token'] || '', JSON.parse(init.body));
-      return { status: res.status, text: async () => JSON.stringify(res.json) };
+      assert.equal(url, '/api/db.php');
+      return fetch(S.base + url, init); // echter HTTP-Aufruf an die PHP-Schnittstelle
     }
   };
   sandbox.window.window = win;
   sandbox.globalThis = sandbox;
-  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'ps-backend.js'), 'utf8');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'ps-backend.js'), 'utf8');
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox);
   const fb = win.firebase;
@@ -150,7 +141,7 @@ test('Abgelaufene Anmeldung: Benutzer gilt als abgemeldet; keine Einrichtung: kl
   const { user, fb } = await boot({ expired: true });
   assert.equal(user, null);
   const noCfg = await (async () => { // Platzhalter nicht ersetzt
-    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'ps-backend.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'ps-backend.js'), 'utf8');
     const win = { PS_CONFIG: { tenantId: 'TENANT-ID-EINTRAGEN', clientId: 'CLIENT-ID-EINTRAGEN' }, addEventListener() {} };
     const sb = { window: win, console, setTimeout, clearTimeout, setInterval, clearInterval, JSON, Promise, Date, Object, Array, String, Number, Error, location: { origin: 'x' }, localStorage: {}, document: {}, fetch() {} };
     vm.createContext(sb); vm.runInContext(src, sb);

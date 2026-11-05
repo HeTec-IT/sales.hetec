@@ -1,0 +1,30 @@
+# Pencil Selling - Apache-Einstellungen fuer das Hetzner-Webhosting (ps.hetec.de)
+Options -Indexes
+DirectoryIndex index.html
+
+# Immer ueber HTTPS
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType text/javascript .js .mjs
+</IfModule>
+
+# App-Dateien immer frisch pruefen (Updates sollen sofort ankommen); die Bots aktualisieren die Preis-JSONs taeglich
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  <FilesMatch "^(index\.html|sw\.js|ps-config\.js|ps-backend\.js|manifest\.webmanifest|.+\.json)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+# Komprimierung (index.html ist gross)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>

@@ -19,7 +19,7 @@
       'body>:not(.c):not(script){display:none!important}.e{color:#b91c1c;font-weight:700}.sp{width:36px;height:36px;border:4px solid #dbeafe;border-top-color:#0b3ccf;border-radius:50%;animation:r 1s linear infinite;margin:14px auto}@keyframes r{to{transform:rotate(360deg)}}</style></head>' +
       '<body><div class="c"><h1>Ihr ausgefülltes Formular</h1><p>Interne Rufnummernmitnahme</p><div id="o"><div class="sp"></div><p>Wird geladen …</p></div></div>' +
       '<script>(async function(){var o=document.getElementById("o");function err(t){o.innerHTML=\'<p class="e">\'+t+"</p>"}' +
-      'async function g(k){var r=await fetch("/api/db",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({op:"get",c:"portierung_files",id:k})});var j=await r.json();if(!j||j.ok!==true)throw 0;return j.doc?j.doc.data:null}' +
+      'async function g(k){var r=await fetch("/api/db.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({op:"get",c:"portierung_files",id:k})});var j=await r.json();if(!j||j.ok!==true)throw 0;return j.doc?j.doc.data:null}' +
       'try{var id=' + JSON.stringify(id) + ';' +
       'var f=await g(id+"-0");if(!f){return err("Dieser Link ist abgelaufen oder wurde gelöscht. Bitte lassen Sie sich den Code im Shop neu erstellen.")}' +
       'var n=f.n||1,parts=[f.d];for(var i=1;i<n;i++){var s=await g(id+"-"+i);if(!s){return err("Datei unvollständig – bitte Code neu erstellen lassen.")}parts.push(s.d)}' +
@@ -8956,12 +8956,12 @@ const STATS_PASSWORD = (() => {
   }
 })();
 
-// ── Datenverbindung: eigene Schnittstelle (Azure), Regeln liegen serverseitig in api/ ──
+// ── Datenverbindung: eigene Schnittstelle (Hetzner, PHP/MySQL), Regeln liegen serverseitig in api/ ──
 // WICHTIG: Anmeldung, Benutzerprofile, Statistik, News und gespeicherte
 // Angebote müssen aus demselben Projekt kommen. Das frühere
 // "beta-pencil-selling" führte nach erfolgreichem Login zur sofortigen
 // Sicherheits-Abmeldung, weil users/{uid} im Admin-Projekt nicht gefunden wurde.
-const STATS_FB_CONFIG = { backend: 'eigene-api' }; // eigene Schnittstelle /api/db (siehe ps-backend.js)
+const STATS_FB_CONFIG = { backend: 'eigene-api' }; // eigene Schnittstelle /api/db.php (siehe ps-backend.js)
 
 // ── Firebase Stats DB singleton ──
 const getStatsDb = () => {

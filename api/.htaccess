@@ -1,0 +1,19 @@
+# Schnittstelle: keine Verzeichnislisten, Konfiguration und Interna sind nicht abrufbar.
+Options -Indexes
+
+<IfModule mod_authz_core.c>
+  <FilesMatch "^config.*\.php$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^config.*\.php$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-store"
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>

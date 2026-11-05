@@ -2,15 +2,15 @@
  *
  * Stellt dieselben Aufrufe bereit, die die App bisher von Firebase kannte
  * (firebase.auth(), firebase.firestore(), FieldValue ...), spricht aber nur mit
- * der EIGENEN Schnittstelle (/api/db, Azure Functions) und meldet über
+ * der EIGENEN Schnittstelle (/api/db.php auf dem eigenen Hosting) und meldet über
  * Microsoft Entra an. Es geht keine Anfrage mehr an Google.
  *
- * Aufbau: 1) Login (MSAL)   2) Anfragen an /api/db   3) Firestore-kompatible Objekte
+ * Aufbau: 1) Login (MSAL)   2) Anfragen an /api/db.php   3) Firestore-kompatible Objekte
  */
 (function () {
   'use strict';
   var CFG = window.PS_CONFIG || {};
-  var API_URL = (CFG.apiBase || '/api').replace(/\/$/, '') + '/db';
+  var API_URL = CFG.apiUrl || ((CFG.apiBase || '/api').replace(/\/$/, '') + '/db.php');
   var SCOPES = ['openid', 'profile', 'email'];
   var POLL_MS = 20000;
 

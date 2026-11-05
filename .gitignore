@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+# Zugangsdaten (Datenbank-Passwort) - nur per SFTP auf den Server
+api/config.php
+api/cache/*
+!api/cache/.htaccess
+# Build-Ausgabe
+dist-hetzner/
+*.zip
