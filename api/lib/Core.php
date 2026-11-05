@@ -20,7 +20,7 @@ final class ApiError extends \Exception
     }
 }
 
-// Fehlercodes entsprechen bewusst den Firestore-Codes, damit die App unveraendert darauf reagiert.
+// Fehlercodes entsprechen bewusst den bisherigen Codes der App (permission-denied usw.), damit sie unveraendert darauf reagiert.
 final class E
 {
     public static function unauth(string $m = 'Nicht angemeldet.'): ApiError { return new ApiError(401, 'unauthenticated', $m); }

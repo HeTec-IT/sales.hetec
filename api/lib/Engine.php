@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace PS;
 
 // Fuehrt die Datenbank-Operationen der App aus (get / query / set / update / delete / add / batch).
-// Gleiche Schnittstelle wie bisher - die App merkt keinen Unterschied zu Firestore.
+// Gleiche Schnittstelle wie bisher - die App braucht keine Anpassung an die Datenbank dahinter.
 final class Engine
 {
     private const COLLECTIONS = ['users', 'analytics', 'saved_offers', 'pdf_index', 'skip_limits', 'tool_usage', 'news', 'aktionsmappe', 'portierung_files'];
@@ -220,7 +220,7 @@ final class Engine
         $curData = $cur ? Json::decode($cur['json']) : null;
         $base = $curData instanceof \stdClass ? $curData : null;
         if ($base === null && $ctx->active) {
-            // Erstanmeldung: Profil eines frueheren Firebase-Kontos mit gleicher E-Mail uebernehmen
+            // Erstanmeldung: Profil eines frueheren Kontos (Altdaten) mit gleicher E-Mail uebernehmen
             try {
                 $found = null;
                 $this->store->scan('users', [[['k_email', $ctx->email]]], [], function (string $id, string $json) use ($ctx, &$found) {
@@ -261,7 +261,7 @@ final class Engine
         return $this->profiles[$ctx->uid] = $profile;
     }
 
-    // Eigene Kennungen (inkl. aus Firebase uebernommener alter Kennungen) fuer analytics / pdf_index laden
+    // Eigene Kennungen (inkl. uebernommener alter Kennungen aus Altdaten) fuer analytics / pdf_index laden
     private function prepare(?Ctx $ctx, string $coll): void
     {
         if ($ctx !== null && $ctx->active && ($coll === 'analytics' || $coll === 'pdf_index') && !$ctx->legacyLoaded) {

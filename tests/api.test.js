@@ -251,7 +251,7 @@ test('QR-Download (portierung_files): Upload nur angemeldet, Abruf oeffentlich',
   denied(await call(max, { op: 'update', c: 'portierung_files', id: base + '-1', data: { d: 'x' } }));
 });
 
-test('Erstanmeldung uebernimmt altes Firebase-Profil (Name + alte Zeilen) per E-Mail', async () => {
+test('Erstanmeldung uebernimmt altes Profil (Altdaten) (Name + alte Zeilen) per E-Mail', async () => {
   const adm = user('oid-adm', 'd.dasilva@hetec-gmbh.de', [G.admin], 'Diego da Silva');
   ok(await call(adm, { op: 'set', c: 'users', id: 'fbUID123', data: { email: 'l.alt@hetec-gmbh.de', name: 'Lena Alt', vorname: 'Lena', nachname: 'Alt', isTestUser: false, role: 'verkaeufer' } }));
   ok(await call(adm, { op: 'set', c: 'analytics', id: 'alt1', data: { id: 'alt1', userUid: 'fbUID123', user: 'Lena Alt', shopId: 'aalen', ts: '2026-01-01T00:00:00Z' } }));

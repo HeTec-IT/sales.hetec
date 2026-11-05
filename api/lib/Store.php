@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace PS;
 
 // Dokumentenspeicher auf MySQL/MariaDB (eine Tabelle ps_docs).
-//   coll + id = Schluessel (wie Firestore: Sammlung/Dokument-ID), data = JSON.
+//   coll + id = Schluessel (Sammlung/Dokument-ID), data = JSON.
 //   Zusaetzlich einige Schluesselspalten (k_*), damit Abfragen nach Standort, Benutzer,
 //   E-Mail und Zeit in der Datenbank statt im Speicher laufen.
 final class Store

@@ -1,11 +1,10 @@
-/* Pencil Selling – eigene Datenschicht (ersetzt Firebase).
+/* Pencil Selling – eigene Datenschicht (window.psData).
  *
- * Stellt dieselben Aufrufe bereit, die die App bisher von Firebase kannte
- * (firebase.auth(), firebase.firestore(), FieldValue ...), spricht aber nur mit
- * der EIGENEN Schnittstelle (/api/db.php auf dem eigenen Hosting) und meldet über
- * Microsoft Entra an. Es geht keine Anfrage mehr an Google.
+ * Stellt der App Anmeldung (psData.auth()) und Datenbank (psData.db(): collection/doc/get/set/update/
+ * where/orderBy/batch ...) bereit. Gesprochen wird nur mit der EIGENEN Schnittstelle (/api/db.php auf dem
+ * eigenen Hosting); angemeldet wird über Microsoft Entra. Es geht keine Anfrage an Google.
  *
- * Aufbau: 1) Login (MSAL)   2) Anfragen an /api/db.php   3) Firestore-kompatible Objekte
+ * Aufbau: 1) Login (MSAL)   2) Anfragen an /api/db.php   3) Datenbank-Objekte
  */
 (function () {
   'use strict';
@@ -28,7 +27,7 @@
   /* ------------------------------------------------------------ 1) Login --- */
   var msalApp = null;
   var account = null;       // aktives Microsoft-Konto
-  var currentUser = null;   // Firebase-kompatibles Benutzerobjekt (oder null)
+  var currentUser = null;   // Benutzerobjekt (oder null)
   var initDone = false;
   var initError = null;
   var listeners = [];
@@ -209,7 +208,7 @@
     });
   }
 
-  /* ------------------------------------------ 3) Firestore-kompatibel --- */
+  /* ------------------------------------------------ 3) Datenbank-Objekte --- */
   var NAME = '__name__';
   function FieldValue(kind, n) { this.__ps = kind; if (n !== undefined) this.n = n; }
   FieldValue.increment = function (n) { return new FieldValue('inc', Number(n)); };
@@ -235,7 +234,7 @@
 
   function profileKey(uid) { return 'ps_profile_cache_' + uid; }
 
-  function DocRef(db, coll, id) { this.firestore = db; this.parentName = coll; this.id = id; this.path = coll + '/' + id; }
+  function DocRef(db, coll, id) { this.owner = db; this.parentName = coll; this.id = id; this.path = coll + '/' + id; }
   DocRef.prototype.get = function () {
     var self = this;
     return call({ op: 'get', c: this.parentName, id: this.id }).then(function (r) {
@@ -292,11 +291,11 @@
     return function () { stopped = true; clearInterval(timer); cleanup(); };
   };
 
-  function Query(db, coll, st) { this.firestore = db; this.name = coll; this.st = st || { where: [], order: [], limit: null, after: null }; }
+  function Query(db, coll, st) { this.owner = db; this.name = coll; this.st = st || { where: [], order: [], limit: null, after: null }; }
   Query.prototype._with = function (patch) {
     var st = { where: this.st.where.slice(), order: this.st.order.slice(), limit: this.st.limit, after: this.st.after };
     Object.keys(patch).forEach(function (k) { st[k] = patch[k]; });
-    return new Query(this.firestore, this.name, st);
+    return new Query(this.owner, this.name, st);
   };
   Query.prototype.where = function (f, op, v) { return this._with({ where: this.st.where.concat([[String(f), op, plain(v)]]) }); };
   Query.prototype.orderBy = function (f, dir) { return this._with({ order: this.st.order.concat([[String(f), dir === 'desc' ? 'desc' : 'asc']]) }); };
@@ -312,7 +311,7 @@
       body.after = { id: s.id, values: ord.map(function (o) { return o[0] === NAME ? s.id : (d || {})[o[0]]; }) };
     }
     return call(body).then(function (r) {
-      return new QuerySnap(r.docs.map(function (d) { return new DocSnap(new DocRef(self.firestore, self.name, d.id), d.data, false); }));
+      return new QuerySnap(r.docs.map(function (d) { return new DocSnap(new DocRef(self.owner, self.name, d.id), d.data, false); }));
     });
   };
 
@@ -320,11 +319,11 @@
   CollRef.prototype = Object.create(Query.prototype);
   CollRef.prototype.doc = function (id) {
     if (id == null) id = Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(10)), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
-    return new DocRef(this.firestore, this.name, String(id));
+    return new DocRef(this.owner, this.name, String(id));
   };
   CollRef.prototype.add = function (data) {
     var self = this;
-    return call({ op: 'add', c: this.name, data: plain(data) }).then(function (r) { return new DocRef(self.firestore, self.name, r.id); });
+    return call({ op: 'add', c: this.name, data: plain(data) }).then(function (r) { return new DocRef(self.owner, self.name, r.id); });
   };
 
   function Batch() { this.ops = []; }
@@ -344,28 +343,21 @@
     settings: function () {}
   };
 
-  /* -------------------------------------------------- firebase-Schnittstelle --- */
-  var apps = [];
-  function makeApp(cfg, name) {
-    var app = { name: name || '[DEFAULT]', options: cfg || {} };
-    app.auth = function () { return authApi; };
-    app.firestore = function () { return db; };
-    return app;
+  /* ----------------------------------------------- Schnittstelle der App --- */
+  var connections = {};
+  function connect(name) {
+    name = name || 'default';
+    if (!connections[name]) connections[name] = { name: name, auth: function () { return authApi; }, db: function () { return db; } };
+    return connections[name];
   }
-  var firebase = {
-    apps: apps,
-    initializeApp: function (cfg, name) {
-      var existing = apps.filter(function (a) { return a.name === (name || '[DEFAULT]'); })[0];
-      if (existing) return existing;
-      var a = makeApp(cfg, name); apps.push(a); return a;
-    },
-    firestore: function () { return db; },
-    auth: function () { return authApi; }
+  var psData = {
+    connect: connect,                                    // benannte Verbindung: psData.connect('stats')
+    db: function () { return db; },                      // Datenbank: collection().doc().get()/set()/update() ...
+    auth: function () { return authApi; },               // Anmeldung (Microsoft Entra)
+    values: FieldValue,                                  // increment(n) / serverTimestamp() / delete()
+    docId: function () { return NAME; }                  // orderBy(psData.docId()) = nach Dokument-ID
   };
-  firebase.firestore.FieldValue = FieldValue;
-  firebase.firestore.FieldPath = FieldPath;
-  firebase.auth.Auth = { Persistence: { LOCAL: 'local', SESSION: 'session', NONE: 'none' } };
-  window.firebase = firebase;
+  window.psData = psData;
   window.psBackend = { signInWithMicrosoft: signInWithMicrosoft, getIdToken: getIdToken };
 
   init();

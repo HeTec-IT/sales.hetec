@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace PS;
 
-// Zugriffsregeln je Sammlung. Ersetzt die bisherigen Firestore-Regeln - aber strenger:
+// Zugriffsregeln je Sammlung. Ersetzt die frueheren Regeln - aber strenger:
 // JEDE Anfrage braucht ein gueltiges Entra-Login (Ausnahme: das Kunden-Download-Dokument per
 // QR-Code), Shops und Rollen kommen aus den Gruppen.
 final class Rules
@@ -161,7 +161,7 @@ final class Rules
             case 'analytics':
                 if ($ctx->isStaff) return [$wheres];
                 foreach ($eq('userUid') as $w) if (!in_array(Val::jsString($w[2]), $ctx->ownUids, true)) throw E::denied();
-                // Mitarbeiter sehen nur eigene Zeilen (inkl. aus Firebase uebernommener alter Kennungen)
+                // Mitarbeiter sehen nur eigene Zeilen (inkl. uebernommener alter Kennungen aus Altdaten)
                 return array_map(fn($u) => array_merge($without('userUid'), [['userUid', '==', $u]]), $ctx->ownUids);
             case 'saved_offers':
             case 'pdf_index':

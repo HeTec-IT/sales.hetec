@@ -1,5 +1,5 @@
 'use strict';
-// Prueft die Firestore-kompatible Client-Schicht (ps-backend.js) gegen die ECHTE PHP-Schnittstelle
+// Prueft die Datenschicht des Browsers (ps-backend.js) gegen die ECHTE PHP-Schnittstelle
 // (php -S + MariaDB): Browser-Umgebung und Microsoft-Bibliothek sind nachgebaut, alles andere ist echt.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -59,28 +59,28 @@ async function boot(opts) {
   const src = fs.readFileSync(path.join(__dirname, '..', 'ps-backend.js'), 'utf8');
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox);
-  const fb = win.firebase;
+  const fb = win.psData;
   const user = await new Promise(res => fb.auth().onAuthStateChanged(res));
-  return { fb, user, events, store, win, db: fb.firestore() };
+  return { fb, user, events, store, win, db: fb.db() };
 }
 
 const rejectsWith = async (p, code) => { try { await p; } catch (e) { assert.equal(e.code, code, e.message); return; } assert.fail('haette abgelehnt werden muessen (' + code + ')'); };
 
 test('Anmeldung: Benutzerobjekt, Profil, Rollen aus Gruppen', async () => {
-  const { fb, user, db } = await boot({ groups: [G.aalen] });
+  const { fb, user, db, win } = await boot({ groups: [G.aalen] });
   assert.equal(user.uid, 'oid-max'); assert.equal(user.email, 'm.muster@hetec-gmbh.de'); assert.equal(user.emailVerified, true);
   assert.equal(fb.auth().currentUser.uid, 'oid-max');
   assert.ok((await user.getIdToken(true)).split('.').length === 3);
   const snap = await db.collection('users').doc(user.uid).get();
   assert.equal(snap.exists, true); assert.equal(snap.id, 'oid-max');
   const p = snap.data(); assert.equal(p.status, 'approved'); assert.equal(p.shopId, 'aalen'); assert.equal(snap.metadata.fromCache, false);
-  assert.ok(fb.apps.length === 0); const app = fb.initializeApp({}, 'stats'); assert.equal(fb.apps.length, 1); assert.equal(app.auth().currentUser.uid, 'oid-max');
+  const app = fb.connect('stats'); assert.equal(fb.connect('stats'), app); assert.equal(app.auth().currentUser.uid, 'oid-max'); assert.equal(typeof app.db().collection, "function"); assert.equal(win.firebase, undefined);
   await rejectsWith(fb.auth().signInWithEmailAndPassword('a', 'b'), 'auth/operation-not-allowed');
 });
 
-test('Firestore-API: set/get/update/merge/increment/delete/add/where/orderBy/limit/startAfter/batch', async () => {
+test('Datenbank-API: set/get/update/merge/increment/delete/add/where/orderBy/limit/startAfter/batch', async () => {
   const { fb, user, db } = await boot({ groups: [G.aalen] });
-  const FV = fb.firestore.FieldValue;
+  const FV = fb.values;
   // Analytics schreiben (Server setzt userUid) und seitenweise lesen
   for (let i = 1; i <= 5; i++) await db.collection('analytics').doc('r' + i).set({ id: 'r' + i, user: 'Max', shopId: 'aalen', ts: '2026-11-0' + i, serverTime: FV.serverTimestamp() });
   const one = await db.collection('analytics').doc('r3').get();
@@ -92,7 +92,7 @@ test('Firestore-API: set/get/update/merge/increment/delete/add/where/orderBy/lim
     if (s.docs.length < 2) break; last = s.docs[s.docs.length - 1];
   }
   assert.deepEqual(pages, ['r5', 'r4', 'r3', 'r2', 'r1']);
-  const q2 = await db.collection('analytics').where('userUid', '==', user.uid).orderBy(fb.firestore.FieldPath.documentId()).get();
+  const q2 = await db.collection('analytics').where('userUid', '==', user.uid).orderBy(fb.docId()).get();
   assert.equal(q2.size, 5); assert.equal(q2.empty, false); assert.deepEqual(q2.docs.map(d => d.id), ['r1', 'r2', 'r3', 'r4', 'r5']);
   assert.equal(typeof q2.docs[0].ref.delete, 'function');
   // merge + increment
@@ -102,7 +102,7 @@ test('Firestore-API: set/get/update/merge/increment/delete/add/where/orderBy/lim
   assert.equal((await ref.get()).data().count, 2);
   // fehlendes Dokument
   const none = await db.collection('news').doc('o2').get(); assert.equal(none.exists, false); assert.equal(none.data(), undefined);
-  // nicht erlaubt -> code 'permission-denied' (wie Firestore)
+  // nicht erlaubt -> code 'permission-denied' (wie bisher)
   await rejectsWith(db.collection('news').doc('o2').set({ text: 'x' }), 'permission-denied');
   await rejectsWith(db.collection('analytics').where('userUid', '==', 'fremd').get(), 'permission-denied');
   // add + Batch (nur Admin darf loeschen -> hier Fehler)
@@ -145,8 +145,8 @@ test('Abgelaufene Anmeldung: Benutzer gilt als abgemeldet; keine Einrichtung: kl
     const win = { PS_CONFIG: { tenantId: 'TENANT-ID-EINTRAGEN', clientId: 'CLIENT-ID-EINTRAGEN' }, addEventListener() {} };
     const sb = { window: win, console, setTimeout, clearTimeout, setInterval, clearInterval, JSON, Promise, Date, Object, Array, String, Number, Error, location: { origin: 'x' }, localStorage: {}, document: {}, fetch() {} };
     vm.createContext(sb); vm.runInContext(src, sb);
-    const u = await new Promise(r => win.firebase.auth().onAuthStateChanged(r));
-    return { u, err: win.firebase.auth().lastError };
+    const u = await new Promise(r => win.psData.auth().onAuthStateChanged(r));
+    return { u, err: win.psData.auth().lastError };
   })();
   assert.equal(noCfg.u, null); assert.equal(noCfg.err.code, 'auth/not-configured'); assert.match(noCfg.err.message, /ps-config\.js/);
 });
