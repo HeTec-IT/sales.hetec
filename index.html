@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.146';
+    window.APP_VERSION = '55.147';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -10462,6 +10462,466 @@ const sitPick = (key, opts) => {
   return opts[(h >>> 0) % opts.length];
 };
 const sitJoin = arr => arr.length <= 1 ? arr.join('') : arr.slice(0, -1).join(', ') + ' und ' + arr[arr.length - 1];
+// v55.147 (Beta): Fliesstext der Schnellauswahl in der Zielsprache (Globus) – ganze Saetze statt Stichwort-Tags.
+// Offline-Satzbausteine je Sprache (keine Uebersetzungs-Anfrage noetig). Syntax: *fett*, {0}/{1} = Platzhalter.
+// Je Satz mehrere Varianten (wie im Deutschen: wechselt je Beratung, Bildschirm und PDF bleiben gleich).
+// Die Texte sind KI-uebersetzt – bitte von Muttersprachlern gegenlesen lassen.
+const SIT_SENT = {
+  en: {
+    sep: ', ', and: ' and ',
+    anb: ['You are currently a customer of *{0}*.', 'Your current provider is *{0}*.'],
+    anbO: ['You are currently with *another provider*.', 'Your current provider is *another one*.'],
+    EM: ['in less than 3 months', 'in 3–6 months', 'in 6–12 months', 'in more than 12 months'],
+    end: ['Your contract ends *{0}*.', 'Your contract runs out *{0}*.'],
+    kj: ['The contract has *already been cancelled*.', 'You have *already cancelled* the contract.'],
+    kn: ['The contract has *not been cancelled yet*.', 'You have *not cancelled* the contract *yet*.'],
+    pj: ['You would like to *keep your phone number*.', 'Your phone number *will be transferred*.'],
+    pn: ['You *do not want to keep* your phone number.', 'Your phone number *will not be transferred*.'],
+    HM: { iPhone: 'an iPhone', Samsung: 'a Samsung smartphone', Pixel: 'a Google Pixel', Xiaomi: 'a Xiaomi smartphone', Andere: 'another smartphone' },
+    AM: ['less than 1 year old', '1–2 years old', 'more than 2 years old'],
+    hw2: ['You use *{0}* that is *{1}*.', 'Your current device is *{0}*, which is *{1}*.'],
+    hw1: ['You use *{0}*.', 'Your current device is *{0}*.'],
+    hwA: ['Your device is *{0}*.', 'Your current smartphone is *{0}*.'],
+    du: ['You need *unlimited data*.', 'You would like *unlimited data volume*.'],
+    DV: ['under 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Your data needs are *{0}* per month.', 'You use *{0}* per month.'],
+    WI: { Streaming: 'streaming', Ausland: 'using your phone abroad', Kamera: 'a good camera', Hotspot: 'hotspot', Games: 'gaming', 'Social Media': 'social media', 'Viel Speicher': 'plenty of device storage' },
+    wi: ['What matters most to you: *{0}*.', 'You particularly care about *{0}*.'],
+    P: ['{n} person', '{n} people'], C: ['{n} mobile contract', '{n} mobile contracts'],
+    hhP: ['Your household has *{0}*.', 'Your household consists of *{0}*.'],
+    hhV: ['You have *{0}*.', 'You currently have *{0}*.'],
+    tvk: ['You do *not watch TV*.', 'Television is *not used* in your household.'],
+    TV: { Kabel: 'cable', Sat: 'satellite', Streaming: 'streaming' },
+    tv: ['You watch TV via *{0}*.', 'You get your TV through *{0}*.'],
+    TW: { Werbefrei: 'ad-free streaming', 'Viel Aufnahme': 'plenty of recording storage', 'EU-Ausland': 'TV in other EU countries' },
+    tw: ['For TV, you care about *{0}*.', 'What matters to you for TV: *{0}*.'],
+    WM: ['satisfied', 'only partly satisfied', 'not satisfied'],
+    wl: ['You are *{0}* with your home WiFi.', 'As for your WiFi at home, you are *{0}*.'],
+    GG: { Tablet: 'a tablet', Smartwatch: 'a smartwatch', Laptop: 'a laptop', Versicherung: 'device insurance' },
+    gg: ['You also use *{0}*.', 'In addition, you have *{0}*.'],
+    KB: ['less than €30', '€30–50', '€50–80', 'more than €80'],
+    kost: ['You currently pay *{0}* per month.', 'Your current costs are *{0}* per month.']
+  },
+  tr: {
+    sep: ', ', and: ' ve ',
+    anb: ['Şu anda *{0}* müşterisisiniz.', 'Mevcut operatörünüz *{0}*.'],
+    anbO: ['Şu anda *başka bir operatörün* müşterisisiniz.', 'Mevcut operatörünüz *başka bir operatör*.'],
+    EM: ['3 aydan kısa süre içinde', '3–6 ay içinde', '6–12 ay içinde', '12 aydan uzun süre sonra'],
+    end: ['Sözleşmeniz *{0}* sona eriyor.', 'Sözleşme bitişi: *{0}*.'],
+    kj: ['Sözleşme *zaten feshedildi*.', 'Sözleşmeyi *zaten feshettiniz*.'],
+    kn: ['Sözleşme *henüz feshedilmedi*.', 'Sözleşmeyi *henüz feshetmediniz*.'],
+    pj: ['Numaranızı *taşımak istiyorsunuz*.', 'Numaranız *taşınacak*.'],
+    pn: ['Numaranızı *taşımak istemiyorsunuz*.', 'Numaranız *taşınmayacak*.'],
+    HM: { iPhone: 'bir iPhone', Samsung: 'bir Samsung telefon', Pixel: 'bir Google Pixel', Xiaomi: 'bir Xiaomi telefon', Andere: 'başka bir telefon' },
+    AM: ['1 yıldan yeni', '1–2 yıllık', '2 yıldan eski'],
+    hw2: ['*{0}* kullanıyorsunuz; cihazınız *{1}*.', 'Şu anki cihazınız *{0}* ve *{1}*.'],
+    hw1: ['*{0}* kullanıyorsunuz.', 'Şu anki cihazınız *{0}*.'],
+    hwA: ['Cihazınız *{0}*.', 'Şu anki telefonunuz *{0}*.'],
+    du: ['*Sınırsız veri* istiyorsunuz.', '*Sınırsız internet* kullanmak istiyorsunuz.'],
+    DV: ['10 GB’ın altında', '10–50 GB', '50–100 GB'],
+    dv: ['Aylık veri ihtiyacınız *{0}*.', 'Ayda *{0}* kullanıyorsunuz.'],
+    WI: { Streaming: 'yayın akışı', Ausland: 'yurt dışında kullanım', Kamera: 'iyi bir kamera', Hotspot: 'hotspot', Games: 'oyun', 'Social Media': 'sosyal medya', 'Viel Speicher': 'geniş depolama alanı' },
+    wi: ['Sizin için en önemli olanlar: *{0}*.', 'Özellikle *{0}* sizin için önemli.'],
+    P: ['{n} kişiden'], C: ['{n} mobil hat'],
+    hhP: ['Haneniz *{0}* oluşuyor.'],
+    hhV: ['Sizde *{0}* var.', 'Şu anda *{0}* kullanıyorsunuz.'],
+    tvk: ['*Televizyon izlemiyorsunuz*.', 'Televizyon *kullanmıyorsunuz*.'],
+    TV: { Kabel: 'kablo', Sat: 'uydu', Streaming: 'yayın akışı' },
+    tv: ['Televizyonu *{0}* üzerinden izliyorsunuz.', 'TV’yi *{0}* ile izliyorsunuz.'],
+    TW: { Werbefrei: 'reklamsız yayın', 'Viel Aufnahme': 'geniş kayıt alanı', 'EU-Ausland': 'AB ülkelerinde TV' },
+    tw: ['Televizyonda sizin için önemli olanlar: *{0}*.', 'TV’de *{0}* sizin için önemli.'],
+    WM: ['memnunsunuz', 'kısmen memnunsunuz', 'memnun değilsiniz'],
+    wl: ['Evdeki WLAN’dan *{0}*.', 'WLAN konusunda *{0}*.'],
+    GG: { Tablet: 'tablet', Smartwatch: 'akıllı saat', Laptop: 'dizüstü bilgisayar', Versicherung: 'cihaz sigortası' },
+    gg: ['Ayrıca şunları kullanıyorsunuz: *{0}*.', 'Ek olarak sizde şunlar var: *{0}*.'],
+    KB: ['30 €’nun altında', '30–50 €', '50–80 €', '80 €’nun üzerinde'],
+    kost: ['Şu anda ayda *{0}* ödüyorsunuz.', 'Güncel aylık maliyetiniz *{0}*.']
+  },
+  ru: {
+    sep: ', ', and: ' и ',
+    anb: ['Сейчас вы клиент *{0}*.', 'Ваш текущий оператор — *{0}*.'],
+    anbO: ['Сейчас вы клиент *другого оператора*.', 'Ваш текущий оператор — *другой*.'],
+    EM: ['менее чем через 3 месяца', 'через 3–6 месяцев', 'через 6–12 месяцев', 'более чем через 12 месяцев'],
+    end: ['Ваш договор заканчивается *{0}*.', 'Срок действия договора истекает *{0}*.'],
+    kj: ['Договор *уже расторгнут*.', 'Вы *уже расторгли* договор.'],
+    kn: ['Договор *ещё не расторгнут*.', 'Вы *ещё не расторгали* договор.'],
+    pj: ['Вы хотите *сохранить свой номер*.', 'Ваш номер *будет перенесён*.'],
+    pn: ['Вы *не хотите сохранять* свой номер.', 'Ваш номер *не будет переноситься*.'],
+    HM: { iPhone: 'iPhone', Samsung: 'смартфон Samsung', Pixel: 'Google Pixel', Xiaomi: 'смартфон Xiaomi', Andere: 'другой смартфон' },
+    AM: ['младше 1 года', '1–2 года', 'старше 2 лет'],
+    hw2: ['Ваше устройство — *{0}*, возраст: *{1}*.'],
+    hw1: ['Ваше устройство — *{0}*.', 'Сейчас у вас *{0}*.'],
+    hwA: ['Возраст вашего устройства: *{0}*.'],
+    du: ['Вам нужен *безлимитный интернет*.', 'Вы хотите *безлимитный объём данных*.'],
+    DV: ['меньше 10 ГБ', '10–50 ГБ', '50–100 ГБ'],
+    dv: ['Ваш объём данных — *{0}* в месяц.', 'В месяц вы используете *{0}*.'],
+    WI: { Streaming: 'стриминг', Ausland: 'использование за границей', Kamera: 'хорошая камера', Hotspot: 'точка доступа (hotspot)', Games: 'игры', 'Social Media': 'соцсети', 'Viel Speicher': 'много памяти в устройстве' },
+    wi: ['Для вас особенно важно: *{0}*.', 'Для вас важно: *{0}*.'],
+    P: ['{n} человек', '{n} человека', '{n} человек'], C: ['{n} мобильный договор', '{n} мобильных договора', '{n} мобильных договоров'],
+    hhP: ['В вашем домохозяйстве *{0}*.', 'Состав вашего домохозяйства: *{0}*.'],
+    hhV: ['У вас *{0}*.', 'Сейчас у вас *{0}*.'],
+    tvk: ['Вы *не смотрите телевизор*.', 'Телевидением вы *не пользуетесь*.'],
+    TV: { Kabel: 'кабель', Sat: 'спутник', Streaming: 'стриминг' },
+    tv: ['Телевизор вы смотрите через *{0}*.', 'Ваше телевидение — это *{0}*.'],
+    TW: { Werbefrei: 'просмотр без рекламы', 'Viel Aufnahme': 'большой объём записи', 'EU-Ausland': 'ТВ в странах ЕС' },
+    tw: ['В телевидении для вас важно: *{0}*.', 'При просмотре ТВ для вас важно: *{0}*.'],
+    WM: ['устраивает', 'устраивает лишь отчасти', 'не устраивает'],
+    wl: ['Домашний Wi‑Fi вас *{0}*.', 'Wi‑Fi дома вас *{0}*.'],
+    GG: { Tablet: 'планшет', Smartwatch: 'смарт-часы', Laptop: 'ноутбук', Versicherung: 'страховка устройства' },
+    gg: ['Дополнительно вы пользуетесь: *{0}*.', 'Кроме того, у вас есть: *{0}*.'],
+    KB: ['менее 30 €', '30–50 €', '50–80 €', 'более 80 €'],
+    kost: ['Сейчас вы платите *{0}* в месяц.', 'Ваши текущие расходы — *{0}* в месяц.']
+  },
+  uk: {
+    sep: ', ', and: ' і ',
+    anb: ['Зараз ви клієнт *{0}*.', 'Ваш поточний оператор — *{0}*.'],
+    anbO: ['Зараз ви клієнт *іншого оператора*.', 'Ваш поточний оператор — *інший*.'],
+    EM: ['менш ніж через 3 місяці', 'через 3–6 місяців', 'через 6–12 місяців', 'більш ніж через 12 місяців'],
+    end: ['Ваш договір закінчується *{0}*.', 'Термін дії договору спливає *{0}*.'],
+    kj: ['Договір *уже розірвано*.', 'Ви *вже розірвали* договір.'],
+    kn: ['Договір *ще не розірвано*.', 'Ви *ще не розривали* договір.'],
+    pj: ['Ви хочете *зберегти свій номер*.', 'Ваш номер *буде перенесено*.'],
+    pn: ['Ви *не хочете зберігати* свій номер.', 'Ваш номер *не буде переноситися*.'],
+    HM: { iPhone: 'iPhone', Samsung: 'смартфон Samsung', Pixel: 'Google Pixel', Xiaomi: 'смартфон Xiaomi', Andere: 'інший смартфон' },
+    AM: ['молодше 1 року', '1–2 роки', 'старше 2 років'],
+    hw2: ['Ваш пристрій — *{0}*, вік: *{1}*.'],
+    hw1: ['Ваш пристрій — *{0}*.', 'Зараз у вас *{0}*.'],
+    hwA: ['Вік вашого пристрою: *{0}*.'],
+    du: ['Вам потрібен *безлімітний інтернет*.', 'Ви хочете *безлімітний обсяг даних*.'],
+    DV: ['менше 10 ГБ', '10–50 ГБ', '50–100 ГБ'],
+    dv: ['Ваші потреби в даних — *{0}* на місяць.', 'На місяць ви використовуєте *{0}*.'],
+    WI: { Streaming: 'стримінг', Ausland: 'використання за кордоном', Kamera: 'гарна камера', Hotspot: 'точка доступу (hotspot)', Games: 'ігри', 'Social Media': 'соцмережі', 'Viel Speicher': 'багато пам’яті на пристрої' },
+    wi: ['Для вас особливо важливо: *{0}*.', 'Для вас важливо: *{0}*.'],
+    P: ['{n} особа', '{n} особи', '{n} осіб'], C: ['{n} мобільний договір', '{n} мобільні договори', '{n} мобільних договорів'],
+    hhP: ['У вашому домогосподарстві *{0}*.', 'Склад вашого домогосподарства: *{0}*.'],
+    hhV: ['У вас *{0}*.', 'Зараз у вас *{0}*.'],
+    tvk: ['Ви *не дивитеся телевізор*.', 'Телебаченням ви *не користуєтеся*.'],
+    TV: { Kabel: 'кабель', Sat: 'супутник', Streaming: 'стримінг' },
+    tv: ['Телевізор ви дивитеся через *{0}*.', 'Ваше телебачення — це *{0}*.'],
+    TW: { Werbefrei: 'перегляд без реклами', 'Viel Aufnahme': 'великий обсяг запису', 'EU-Ausland': 'ТБ у країнах ЄС' },
+    tw: ['У телебаченні для вас важливо: *{0}*.', 'Під час перегляду ТБ для вас важливо: *{0}*.'],
+    WM: ['влаштовує', 'влаштовує лише частково', 'не влаштовує'],
+    wl: ['Домашній Wi‑Fi вас *{0}*.', 'Wi‑Fi вдома вас *{0}*.'],
+    GG: { Tablet: 'планшет', Smartwatch: 'смарт-годинник', Laptop: 'ноутбук', Versicherung: 'страхування пристрою' },
+    gg: ['Додатково ви користуєтеся: *{0}*.', 'Крім того, у вас є: *{0}*.'],
+    KB: ['менше 30 €', '30–50 €', '50–80 €', 'понад 80 €'],
+    kost: ['Зараз ви платите *{0}* на місяць.', 'Ваші поточні витрати — *{0}* на місяць.']
+  },
+  pl: {
+    sep: ', ', and: ' i ',
+    anb: ['Są Państwo obecnie klientami *{0}*.', 'Państwa obecny operator to *{0}*.'],
+    anbO: ['Są Państwo obecnie klientami *innego operatora*.', 'Państwa obecny operator to *inny operator*.'],
+    EM: ['za mniej niż 3 miesiące', 'za 3–6 miesięcy', 'za 6–12 miesięcy', 'za ponad 12 miesięcy'],
+    end: ['Państwa umowa kończy się *{0}*.', 'Umowa wygasa *{0}*.'],
+    kj: ['Umowa *została już wypowiedziana*.', 'Umowę *już wypowiedziano*.'],
+    kn: ['Umowa *nie została jeszcze wypowiedziana*.', 'Umowy *jeszcze nie wypowiedziano*.'],
+    pj: ['Chcą Państwo *zachować swój numer*.', 'Państwa numer *zostanie przeniesiony*.'],
+    pn: ['*Nie chcą* Państwo *zachować* swojego numeru.', 'Państwa numer *nie zostanie przeniesiony*.'],
+    HM: { iPhone: 'iPhone’a', Samsung: 'smartfona Samsung', Pixel: 'Google Pixel', Xiaomi: 'smartfona Xiaomi', Andere: 'innego smartfona' },
+    AM: ['mniej niż rok', '1–2 lata', 'ponad 2 lata'],
+    hw2: ['Korzystają Państwo z *{0}*, który ma *{1}*.'],
+    hw1: ['Korzystają Państwo z *{0}*.'],
+    hwA: ['Wiek Państwa urządzenia: *{0}*.'],
+    du: ['Potrzebują Państwo *nielimitowanego transferu danych*.', 'Zależy Państwu na *nielimitowanym internecie*.'],
+    DV: ['poniżej 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Państwa zapotrzebowanie na dane to *{0}* miesięcznie.', 'Miesięcznie zużywają Państwo *{0}*.'],
+    WI: { Streaming: 'streaming', Ausland: 'korzystanie za granicą', Kamera: 'dobry aparat', Hotspot: 'hotspot', Games: 'gry', 'Social Media': 'media społecznościowe', 'Viel Speicher': 'dużo pamięci w urządzeniu' },
+    wi: ['Szczególnie ważne dla Państwa: *{0}*.', 'Najważniejsze dla Państwa: *{0}*.'],
+    P: ['{n} osoba', '{n} osoby', '{n} osób'], C: ['{n} umowę mobilną', '{n} umowy mobilne', '{n} umów mobilnych'],
+    hhP: ['Skład Państwa gospodarstwa domowego: *{0}*.'],
+    hhV: ['Mają Państwo *{0}*.'],
+    tvk: ['*Nie oglądają* Państwo *telewizji*.', 'Z telewizji *nie korzystają* Państwo.'],
+    TV: { Kabel: 'kabel', Sat: 'satelitę', Streaming: 'streaming' },
+    tv: ['Telewizję oglądają Państwo przez *{0}*.'],
+    TW: { Werbefrei: 'oglądanie bez reklam', 'Viel Aufnahme': 'dużo miejsca na nagrania', 'EU-Ausland': 'TV w innych krajach UE' },
+    tw: ['Przy telewizji ważne dla Państwa: *{0}*.'],
+    WM: ['spełnia Państwa oczekiwania', 'tylko częściowo spełnia Państwa oczekiwania', 'nie spełnia Państwa oczekiwań'],
+    wl: ['Domowe Wi‑Fi *{0}*.', 'Wi‑Fi w domu *{0}*.'],
+    GG: { Tablet: 'tablet', Smartwatch: 'smartwatch', Laptop: 'laptop', Versicherung: 'ubezpieczenie urządzenia' },
+    gg: ['Dodatkowo korzystają Państwo z: *{0}*.', 'Ponadto mają Państwo: *{0}*.'],
+    KB: ['mniej niż 30 €', '30–50 €', '50–80 €', 'ponad 80 €'],
+    kost: ['Obecnie płacą Państwo *{0}* miesięcznie.', 'Państwa obecne koszty to *{0}* miesięcznie.']
+  },
+  ro: {
+    sep: ', ', and: ' și ',
+    anb: ['În prezent sunteți client *{0}*.', 'Furnizorul dumneavoastră actual este *{0}*.'],
+    anbO: ['În prezent sunteți client al *altui furnizor*.', 'Furnizorul dumneavoastră actual este *altul*.'],
+    EM: ['în mai puțin de 3 luni', 'în 3–6 luni', 'în 6–12 luni', 'în mai mult de 12 luni'],
+    end: ['Contractul dumneavoastră se încheie *{0}*.', 'Contractul expiră *{0}*.'],
+    kj: ['Contractul a fost *deja reziliat*.', 'Ați *reziliat deja* contractul.'],
+    kn: ['Contractul *nu a fost încă reziliat*.', '*Nu ați reziliat încă* contractul.'],
+    pj: ['Doriți să *păstrați numărul*.', 'Numărul dumneavoastră *va fi portat*.'],
+    pn: ['*Nu doriți să păstrați* numărul.', 'Numărul dumneavoastră *nu va fi portat*.'],
+    HM: { iPhone: 'un iPhone', Samsung: 'un smartphone Samsung', Pixel: 'un Google Pixel', Xiaomi: 'un smartphone Xiaomi', Andere: 'un alt smartphone' },
+    AM: ['mai nou de 1 an', 'vechi de 1–2 ani', 'mai vechi de 2 ani'],
+    hw2: ['Folosiți *{0}*, care este *{1}*.', 'Dispozitivul dumneavoastră actual este *{0}*, *{1}*.'],
+    hw1: ['Folosiți *{0}*.', 'Dispozitivul dumneavoastră actual este *{0}*.'],
+    hwA: ['Dispozitivul dumneavoastră este *{0}*.'],
+    du: ['Aveți nevoie de *date nelimitate*.', 'Doriți *trafic de date nelimitat*.'],
+    DV: ['sub 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Necesarul dumneavoastră de date este de *{0}* pe lună.', 'Consumați *{0}* pe lună.'],
+    WI: { Streaming: 'streaming-ul', Ausland: 'utilizarea în străinătate', Kamera: 'o cameră bună', Hotspot: 'hotspot-ul', Games: 'jocurile', 'Social Media': 'rețelele sociale', 'Viel Speicher': 'multă memorie în dispozitiv' },
+    wi: ['Pentru dumneavoastră contează în special: *{0}*.', 'Vă contează mai ales: *{0}*.'],
+    P: ['{n} persoană', '{n} persoane', '{n} de persoane'], C: ['{n} contract de telefonie mobilă', '{n} contracte de telefonie mobilă', '{n} de contracte de telefonie mobilă'],
+    hhP: ['Gospodăria dumneavoastră are *{0}*.', 'Gospodăria dumneavoastră este formată din *{0}*.'],
+    hhV: ['Aveți *{0}*.', 'În prezent aveți *{0}*.'],
+    tvk: ['*Nu vă uitați la televizor*.', '*Nu folosiți* televiziunea.'],
+    TV: { Kabel: 'cablu', Sat: 'satelit', Streaming: 'streaming' },
+    tv: ['Vă uitați la televizor prin *{0}*.', 'Televiziunea dumneavoastră funcționează prin *{0}*.'],
+    TW: { Werbefrei: 'vizionare fără reclame', 'Viel Aufnahme': 'mult spațiu de înregistrare', 'EU-Ausland': 'TV în alte țări UE' },
+    tw: ['La televiziune contează pentru dumneavoastră: *{0}*.', 'Când vă uitați la TV, vă contează: *{0}*.'],
+    WM: ['vă mulțumește', 'vă mulțumește doar parțial', 'nu vă mulțumește'],
+    wl: ['Wi‑Fi‑ul de acasă *{0}*.', 'Wi‑Fi‑ul din locuința dumneavoastră *{0}*.'],
+    GG: { Tablet: 'o tabletă', Smartwatch: 'un smartwatch', Laptop: 'un laptop', Versicherung: 'o asigurare pentru dispozitiv' },
+    gg: ['De asemenea, folosiți: *{0}*.', 'În plus, aveți: *{0}*.'],
+    KB: ['mai puțin de 30 €', '30–50 €', '50–80 €', 'peste 80 €'],
+    kost: ['În prezent plătiți *{0}* pe lună.', 'Costurile dumneavoastră actuale sunt de *{0}* pe lună.']
+  },
+  es: {
+    sep: ', ', and: ' y ',
+    anb: ['Actualmente es cliente de *{0}*.', 'Su proveedor actual es *{0}*.'],
+    anbO: ['Actualmente es cliente de *otro proveedor*.', 'Su proveedor actual es *otro*.'],
+    EM: ['en menos de 3 meses', 'en 3–6 meses', 'en 6–12 meses', 'en más de 12 meses'],
+    end: ['Su contrato termina *{0}*.', 'Su contrato vence *{0}*.'],
+    kj: ['El contrato *ya está cancelado*.', 'Usted *ya ha cancelado* el contrato.'],
+    kn: ['El contrato *aún no está cancelado*.', 'Usted *todavía no ha cancelado* el contrato.'],
+    pj: ['Quiere *conservar su número*.', 'Su número de teléfono *se conservará*.'],
+    pn: ['*No quiere conservar* su número.', 'Su número de teléfono *no se conservará*.'],
+    HM: { iPhone: 'un iPhone', Samsung: 'un smartphone Samsung', Pixel: 'un Google Pixel', Xiaomi: 'un smartphone Xiaomi', Andere: 'otro smartphone' },
+    AM: ['menos de 1 año', '1–2 años', 'más de 2 años'],
+    hw2: ['Usa *{0}* con *{1}* de antigüedad.', 'Su dispositivo actual es *{0}*, con *{1}* de antigüedad.'],
+    hw1: ['Usa *{0}*.', 'Su dispositivo actual es *{0}*.'],
+    hwA: ['Su dispositivo tiene *{0}* de antigüedad.', 'Su smartphone actual tiene *{0}* de antigüedad.'],
+    du: ['Necesita *datos ilimitados*.', 'Quiere *un volumen de datos ilimitado*.'],
+    DV: ['menos de 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Su consumo de datos es de *{0}* al mes.', 'Al mes consume *{0}*.'],
+    WI: { Streaming: 'el streaming', Ausland: 'usarlo en el extranjero', Kamera: 'una buena cámara', Hotspot: 'el punto de acceso (hotspot)', Games: 'los juegos', 'Social Media': 'las redes sociales', 'Viel Speicher': 'mucho almacenamiento' },
+    wi: ['Lo más importante para usted es: *{0}*.', 'Le interesa especialmente: *{0}*.'],
+    P: ['{n} persona', '{n} personas'], C: ['{n} contrato de móvil', '{n} contratos de móvil'],
+    hhP: ['En su hogar hay *{0}*.', 'Su hogar está formado por *{0}*.'],
+    hhV: ['Tiene *{0}*.', 'Actualmente tiene *{0}*.'],
+    tvk: ['*No ve la televisión*.', '*No utiliza* la televisión.'],
+    TV: { Kabel: 'cable', Sat: 'satélite', Streaming: 'streaming' },
+    tv: ['Ve la televisión por *{0}*.', 'Su televisión funciona por *{0}*.'],
+    TW: { Werbefrei: 'ver sin publicidad', 'Viel Aufnahme': 'mucha capacidad de grabación', 'EU-Ausland': 'ver la tele en otros países de la UE' },
+    tw: ['En televisión le interesa: *{0}*.', 'Al ver la tele, le resulta importante: *{0}*.'],
+    WM: ['le satisface', 'solo le satisface en parte', 'no le satisface'],
+    wl: ['El WiFi de su casa *{0}*.', 'Su WiFi en casa *{0}*.'],
+    GG: { Tablet: 'una tablet', Smartwatch: 'un smartwatch', Laptop: 'un portátil', Versicherung: 'un seguro para el dispositivo' },
+    gg: ['Además utiliza: *{0}*.', 'Adicionalmente tiene: *{0}*.'],
+    KB: ['menos de 30 €', '30–50 €', '50–80 €', 'más de 80 €'],
+    kost: ['Actualmente paga *{0}* al mes.', 'Sus costes actuales son de *{0}* al mes.']
+  },
+  it: {
+    sep: ', ', and: ' e ',
+    anb: ['Attualmente è cliente di *{0}*.', 'Il Suo operatore attuale è *{0}*.'],
+    anbO: ['Attualmente è cliente di *un altro operatore*.', 'Il Suo operatore attuale è *un altro*.'],
+    EM: ['tra meno di 3 mesi', 'tra 3–6 mesi', 'tra 6–12 mesi', 'tra più di 12 mesi'],
+    end: ['Il Suo contratto scade *{0}*.', 'La scadenza del contratto è *{0}*.'],
+    kj: ['Il contratto è *già stato disdetto*.', 'Ha *già disdetto* il contratto.'],
+    kn: ['Il contratto *non è ancora stato disdetto*.', '*Non ha ancora disdetto* il contratto.'],
+    pj: ['Desidera *portare con sé il numero*.', 'Il Suo numero *verrà portato con sé*.'],
+    pn: ['*Non desidera* portare con sé il numero.', 'Il Suo numero *non verrà portato con sé*.'],
+    HM: { iPhone: 'un iPhone', Samsung: 'uno smartphone Samsung', Pixel: 'un Google Pixel', Xiaomi: 'uno smartphone Xiaomi', Andere: 'un altro smartphone' },
+    AM: ['meno di 1 anno', '1–2 anni', 'più di 2 anni'],
+    hw2: ['Utilizza *{0}* con *{1}* di vita.', 'Il Suo dispositivo attuale è *{0}*, con *{1}* di vita.'],
+    hw1: ['Utilizza *{0}*.', 'Il Suo dispositivo attuale è *{0}*.'],
+    hwA: ['Il Suo dispositivo ha *{0}* di vita.', 'Il Suo smartphone attuale ha *{0}* di vita.'],
+    du: ['Ha bisogno di *dati illimitati*.', 'Desidera *un volume di dati illimitato*.'],
+    DV: ['meno di 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Il Suo fabbisogno di dati è di *{0}* al mese.', 'Ogni mese consuma *{0}*.'],
+    WI: { Streaming: 'lo streaming', Ausland: 'l’uso all’estero', Kamera: 'una buona fotocamera', Hotspot: 'l’hotspot', Games: 'i giochi', 'Social Media': 'i social media', 'Viel Speicher': 'molta memoria nel dispositivo' },
+    wi: ['Per Lei è particolarmente importante: *{0}*.', 'Le sta a cuore soprattutto: *{0}*.'],
+    P: ['{n} persona', '{n} persone'], C: ['{n} contratto di telefonia mobile', '{n} contratti di telefonia mobile'],
+    hhP: ['Il Suo nucleo familiare è composto da *{0}*.', 'Il Suo nucleo familiare conta *{0}*.'],
+    hhV: ['Ha *{0}*.', 'Attualmente ha *{0}*.'],
+    tvk: ['*Non guarda la televisione*.', '*Non utilizza* la televisione.'],
+    TV: { Kabel: 'cavo', Sat: 'satellite', Streaming: 'streaming' },
+    tv: ['Guarda la televisione tramite *{0}*.', 'La Sua televisione funziona tramite *{0}*.'],
+    TW: { Werbefrei: 'la visione senza pubblicità', 'Viel Aufnahme': 'molta capacità di registrazione', 'EU-Ausland': 'la TV negli altri Paesi UE' },
+    tw: ['Per la televisione è importante per Lei: *{0}*.', 'Guardando la TV, Le interessa: *{0}*.'],
+    WM: ['La soddisfa', 'La soddisfa solo in parte', 'non La soddisfa'],
+    wl: ['Il Wi‑Fi di casa *{0}*.', 'Il Suo Wi‑Fi domestico *{0}*.'],
+    GG: { Tablet: 'un tablet', Smartwatch: 'uno smartwatch', Laptop: 'un laptop', Versicherung: 'un’assicurazione per il dispositivo' },
+    gg: ['Inoltre utilizza: *{0}*.', 'In aggiunta ha: *{0}*.'],
+    KB: ['meno di 30 €', '30–50 €', '50–80 €', 'più di 80 €'],
+    kost: ['Attualmente paga *{0}* al mese.', 'I Suoi costi attuali sono di *{0}* al mese.']
+  },
+  pt: {
+    sep: ', ', and: ' e ',
+    anb: ['Atualmente você é cliente de *{0}*.', 'Sua operadora atual é *{0}*.'],
+    anbO: ['Atualmente você é cliente de *outra operadora*.', 'Sua operadora atual é *outra*.'],
+    EM: ['em menos de 3 meses', 'em 3–6 meses', 'em 6–12 meses', 'em mais de 12 meses'],
+    end: ['Seu contrato termina *{0}*.', 'Seu contrato vence *{0}*.'],
+    kj: ['O contrato *já foi cancelado*.', 'Você *já cancelou* o contrato.'],
+    kn: ['O contrato *ainda não foi cancelado*.', 'Você *ainda não cancelou* o contrato.'],
+    pj: ['Você quer *manter o seu número*.', 'O seu número *será mantido*.'],
+    pn: ['Você *não quer manter* o seu número.', 'O seu número *não será mantido*.'],
+    HM: { iPhone: 'um iPhone', Samsung: 'um smartphone Samsung', Pixel: 'um Google Pixel', Xiaomi: 'um smartphone Xiaomi', Andere: 'outro smartphone' },
+    AM: ['menos de 1 ano', '1–2 anos', 'mais de 2 anos'],
+    hw2: ['Você usa *{0}* com *{1}* de uso.', 'Seu aparelho atual é *{0}*, com *{1}* de uso.'],
+    hw1: ['Você usa *{0}*.', 'Seu aparelho atual é *{0}*.'],
+    hwA: ['Seu aparelho tem *{0}* de uso.'],
+    du: ['Você precisa de *dados ilimitados*.', 'Você quer *um volume de dados ilimitado*.'],
+    DV: ['menos de 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Sua necessidade de dados é de *{0}* por mês.', 'Por mês você consome *{0}*.'],
+    WI: { Streaming: 'streaming', Ausland: 'uso no exterior', Kamera: 'uma boa câmera', Hotspot: 'hotspot', Games: 'jogos', 'Social Media': 'redes sociais', 'Viel Speicher': 'bastante armazenamento' },
+    wi: ['O que é mais importante para você: *{0}*.', 'Para você é especialmente importante: *{0}*.'],
+    P: ['{n} pessoa', '{n} pessoas'], C: ['{n} contrato de celular', '{n} contratos de celular'],
+    hhP: ['Seu domicílio é composto por *{0}*.', 'Sua casa tem *{0}*.'],
+    hhV: ['Você tem *{0}*.', 'Atualmente você tem *{0}*.'],
+    tvk: ['Você *não assiste TV*.', 'Você *não usa* televisão.'],
+    TV: { Kabel: 'cabo', Sat: 'satélite', Streaming: 'streaming' },
+    tv: ['Você assiste TV por *{0}*.', 'Sua TV funciona por *{0}*.'],
+    TW: { Werbefrei: 'assistir sem propaganda', 'Viel Aufnahme': 'bastante espaço de gravação', 'EU-Ausland': 'TV em outros países da UE' },
+    tw: ['Na TV, é importante para você: *{0}*.', 'Ao assistir TV, o que importa para você é: *{0}*.'],
+    WM: ['atende às suas expectativas', 'atende só em parte às suas expectativas', 'não atende às suas expectativas'],
+    wl: ['O Wi‑Fi de casa *{0}*.', 'O seu Wi‑Fi residencial *{0}*.'],
+    GG: { Tablet: 'um tablet', Smartwatch: 'um smartwatch', Laptop: 'um notebook', Versicherung: 'um seguro do aparelho' },
+    gg: ['Além disso, você usa: *{0}*.', 'Você também tem: *{0}*.'],
+    KB: ['menos de 30 €', '30–50 €', '50–80 €', 'mais de 80 €'],
+    kost: ['Atualmente você paga *{0}* por mês.', 'Seus custos atuais são de *{0}* por mês.']
+  },
+  el: {
+    sep: ', ', and: ' και ',
+    anb: ['Αυτή τη στιγμή έχετε συμβόλαιο με την *{0}*.', 'Ο τρέχων πάροχός σας είναι η *{0}*.'],
+    anbO: ['Αυτή τη στιγμή έχετε συμβόλαιο με *άλλον πάροχο*.', 'Ο τρέχων πάροχός σας είναι *άλλος*.'],
+    EM: ['σε λιγότερο από 3 μήνες', 'σε 3–6 μήνες', 'σε 6–12 μήνες', 'σε περισσότερους από 12 μήνες'],
+    end: ['Το συμβόλαιό σας λήγει *{0}*.', 'Η λήξη του συμβολαίου είναι *{0}*.'],
+    kj: ['Το συμβόλαιο *έχει ήδη καταγγελθεί*.', 'Έχετε *ήδη καταγγείλει* το συμβόλαιο.'],
+    kn: ['Το συμβόλαιο *δεν έχει καταγγελθεί ακόμη*.', '*Δεν έχετε καταγγείλει* ακόμη το συμβόλαιο.'],
+    pj: ['Θέλετε να *κρατήσετε τον αριθμό σας*.', 'Ο αριθμός σας *θα μεταφερθεί*.'],
+    pn: ['*Δεν θέλετε να κρατήσετε* τον αριθμό σας.', 'Ο αριθμός σας *δεν θα μεταφερθεί*.'],
+    HM: { iPhone: 'ένα iPhone', Samsung: 'ένα smartphone Samsung', Pixel: 'ένα Google Pixel', Xiaomi: 'ένα smartphone Xiaomi', Andere: 'ένα άλλο smartphone' },
+    AM: ['κάτω του 1 έτους', '1–2 ετών', 'άνω των 2 ετών'],
+    hw2: ['Χρησιμοποιείτε *{0}* ηλικίας *{1}*.', 'Η τρέχουσα συσκευή σας είναι *{0}*, ηλικίας *{1}*.'],
+    hw1: ['Χρησιμοποιείτε *{0}*.', 'Η τρέχουσα συσκευή σας είναι *{0}*.'],
+    hwA: ['Η συσκευή σας είναι ηλικίας *{0}*.', 'Το τρέχον smartphone σας είναι ηλικίας *{0}*.'],
+    du: ['Χρειάζεστε *απεριόριστα δεδομένα*.', 'Θέλετε *απεριόριστο όγκο δεδομένων*.'],
+    DV: ['κάτω από 10 GB', '10–50 GB', '50–100 GB'],
+    dv: ['Οι ανάγκες σας σε δεδομένα είναι *{0}* τον μήνα.', 'Καταναλώνετε *{0}* τον μήνα.'],
+    WI: { Streaming: 'το streaming', Ausland: 'η χρήση στο εξωτερικό', Kamera: 'η καλή κάμερα', Hotspot: 'το hotspot', Games: 'τα παιχνίδια', 'Social Media': 'τα μέσα κοινωνικής δικτύωσης', 'Viel Speicher': 'ο μεγάλος αποθηκευτικός χώρος' },
+    wi: ['Για εσάς έχει ιδιαίτερη σημασία: *{0}*.', 'Σας ενδιαφέρει κυρίως: *{0}*.'],
+    P: ['{n} άτομο', '{n} άτομα'], C: ['{n} συμβόλαιο κινητής', '{n} συμβόλαια κινητής'],
+    hhP: ['Το νοικοκυριό σας αποτελείται από *{0}*.', 'Το νοικοκυριό σας έχει *{0}*.'],
+    hhV: ['Έχετε *{0}*.', 'Αυτή τη στιγμή έχετε *{0}*.'],
+    tvk: ['*Δεν βλέπετε τηλεόραση*.', '*Δεν χρησιμοποιείτε* τηλεόραση.'],
+    TV: { Kabel: 'καλωδίου', Sat: 'δορυφόρου', Streaming: 'streaming' },
+    tv: ['Βλέπετε τηλεόραση μέσω *{0}*.', 'Η τηλεόρασή σας λειτουργεί μέσω *{0}*.'],
+    TW: { Werbefrei: 'θέαση χωρίς διαφημίσεις', 'Viel Aufnahme': 'πολύς χώρος εγγραφής', 'EU-Ausland': 'TV σε άλλες χώρες της ΕΕ' },
+    tw: ['Στην τηλεόραση έχει σημασία για εσάς: *{0}*.', 'Όταν βλέπετε TV, σας ενδιαφέρει: *{0}*.'],
+    WM: ['σας ικανοποιεί', 'σας ικανοποιεί μόνο εν μέρει', 'δεν σας ικανοποιεί'],
+    wl: ['Το Wi‑Fi στο σπίτι σας *{0}*.', 'Το οικιακό Wi‑Fi σας *{0}*.'],
+    GG: { Tablet: 'tablet', Smartwatch: 'smartwatch', Laptop: 'laptop', Versicherung: 'ασφάλιση συσκευής' },
+    gg: ['Επιπλέον χρησιμοποιείτε: *{0}*.', 'Επίσης έχετε: *{0}*.'],
+    KB: ['λιγότερο από 30 €', '30–50 €', '50–80 €', 'περισσότερο από 80 €'],
+    kost: ['Αυτή τη στιγμή πληρώνετε *{0}* τον μήνα.', 'Το τρέχον κόστος σας είναι *{0}* τον μήνα.']
+  },
+  ar: {
+    sep: '، ', and: ' و',
+    anb: ['حاليًا اشتراكك لدى *{0}*.', 'مزوّدك الحالي هو *{0}*.'],
+    anbO: ['حاليًا اشتراكك لدى *مزوّد آخر*.', 'مزوّدك الحالي هو *مزوّد آخر*.'],
+    EM: ['خلال أقل من 3 أشهر', 'خلال 3–6 أشهر', 'خلال 6–12 شهرًا', 'خلال أكثر من 12 شهرًا'],
+    end: ['ينتهي عقدك *{0}*.', 'ينتهي العقد *{0}*.'],
+    kj: ['العقد *أُلغي بالفعل*.', 'لقد *ألغيت* العقد *بالفعل*.'],
+    kn: ['العقد *لم يُلغَ بعد*.', '*لم تُلغِ* العقد *بعد*.'],
+    pj: ['ترغب في *الاحتفاظ برقمك*.', 'رقمك *سيتم نقله*.'],
+    pn: ['*لا ترغب في الاحتفاظ* برقمك.', 'رقمك *لن يتم نقله*.'],
+    HM: { iPhone: 'iPhone', Samsung: 'هاتف Samsung', Pixel: 'هاتف Google Pixel', Xiaomi: 'هاتف Xiaomi', Andere: 'هاتفًا آخر' },
+    AM: ['أقل من سنة', 'من سنة إلى سنتين', 'أكثر من سنتين'],
+    hw2: ['تستخدم *{0}* عمره *{1}*.'],
+    hw1: ['تستخدم *{0}*.'],
+    hwA: ['عمر جهازك *{0}*.'],
+    du: ['تحتاج إلى *بيانات غير محدودة*.', 'ترغب في *حجم بيانات غير محدود*.'],
+    DV: ['أقل من 10 جيجابايت', '10–50 جيجابايت', '50–100 جيجابايت'],
+    dv: ['احتياجك من البيانات *{0}* شهريًا.', 'تستهلك *{0}* شهريًا.'],
+    WI: { Streaming: 'البث (Streaming)', Ausland: 'الاستخدام في الخارج', Kamera: 'كاميرا جيدة', Hotspot: 'نقطة الاتصال (Hotspot)', Games: 'الألعاب', 'Social Media': 'وسائل التواصل الاجتماعي', 'Viel Speicher': 'مساحة تخزين كبيرة' },
+    wi: ['الأهم بالنسبة لك: *{0}*.', 'يهمّك بشكل خاص: *{0}*.'],
+    P: ['شخص واحد', 'شخصين', '{n} أشخاص', '{n} شخصًا'], C: ['عقد جوال واحد', 'عقدي جوال', '{n} عقود جوال', '{n} عقدًا للجوال'],
+    hhP: ['تتكوّن أسرتك من *{0}*.', 'يضم منزلك *{0}*.'],
+    hhV: ['لديك *{0}*.', 'لديك حاليًا *{0}*.'],
+    tvk: ['*لا تشاهد التلفزيون*.', '*لا تستخدم* التلفزيون.'],
+    TV: { Kabel: 'الكابل', Sat: 'القمر الصناعي', Streaming: 'البث عبر الإنترنت' },
+    tv: ['تشاهد التلفزيون عبر *{0}*.', 'يعمل تلفزيونك عبر *{0}*.'],
+    TW: { Werbefrei: 'المشاهدة بدون إعلانات', 'Viel Aufnahme': 'مساحة تسجيل كبيرة', 'EU-Ausland': 'التلفزيون في دول الاتحاد الأوروبي الأخرى' },
+    tw: ['في التلفزيون يهمّك: *{0}*.', 'عند مشاهدة التلفزيون يهمّك: *{0}*.'],
+    WM: ['ترضيك', 'ترضيك جزئيًا فقط', 'لا ترضيك'],
+    wl: ['شبكة الواي فاي في منزلك *{0}*.', 'الواي فاي المنزلي *{0}*.'],
+    GG: { Tablet: 'جهاز لوحي', Smartwatch: 'ساعة ذكية', Laptop: 'حاسوب محمول', Versicherung: 'تأمين على الجهاز' },
+    gg: ['كما تستخدم: *{0}*.', 'ولديك أيضًا: *{0}*.'],
+    KB: ['أقل من 30 €', '30–50 €', '50–80 €', 'أكثر من 80 €'],
+    kost: ['تدفع حاليًا *{0}* شهريًا.', 'تكاليفك الحالية *{0}* شهريًا.']
+  }
+};
+// *fett* und {0}/{1} in Satzteile fuer die Anzeige umsetzen (Text | { b: fett })
+const sitFmt = (tpl, vals) => String(tpl).replace(/\{(\d)\}/g, (m, i) => vals && vals[+i] != null ? vals[+i] : '').split('*').map((p, i) => i % 2 ? { b: p } : p).filter(p => p !== '');
+// Mehrzahl-Form je Sprache (Index in die Formenliste; ru/uk/pl/ro/ar haben mehrere Formen)
+const sitPluralIdx = (l, n) => {
+  const a = n % 10, b = n % 100;
+  if (l === 'ru' || l === 'uk') return a === 1 && b !== 11 ? 0 : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 1 : 2;
+  if (l === 'pl') return n === 1 ? 0 : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 1 : 2;
+  if (l === 'ro') return n === 1 ? 0 : n === 0 || (b >= 2 && b <= 19) ? 1 : 2;
+  if (l === 'ar') return n === 1 ? 0 : n === 2 ? 1 : b >= 3 && b <= 10 ? 2 : 3;
+  if (l === 'tr') return 0;
+  return n === 1 ? 0 : 1;
+};
+const sitNumPhrase = (l, forms, n, label) => forms[Math.min(sitPluralIdx(l, n), forms.length - 1)].replace('{n}', label != null ? label : n);
+// Fliesstext in der gewaehlten Zielsprache (Gegenstueck zu sitSentence fuer Deutsch). Liefert dieselbe Struktur: Liste von Satz-Teilen.
+const sitSentenceL = (td, itemId) => {
+  const l = __sitLang, L = SIT_SENT[l];
+  const sel = sitChipsParse(td);
+  const g = id => sel[id] || [];
+  const one = id => g(id)[0];
+  const out = [];
+  const say = (key, tpls, vals) => { if (tpls && tpls.length) out.push(sitFmt(sitPick(itemId + ':' + key, tpls), vals)); };
+  const list = (arr, map) => { const a = arr.map(x => map && map[x] || x); return a.length <= 1 ? a.join('') : a.slice(0, -1).join(L.sep) + L.and + a[a.length - 1]; };
+  if (itemId === 'Anbieter') {
+    const a = one('anb');
+    if (a) { if (a === 'Andere') say('anb', L.anbO); else say('anb', L.anb, [a]); }
+    const e = one('end');
+    if (e) { const i = ['< 3 Mon.', '3–6 Mon.', '6–12 Mon.', '> 12 Mon.'].indexOf(e); say('end', L.end, [i >= 0 ? L.EM[i] : sitT(e)]); }
+    const k = one('kuend');
+    if (k) say('kuend', k === 'Ja' ? L.kj : L.kn);
+    const pt = one('port');
+    if (pt) say('port', pt === 'Ja' ? L.pj : L.pn);
+  } else if (itemId === 'Hardware') {
+    const hd = one('handy'), al = one('alter');
+    const H = hd ? L.HM[hd] || hd : '';
+    const A = al ? L.AM[['< 1 J.', '1–2 J.', '> 2 J.'].indexOf(al)] || sitT(al) : '';
+    if (hd && al) say('hw', L.hw2, [H, A]);
+    else if (hd) say('hw', L.hw1, [H]);
+    else if (al) say('hw', L.hwA, [A]);
+  } else if (itemId === 'Nutzung') {
+    const d = one('daten');
+    if (d === 'Unlimited') say('daten', L.du);
+    else if (d) { const i = ['< 10 GB', '10–50 GB', '50–100 GB'].indexOf(d); say('daten', L.dv, [i >= 0 ? L.DV[i] : d]); }
+    const w = g('wichtig');
+    if (w.length) say('wichtig', L.wi, [list(w, L.WI)]);
+  } else if (itemId === 'Haushalt') {
+    const o = sitCostGet(td);
+    const p = o.p > 0 ? o.p : 0, v = o.v > 0 ? o.v : 0;
+    if (p) say('hhp', L.hhP, [sitNumPhrase(l, L.P, p)]);
+    if (v) say('hhv', L.hhV, [sitNumPhrase(l, L.C, v)]);
+    const pc = one('pers');
+    if (pc && !p) say('hhp', L.hhP, [sitNumPhrase(l, L.P, parseInt(pc, 10) || 1, pc)]);
+  } else if (itemId === 'Fernsehen') {
+    const t = g('tv');
+    if (t.includes('Kein TV')) say('tvk', L.tvk);
+    else if (t.length) say('tv', L.tv, [list(t, L.TV)]);
+    const tw = g('tvwichtig');
+    if (tw.length) say('tvw', L.tw, [list(tw, L.TW)]);
+  } else if (itemId === 'WiFi') {
+    const w = one('wlan');
+    if (w) { const i = ['Ja', 'Teilweise', 'Nein'].indexOf(w); say('wlan', L.wl, [i >= 0 ? L.WM[i] : w]); }
+  } else if (itemId === 'Weitere Produkte') {
+    const gg = g('geraete');
+    if (gg.length) say('gg', L.gg, [list(gg, L.GG)]);
+  } else if (itemId === 'Gesamtkosten') {
+    const k = one('kost');
+    if (k) { const i = ['< 30 €', '30–50 €', '50–80 €', '> 80 €'].indexOf(k); say('kost', L.kost, [i >= 0 ? L.KB[i] : k]); }
+  }
+  return out;
+};
 const sitSentence = (td, itemId) => {
   const sel = sitChipsParse(td);
   const g = id => sel[id] || [];
@@ -10470,6 +10930,8 @@ const sitSentence = (td, itemId) => {
   const say = (...parts) => out.push(parts);
   const V = (key, ...vs) => sitPick(itemId + ':' + key, vs);
   // v55.113: andere Sprache – uebersetzte Antwort-Phrasen statt deutscher Satzbausteine
+  // v55.147: ganze Saetze in der Zielsprache (nur Sprachen mit Satzbausteinen; sonst wie bisher uebersetzte Tags)
+  if (__sitLang !== 'de' && SIT_SENT[__sitLang] && itemId !== 'Gesamtkosten') return sitSentenceL(td, itemId);
   if (__sitLang !== 'de' && itemId !== 'Gesamtkosten') {
     if (itemId === 'Haushalt') {
       const o = sitCostGet(td);
@@ -10534,6 +10996,7 @@ const sitSentence = (td, itemId) => {
       out.push({ row: true, sum: true, l: sitT('Gesamt pro Monat'), v: sitCostFmt(sum) + ' €' + (o.p > 0 ? ' · ' + sitCostFmt(sum / o.p) + ' € ' + sitT('pro Person') : '') });
     } else {
       const k = one('kost');
+      if (k && __sitLang !== 'de' && SIT_SENT[__sitLang]) return sitSentenceL(td, itemId);
       if (k) { const X = { b: k.replace('< ', 'unter ').replace('> ', 'über ') + ' im Monat' }; say(...V('kost', ['Sie zahlen heute ', X, '.'], ['Aktuell zahlen Sie ', X, '.'], ['Ihre aktuellen Kosten liegen bei ', X, '.'])); }
     }
   }
