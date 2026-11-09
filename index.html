@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.148';
+    window.APP_VERSION = '55.149';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -11821,7 +11821,7 @@ function SitPriceRow({ row, vert, pers, onVert, onSplit, onApply, onPad, compact
     className: 'sit-price-c' + (has ? ' has' : ''),
     'data-price': row.k,
     onClick: e => onOpen(row.k, e.currentTarget)
-  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (row.ind ? 'Σ ' + sitCostFmt(row.total) + ' €' : n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 }))));
+  }, h('i', null, h(Icon, { d: row.icon, size: 15 })), h('span', { className: 'l' }, sitT(row.label)), h('span', { className: 'v' }, has ? (row.ind ? sitCostFmt(row.total) + ' €' : n > 1 ? n + ' × ' + cur + ' €' : cur + ' €') : sitT('Preis')), h('span', { className: 'pn' }, h(Icon, { d: ICONS.Pen, size: 14 }))));
   return h('div', { className: 'sit-price' + (has ? ' has' : ''), 'data-price': row.k }, h('div', { className: 'sit-price-hd' }, h('i', null, h(Icon, { d: row.icon, size: 15 })), sitT(row.label), h('em', null, isM ? 'je Vertrag' : 'mtl.')), isM ? h(SitVertRow, { vert, pers, onVert }) : null, row.ind ? h(SitVertPrices, { row, onApply, onPad, onEnter, autoFocus, kbd }) : quick.length ? h('div', { className: 'sit-qp' }, quick.map(q => h('button', {
     key: q,
     type: 'button',
