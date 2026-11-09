@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.147';
+    window.APP_VERSION = '55.148';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -38660,6 +38660,27 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         chip.textContent = st === 'closed' ? '✓ Abgeschlossen' : 'Offen';
         chip.style.cssText = 'position:relative;align-self:flex-start;margin-top:18px;font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;' + (st === 'closed' ? 'background:#22c55e;color:#ffffff;' : 'background:#ffffff;color:#b91c1c;');
         side.appendChild(chip);
+      }
+      // v55.148: Offene Angebote zeigen ihren Preis als "Preisangebot" (reine Anzeige fuer den Kunden – wird NICHT in die
+      // Kostenuebersicht eingerechnet, die Summen laufen unveraendert ueber psPriceTotals). Verbundene Angebote: Preis des Gruppen-Anfuehrers.
+      if (st === 'open') {
+        try {
+          const _pj = window.__psJoin || {};
+          const _pgr = psJoinGroups(!!_pj.j12, !!_pj.j23).find(g => g.indexOf(idx) >= 0) || [idx];
+          const _ppr = packagePrices['offer' + (_pgr[0] + 1)] || {};
+          const _pm = psParseEuro(_ppr.monatlich), _pe = psParseEuro(_ppr.einmalig);
+          const _pf = n => n.toFixed(2).replace('.', ',') + ' \u20ac';
+          if (_pm > 0 || _pe > 0) {
+            const pb = doc.createElement('div');
+            pb.setAttribute('data-ps-preisangebot', '1');
+            pb.style.cssText = 'position:relative;margin-top:16px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.38);';
+            let ph = '<div style="font-size:10px;letter-spacing:0.16em;font-weight:700;opacity:0.85;">PREISANGEBOT</div>';
+            if (_pm > 0) ph += '<div style="margin-top:4px;font-size:26px;font-weight:800;line-height:1.1;">' + _pf(_pm) + '<span style="font-size:12px;font-weight:600;opacity:0.85;"> / Monat</span></div>';
+            if (_pe > 0) ph += '<div style="margin-top:4px;font-size:12px;font-weight:600;opacity:0.92;">' + (_pm > 0 ? '+ ' : '') + _pf(_pe) + ' einmalig</div>';
+            pb.innerHTML = ph;
+            side.appendChild(pb);
+          }
+        } catch (e) {}
       }
       let agent = '';
       try {
