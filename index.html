@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.149';
+    window.APP_VERSION = '55.150';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -34074,8 +34074,21 @@ function App() {
     colorRef.current = c;
   };
   // Personen / Mobilfunk-Vertraege per Plus/Minus. Aendert die Vertragszahl, rechnet Mobilfunk neu.
+  // Schnellauswahl-Preise immer vom NEUESTEN Stand lesen/schreiben (nicht vom Stand der Render-Runde): Handschrift-Erkennung und
+  // Schnelleingaben laufen verzoegert und riefen sonst eine veraltete Funktion auf, die andere Einzelpreise mit altem Stand ueberschrieb.
+  const textDataLive = useRef(textData);
+  textDataLive.current = textData;
+  const sitCostWrite = json => {
+    textDataLive.current = { ...textDataLive.current, [SIT_COST_KEY]: json };
+    setTextData(prev => ({ ...prev, [SIT_COST_KEY]: json }));
+  };
+  // Hat die Schnellauswahl fuer diese Sparte schon einen Preis erfasst (auch Einzelpreise), darf getippter Freitext ihn nicht ueberschreiben
+  const sitFixNow = k => {
+    const rec = (sitCostGet(textDataLive.current).r || {})[k];
+    return !!rec && (sitCostNum(rec.p) > 0 || (Array.isArray(rec.ps) && rec.ps.some(x => sitCostNum(x) > 0)));
+  };
   const stepSitCost = (field, d) => {
-    const o = sitCostGet(textData);
+    const o = sitCostGet(textDataLive.current);
     const val = Math.max(0, Math.min(20, (o[field] || 0) + d));
     const next = { ...o, [field]: val };
     if (field === 'v') {
@@ -34098,13 +34111,13 @@ function App() {
         setCostState(prev => ({ ...prev, mobile: total }));
       }
     }
-    setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify(next) }));
+    sitCostWrite(JSON.stringify(next));
   };
   const applySitCost = (k, n, priceStr) => {
     const mi = /^mobile#(\d+)$/.exec(k);
     if (mi) {
       // Preise einzeln: Preis eines einzelnen Mobilfunkvertrags
-      const o1 = sitCostGet(textData);
+      const o1 = sitCostGet(textDataLive.current);
       const rec1 = o1.r && o1.r.mobile || {};
       const cnt = o1.v > 0 ? o1.v : rec1.n > 0 ? rec1.n : 1;
       const i = +mi[1];
@@ -34116,32 +34129,32 @@ function App() {
       const tot = sum > 0 ? sitCostFmt(sum) : '';
       const first = ps.find(x => sitCostNum(x) > 0) || '';
       setCostState(prev => ({ ...prev, mobile: tot }));
-      setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify({ ...o1, v: cnt, r: { ...(o1.r || {}), mobile: { n: cnt, p: first, ps } }, t: { ...(o1.t || {}), mobile: tot } }) }));
+      sitCostWrite(JSON.stringify({ ...o1, v: cnt, r: { ...(o1.r || {}), mobile: { n: cnt, p: first, ps } }, t: { ...(o1.t || {}), mobile: tot } }));
       setSitCostOpen(null);
       return;
     }
     const price = sitCostNum(priceStr);
     const total = price > 0 ? sitCostFmt(price * n) : '';
     if (k === 'mobile' || k === 'landline' || k === 'tv') setCostState(prev => ({ ...prev, [k]: total }));
-    const o = sitCostGet(textData);
+    const o = sitCostGet(textDataLive.current);
     const next = { ...o, r: { ...(o.r || {}), [k]: { n, p: price > 0 ? sitCostFmt(price) : '' } }, t: { ...(o.t || {}), [k]: total } };
     if (k === 'mobile') next.v = n;
-    setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify(next) }));
+    sitCostWrite(JSON.stringify(next));
     setSitCostOpen(null);
   };
   // Mobilfunk: "Preise einzeln" ein-/ausschalten (ein: alle Vertraege starten mit dem bisherigen Preis; aus: Preis des ersten Vertrags fuer alle)
   const splitSitCost = on => {
-    const o = sitCostGet(textData);
+    const o = sitCostGet(textDataLive.current);
     const rec = o.r && o.r.mobile || {};
     const n = o.v > 0 ? o.v : rec.n > 0 ? rec.n : 1;
     if (n < 2) return;
     if (on) {
-      const m = sitCostRows(textData, costState).find(r => r.k === 'mobile');
+      const m = sitCostRows(textDataLive.current, costState).find(r => r.k === 'mobile');
       const pq = m && m.total > 0 && m.price ? sitCostNum(m.price) : 0;
       const p = pq > 0 ? sitCostFmt(pq) : '';
       const tot = pq > 0 ? sitCostFmt(pq * n) : '';
       setCostState(prev => ({ ...prev, mobile: tot }));
-      setTextData(prev => ({ ...prev, [SIT_COST_KEY]: JSON.stringify({ ...o, v: n, r: { ...(o.r || {}), mobile: { n, p, ps: Array(n).fill(p) } }, t: { ...(o.t || {}), mobile: tot } }) }));
+      sitCostWrite(JSON.stringify({ ...o, v: n, r: { ...(o.r || {}), mobile: { n, p, ps: Array(n).fill(p) } }, t: { ...(o.t || {}), mobile: tot } }));
     } else {
       const first = Array.isArray(rec.ps) ? rec.ps.find(x => sitCostNum(x) > 0) : '';
       applySitCost('mobile', n, first || '');
@@ -34282,7 +34295,7 @@ function App() {
       // Alle 4 Mobilfunk-Felder, damit wir immer alle summieren können
       const MOBILE_KEYS = ['Anbieter', 'Hardware', 'WeitereProdukte', 'Weitere Produkte', 'Haushalt'];
       const costTarget = COST_MAP[key];
-      if (costTarget) {
+      if (costTarget && !sitFixNow(costTarget)) {
         // Preis-Regex: Zahl mit Komma oder Punkt als Dezimaltrenner, optional €
         // Matcht: 19,99 | 19.99 | 9,90€ | €24,99 | 9€ | 19,99 €
         // Matcht NICHT: 40 (allein, kein Dezimaltrenner + keine €) | 100GB
@@ -34307,6 +34320,7 @@ function App() {
         if (costTarget === 'mobile') {
           if (window.__costDebounce_mobile) clearTimeout(window.__costDebounce_mobile);
           window.__costDebounce_mobile = setTimeout(() => {
+            if (sitFixNow('mobile')) return;
             setTextData(currentData => {
               const combined = MOBILE_KEYS.map(k2 => {
                 const v2 = k2 === key ? val : currentData[k2] || currentData[k2.replace(' ', '') + ''] || '';
@@ -34327,6 +34341,7 @@ function App() {
           if (amount > 0) {
             if (window[`__costDebounce_${costTarget}`]) clearTimeout(window[`__costDebounce_${costTarget}`]);
             window[`__costDebounce_${costTarget}`] = setTimeout(() => {
+              if (sitFixNow(costTarget)) return;
               setCostState(prev => ({
                 ...prev,
                 [costTarget]: amount.toFixed(2).replace('.', ',')
