@@ -31505,52 +31505,6 @@ function App() {
     field: 'monatlich2',
     expr: ''
   });
-  // Direkt auf der Karte: - / + in 0,50-€-Schritten (halten = schneller, ab 8 Schritten 1 €), Reset auf Summe.
-  const m13Hold = useRef({
-    t: null,
-    i: null,
-    v: 0,
-    n: 0
-  });
-  const m13ClearInk = () => setDrawnStrokes(prev => prev.cost_monatlich2 && prev.cost_monatlich2.length ? {
-    ...prev,
-    cost_monatlich2: []
-  } : prev);
-  const m13Apply = v => {
-    const val = Math.max(0.5, Math.round(v * 100) / 100);
-    try {
-      digitalTouchedRef.current['cost_monatlich2'] = true;
-    } catch (err) {}
-    handleOfferCostChange('monatlich2', val.toFixed(2).replace('.', ','));
-    m13ClearInk();
-    return val;
-  };
-  const m13Stop = () => {
-    const h = m13Hold.current;
-    if (h.t) clearTimeout(h.t);
-    if (h.i) clearInterval(h.i);
-    h.t = null;
-    h.i = null;
-  };
-  const m13Start = (dir, base) => {
-    m13Stop();
-    const h = m13Hold.current;
-    h.n = 0;
-    h.v = base;
-    const tick = () => {
-      h.n++;
-      h.v = m13Apply(h.v + dir * (h.n > 8 ? 1 : 0.5));
-    };
-    tick();
-    h.t = setTimeout(() => {
-      h.i = setInterval(tick, 120);
-    }, 450);
-  };
-  const m13Reset = () => {
-    handleOfferCostChange('monatlich2', '');
-    m13ClearInk();
-  };
-  useEffect(() => m13Stop, []);
   // v55.51 (Beta): Kacheln verbinden – nur im Querformat/Grid (md+) und nicht im Schritt-Modus.
   const [psWide, setPsWide] = useState(() => {
     try {
@@ -48279,6 +48233,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         padding: '10px 14px',
         minWidth: 0,
         textAlign: 'left',
+        cursor: id === 'm13' && inputMode === 'pen' ? 'pointer' : 'default',
+        touchAction: 'manipulation',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
     }, extra || {}), /*#__PURE__*/React.createElement("div", {
@@ -48327,86 +48283,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }, noprint ? {
       "data-ps-noprint": "1"
     } : {}), txt) : null;
-    const m13Btn = (sym, dir) => /*#__PURE__*/React.createElement("button", {
-      type: 'button',
-      "data-ps-noprint": "1",
-      "data-ps-m13-step": sym,
-      "aria-label": dir < 0 ? 'Preis senken' : 'Preis erhöhen',
-      onPointerDown: e => {
-        e.stopPropagation();
-        m13Start(dir, m13 > 0 ? m13 : sumM);
-      },
-      onPointerUp: m13Stop,
-      onPointerCancel: m13Stop,
-      onPointerLeave: m13Stop,
-      onContextMenu: e => e.preventDefault(),
-      style: {
-        width: '40px',
-        height: '40px',
-        flex: '0 0 auto',
-        padding: 0,
-        borderRadius: '6px',
-        border: '1px solid #d1d1d1',
-        background: '#fbfbfb',
-        color: '#0067c0',
-        fontSize: '24px',
-        fontWeight: 600,
-        lineHeight: 1,
-        fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif",
-        cursor: 'pointer',
-        touchAction: 'none',
-        userSelect: 'none',
-        WebkitUserSelect: 'none'
-      }
-    }, sym);
-    const m13Core = m13Hand ? /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '20px',
-        fontWeight: 600
-      }
-    }, "handschriftlich") : valNode(m13, true);
-    const m13Val = inputMode === 'pen' ? /*#__PURE__*/React.createElement("div", {
-      role: 'button',
-      "data-ps-m13-value": "1",
-      onClick: openM13Calc,
-      style: {
-        cursor: 'pointer',
-        touchAction: 'manipulation'
-      }
-    }, m13Core) : m13Core;
-    const m13Sub = inputMode === 'pen' ? /*#__PURE__*/React.createElement("div", {
-      "data-ps-noprint": "1",
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginTop: '6px'
-      }
-    }, m13Btn('−', -1), m13Btn('+', 1), /*#__PURE__*/React.createElement("span", {
-      style: {
-        flex: '1 1 auto',
-        minWidth: 0,
-        fontSize: '12px',
-        color: '#616161',
-        lineHeight: 1.25
-      }
-    }, m13Hand ? 'Handschrift (− / + ersetzt sie)' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt = Summe'), offerData.monatlich2Manual || m13Hand ? /*#__PURE__*/React.createElement("button", {
-      type: 'button',
-      "data-ps-m13-reset": "1",
-      onClick: m13Reset,
-      style: {
-        height: '40px',
-        padding: '0 12px',
-        borderRadius: '6px',
-        border: '1px solid #c8c6c4',
-        background: '#ffffff',
-        color: '#0067c0',
-        fontSize: '13px',
-        fontWeight: 600,
-        cursor: 'pointer',
-        touchAction: 'manipulation'
-      }
-    }, '= Summe') : null) : sub(m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, unten änderbar', true);
     // v55.54: Standard = zwei Karten (Einmalig, Monatlich). "Monatlich ab Monat 13" nur nach Aktivierung (Chip);
     // Hinweistexte unter den Summen erscheinen nie im PDF.
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
@@ -48417,7 +48293,16 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         gap: '10px',
         marginTop: '4px'
       }
-    }, stat('einmalig', 'Einmalig', '#0067c0', valNode(sumE, false), sumE > 0 ? sub(subTxt(nE), true) : sub(emptyHint, true)), stat('m12', showSecondYear ? 'Monatlich, Monat 1–12' : 'Monatlich', '#005a9e', valNode(sumM, true), sumM > 0 ? sub(subTxt(nM), true) : sub(emptyHint, true)), showSecondYear ? stat('m13', 'Monatlich, ab Monat 13', '#8764b8', m13Val, m13Sub) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
+    }, stat('einmalig', 'Einmalig', '#0067c0', valNode(sumE, false), sumE > 0 ? sub(subTxt(nE), true) : sub(emptyHint, true)), stat('m12', showSecondYear ? 'Monatlich, Monat 1–12' : 'Monatlich', '#005a9e', valNode(sumM, true), sumM > 0 ? sub(subTxt(nM), true) : sub(emptyHint, true)), showSecondYear ? stat('m13', 'Monatlich, ab Monat 13', '#8764b8', m13Hand ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '20px',
+        fontWeight: 600
+      }
+    }, "handschriftlich") : valNode(m13, true), sub(inputMode === 'pen' ? m13Hand ? 'Handschrift – antippen zum Ändern' : offerData.monatlich2Manual ? 'Manuell angepasst · antippen' : 'Vorbelegt · antippen zum Ändern' : m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, unten änderbar', true), inputMode === 'pen' ? {
+      onClick: openM13Calc,
+      role: 'button',
+      'data-ps-m13-edit': '1'
+    } : undefined) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
       type: "button",
       "data-ps-noprint": "1",
       "data-ps-y2-on": "1",
