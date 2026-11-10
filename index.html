@@ -31475,6 +31475,19 @@ function App() {
       const t = e.split('+').reduce((s, x) => s + psParseEuro(psCalcTerm(x)), 0);
       value = t.toFixed(2).replace('.', ',');
     }
+    if (c.offerKey === 'm13') {
+      // Preisanpassung ab Monat X: Wert aus dem Rechner uebernehmen, leer = wieder Summe
+      try {
+        digitalTouchedRef.current['cost_monatlich2'] = true;
+      } catch (err) {}
+      handleOfferCostChange('monatlich2', value);
+      setDrawnStrokes(prev => ({
+        ...prev,
+        cost_monatlich2: []
+      }));
+      setPriceCalc(null);
+      return;
+    }
     const sk = psPriceKey(c.offerKey, c.field);
     try {
       digitalTouchedRef.current[sk] = true;
@@ -31486,6 +31499,12 @@ function App() {
     }));
     setPriceCalc(null);
   };
+  // Preisanpassung ab Monat X im Stiftmodus: gleicher Rechner wie bei den Preisfeldern, ohne Tastatur-Wechsel.
+  const openM13Calc = () => setPriceCalc({
+    offerKey: 'm13',
+    field: 'monatlich2',
+    expr: ''
+  });
   // v55.51 (Beta): Kacheln verbinden – nur im Querformat/Grid (md+) und nicht im Schritt-Modus.
   const [psWide, setPsWide] = useState(() => {
     try {
@@ -36202,7 +36221,50 @@ function App() {
       stopDrawing: stopDrawing,
       triggerRedraw: redrawCounter,
       forceKeyboard: type === 'date'
-    })));
+    }), key === 'monatlich2' && inputMode === 'pen' ? /*#__PURE__*/React.createElement("button", {
+      type: 'button',
+      "data-ps-calc-btn": 'm13:monatlich2',
+      title: 'Rechner',
+      "aria-label": 'Rechner',
+      onClick: e => {
+        e.stopPropagation();
+        openM13Calc();
+      },
+      style: {
+        position: 'absolute',
+        right: '6px',
+        top: '8px',
+        width: '30px',
+        height: '30px',
+        zIndex: 30,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+        cursor: 'pointer',
+        background: '#f3f3f3',
+        border: '1px solid #d1d1d1',
+        borderRadius: '4px',
+        color: '#0067c0'
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "16",
+      height: "16",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: "5",
+      y: "2",
+      width: "14",
+      height: "20",
+      rx: "2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M8 6h8M8 11h2M12 11h2M8 15h2M12 15h2M8 19h8"
+    }))) : null));
   };
   const translateBatch = null; // Statische Labels lokal, getippte Texte via MyMemory (kostenlos)
 
@@ -48171,6 +48233,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         padding: '10px 14px',
         minWidth: 0,
         textAlign: 'left',
+        cursor: id === 'm13' && inputMode === 'pen' ? 'pointer' : 'default',
+        touchAction: 'manipulation',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
     }, extra || {}), /*#__PURE__*/React.createElement("div", {
@@ -48234,7 +48298,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         fontSize: '20px',
         fontWeight: 600
       }
-    }, "handschriftlich") : valNode(m13, true), sub(m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, unten änderbar', true)) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
+    }, "handschriftlich") : valNode(m13, true), sub(inputMode === 'pen' ? m13Hand ? 'Handschrift – antippen zum Ändern' : offerData.monatlich2Manual ? 'Manuell angepasst · antippen' : 'Vorbelegt · antippen zum Ändern' : m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, unten änderbar', true), inputMode === 'pen' ? {
+      onClick: openM13Calc,
+      role: 'button',
+      'data-ps-m13-edit': '1'
+    } : undefined) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
       type: "button",
       "data-ps-noprint": "1",
       "data-ps-y2-on": "1",
@@ -48521,7 +48589,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const terms = ex.split('+').map(psCalcTerm);
     const total = terms.reduce((s, x) => s + psParseEuro(x), 0);
     const fmtE = v => v.toFixed(2).replace('.', ',') + ' €';
-    const fieldLabel = (priceCalc.field === 'monatlich' ? 'Monatlich' : 'Einmalig') + ' · Angebot ' + priceCalc.offerKey.slice(-1);
+    const fieldLabel = priceCalc.offerKey === 'm13' ? 'Monatlich ab Monat ' + 13 + ' · Preisanpassung' : (priceCalc.field === 'monatlich' ? 'Monatlich' : 'Einmalig') + ' · Angebot ' + priceCalc.offerKey.slice(-1);
     const font = "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif";
     const key = (label, k, extra) => /*#__PURE__*/React.createElement("button", {
       key: k,
@@ -48597,7 +48665,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         height: '20px',
         marginTop: '4px'
       }
-    }, terms.length > 1 && total > 0 ? '= ' + fmtE(total) : ''), /*#__PURE__*/React.createElement("div", {
+    }, terms.length > 1 && total > 0 ? '= ' + fmtE(total) : priceCalc.offerKey === 'm13' && ex === '' && (offerData.monatlich1 || 0) > 0 ? 'OK ohne Eingabe = Summe ' + fmtE(offerData.monatlich1) : ''), /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
