@@ -48233,7 +48233,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         padding: '10px 14px',
         minWidth: 0,
         textAlign: 'left',
-        cursor: id === 'm13' && inputMode === 'pen' ? 'pointer' : 'default',
+        cursor: id === 'm13' ? 'pointer' : 'default',
         touchAction: 'manipulation',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
@@ -48298,11 +48298,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         fontSize: '20px',
         fontWeight: 600
       }
-    }, "handschriftlich") : valNode(m13, true), sub(inputMode === 'pen' ? m13Hand ? 'Handschrift – antippen zum Ändern' : offerData.monatlich2Manual ? 'Manuell angepasst · antippen' : 'Vorbelegt · antippen zum Ändern' : m13Hand ? 'siehe Feld unten' : offerData.monatlich2Manual ? 'Manuell angepasst' : 'Vorbelegt, unten änderbar', true), inputMode === 'pen' ? {
+    }, "handschriftlich") : valNode(m13, true), sub(m13Hand ? 'Handschrift – antippen zum Ändern' : offerData.monatlich2Manual ? 'Manuell angepasst · antippen' : 'Vorbelegt · antippen zum Ändern', true), {
       onClick: openM13Calc,
       role: 'button',
       'data-ps-m13-edit': '1'
-    } : undefined) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
+    }) : null), !showSecondYear ? /*#__PURE__*/React.createElement("button", {
       type: "button",
       "data-ps-noprint": "1",
       "data-ps-y2-on": "1",
