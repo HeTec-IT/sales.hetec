@@ -48321,9 +48321,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       }
     }, "+ Monatlich ab Monat 13") : null);
   })(), /*#__PURE__*/React.createElement("div", {
-    className: `grid grid-cols-3 gap-4 mt-3 cost-grid-years ${showSecondYear ? 'ps-y2-open' : 'ps-y2-collapsed'}`
+    className: `grid grid-cols-3 gap-4 mt-3 cost-grid-years ${(showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0) ? 'ps-y2-open' : 'ps-y2-collapsed'}`
   }, /*#__PURE__*/React.createElement("div", {
-    className: `year-2-container ${!showSecondYear ? 'hidden-layer' : ''}`,
+    className: `year-2-container ${!(showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0) ? 'hidden-layer' : ''}`,
     style: {
       gridColumn: '3'
     }
