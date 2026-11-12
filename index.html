@@ -26274,6 +26274,8 @@ const psPriceKey = (offerKey, field) => 'cost_p' + String(offerKey).slice(-1) + 
 // v55.51 (Beta): Kacheln verbinden. Gruppen = zusammengehoerende Kacheln (Index 0..2); pro Gruppe zaehlt
 // nur das Preispaar der ersten Kachel (Leader) in die Summen.
 const psParseEuro = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+// Bestehende Verträge (bleiben unverändert): Arten zur Schnellauswahl
+const PS_BST_ARTEN = ['Mobilfunk', 'Festnetz / DSL', 'TV', 'Sonstiges'];
 // v55.56: Rechner-Eingabe ohne Komma ab 3 Ziffern = letzte 2 Ziffern sind Cent (8499 -> 84,99; 999 -> 9,99).
 // Mit Komma gilt die Eingabe wie getippt (100, -> 100 €). 1-2 Ziffern bleiben ganze Euro.
 const psCalcTerm = t => {
@@ -31475,6 +31477,28 @@ function App() {
       const t = e.split('+').reduce((s, x) => s + psParseEuro(psCalcTerm(x)), 0);
       value = t.toFixed(2).replace('.', ',');
     }
+    if (c.offerKey === 'bst') {
+      // Bestehender Vertrag: Zeile anlegen/ändern; ohne Preis passiert nichts
+      if (!(psParseEuro(value) > 0)) {
+        setPriceCalc(null);
+        return;
+      }
+      const row = {
+        art: c.art || 'Mobilfunk',
+        text: String(c.text || '').trim(),
+        preis: value
+      };
+      setOfferData(prev => {
+        const l = Array.isArray(prev.bestehend) ? prev.bestehend.slice() : [];
+        if (c.idx >= 0 && c.idx < l.length) l[c.idx] = row;else l.push(row);
+        return {
+          ...prev,
+          bestehend: l
+        };
+      });
+      setPriceCalc(null);
+      return;
+    }
     if (c.offerKey === 'm13') {
       // Preisanpassung ab Monat X: Wert aus dem Rechner uebernehmen, leer = wieder Summe
       try {
@@ -31505,6 +31529,23 @@ function App() {
     field: 'monatlich2',
     expr: ''
   });
+  // Bestehende Verträge (bleiben unverändert): Rechner mit Art-Auswahl, idx -1 = neue Zeile
+  const openBstCalc = idx => {
+    const l = Array.isArray(offerData.bestehend) ? offerData.bestehend : [];
+    const r = idx >= 0 && l[idx] ? l[idx] : null;
+    setPriceCalc({
+      offerKey: 'bst',
+      field: 'preis',
+      idx: r ? idx : -1,
+      art: r ? r.art : 'Mobilfunk',
+      text: r ? r.text || '' : '',
+      expr: r ? String(r.preis || '') : ''
+    });
+  };
+  const removeBst = idx => setOfferData(prev => ({
+    ...prev,
+    bestehend: (Array.isArray(prev.bestehend) ? prev.bestehend : []).filter((_, i) => i !== idx)
+  }));
   // v55.51 (Beta): Kacheln verbinden – nur im Querformat/Grid (md+) und nicht im Schritt-Modus.
   const [psWide, setPsWide] = useState(() => {
     try {
@@ -48283,6 +48324,142 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }, noprint ? {
       "data-ps-noprint": "1"
     } : {}), txt) : null;
+    // Bestehende Verträge (bleiben unverändert): Zeilen mit Preis + Gesamt, was der Kunde monatlich wirklich zahlt.
+    const bstList = Array.isArray(offerData.bestehend) ? offerData.bestehend : [];
+    const bstSum = bstList.reduce((s, r) => s + parseP(r && r.preis), 0);
+    const bstFont = "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif";
+    const bstLine = (k, l, r, st) => /*#__PURE__*/React.createElement("div", {
+      key: k,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: '10px',
+        ...(st || {})
+      }
+    }, /*#__PURE__*/React.createElement("span", null, l), /*#__PURE__*/React.createElement("span", {
+      style: {
+        whiteSpace: 'nowrap'
+      }
+    }, r));
+    const bstBlock = bstList.length === 0 ? /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      "data-ps-noprint": "1",
+      "data-ps-bst-add": "1",
+      onClick: () => openBstCalc(-1),
+      style: {
+        marginTop: '8px',
+        padding: '6px 12px',
+        background: '#ffffff',
+        border: '1px solid #c8c6c4',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: '#0067c0',
+        cursor: 'pointer',
+        fontFamily: bstFont
+      }
+    }, "+ Bestehende Verträge") : /*#__PURE__*/React.createElement("div", {
+      "data-ps-bst": "1",
+      style: {
+        marginTop: '10px',
+        background: '#ffffff',
+        borderStyle: 'solid',
+        borderWidth: '3px 1px 1px 1px',
+        borderColor: '#605e5c #e0e0e0 #e0e0e0 #e0e0e0',
+        borderRadius: '6px',
+        padding: '10px 14px',
+        fontFamily: bstFont
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '10px',
+        fontSize: '12px',
+        color: '#616161',
+        marginBottom: '4px'
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "Bestehende Verträge · bleiben unverändert"), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      "data-ps-noprint": "1",
+      onClick: () => openBstCalc(-1),
+      style: {
+        padding: '4px 10px',
+        background: '#ffffff',
+        border: '1px solid #c8c6c4',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: '#0067c0',
+        cursor: 'pointer',
+        fontFamily: bstFont
+      }
+    }, "+ Hinzufügen")), bstList.map((r, i) => /*#__PURE__*/React.createElement("div", {
+      key: 'r' + i,
+      onClick: () => openBstCalc(i),
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '10px',
+        fontSize: '15px',
+        color: '#1b1b1b',
+        padding: '3px 0',
+        cursor: 'pointer'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }
+    }, (r && r.art || 'Vertrag') + (r && r.text ? ' · ' + r.text : '')), /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        whiteSpace: 'nowrap',
+        fontWeight: 600
+      }
+    }, fmtE(parseP(r && r.preis)) + ' / Monat', /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      "data-ps-noprint": "1",
+      "aria-label": "Entfernen",
+      onClick: e => {
+        e.stopPropagation();
+        removeBst(i);
+      },
+      style: {
+        width: '28px',
+        height: '28px',
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+        color: '#616161',
+        fontSize: '18px',
+        lineHeight: 1,
+        cursor: 'pointer'
+      }
+    }, "\u00D7")))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: '1px solid #e0e0e0',
+        marginTop: '6px',
+        paddingTop: '6px',
+        fontSize: '13px',
+        color: '#616161'
+      }
+    }, bstLine('n', 'Neu / verlängert', fmtE(sumM) + (sumM > 0 ? ' / Monat' : '')), bstLine('b', 'Bestehend', fmtE(bstSum) + ' / Monat'), bstLine('t', 'Kunde zahlt insgesamt', fmtE(sumM + bstSum) + ' / Monat', {
+      fontSize: '18px',
+      fontWeight: 700,
+      color: '#1b1b1b',
+      marginTop: '4px'
+    }), showSecondYear && m13 > 0 ? bstLine('t13', typeof __s2 !== 'undefined' ? __s2 : 'ab Monat 13', fmtE(m13 + bstSum) + ' / Monat', {
+      fontSize: '14px',
+      fontWeight: 600,
+      color: '#1b1b1b'
+    }) : null));
     // v55.54: Standard = zwei Karten (Einmalig, Monatlich). "Monatlich ab Monat 13" nur nach Aktivierung (Chip);
     // Hinweistexte unter den Summen erscheinen nie im PDF.
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
@@ -48319,7 +48496,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         cursor: 'pointer',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
-    }, "+ Monatlich ab Monat 13") : null);
+    }, "+ Monatlich ab Monat 13") : null, bstBlock);
   })(), /*#__PURE__*/React.createElement("div", {
     className: `grid grid-cols-3 gap-4 mt-3 cost-grid-years ${(showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0) ? 'ps-y2-open' : 'ps-y2-collapsed'}`
   }, /*#__PURE__*/React.createElement("div", {
@@ -48589,7 +48766,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     const terms = ex.split('+').map(psCalcTerm);
     const total = terms.reduce((s, x) => s + psParseEuro(x), 0);
     const fmtE = v => v.toFixed(2).replace('.', ',') + ' €';
-    const fieldLabel = priceCalc.offerKey === 'm13' ? 'Monatlich ab Monat ' + 13 + ' · Preisanpassung' : (priceCalc.field === 'monatlich' ? 'Monatlich' : 'Einmalig') + ' · Angebot ' + priceCalc.offerKey.slice(-1);
+    const fieldLabel = priceCalc.offerKey === 'bst' ? 'Bestehender Vertrag · monatlich' : priceCalc.offerKey === 'm13' ? 'Monatlich ab Monat ' + 13 + ' · Preisanpassung' : (priceCalc.field === 'monatlich' ? 'Monatlich' : 'Einmalig') + ' · Angebot ' + priceCalc.offerKey.slice(-1);
     const font = "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif";
     const key = (label, k, extra) => /*#__PURE__*/React.createElement("button", {
       key: k,
@@ -48610,6 +48787,65 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         ...(extra || {})
       }
     }, label);
+    const bstEditor = priceCalc.offerKey === 'bst' ? /*#__PURE__*/React.createElement("div", {
+      "data-ps-bst-editor": "1",
+      style: {
+        margin: '2px 0 10px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '6px',
+        marginBottom: '8px'
+      }
+    }, PS_BST_ARTEN.map(a => /*#__PURE__*/React.createElement("button", {
+      key: a,
+      type: 'button',
+      "data-ps-bst-art": a,
+      onClick: () => setPriceCalc(c => c ? {
+        ...c,
+        art: a
+      } : c),
+      style: {
+        minHeight: '40px',
+        padding: '0 12px',
+        borderRadius: '6px',
+        border: '1px solid ' + (priceCalc.art === a ? '#0067c0' : '#d1d1d1'),
+        background: priceCalc.art === a ? '#0067c0' : '#fbfbfb',
+        color: priceCalc.art === a ? '#ffffff' : '#1b1b1b',
+        fontSize: '14px',
+        fontWeight: 600,
+        fontFamily: font,
+        cursor: 'pointer',
+        touchAction: 'manipulation'
+      }
+    }, a))), /*#__PURE__*/React.createElement("input", {
+      type: 'text',
+      "data-ps-bst-text": "1",
+      value: priceCalc.text || '',
+      maxLength: 40,
+      placeholder: 'Bezeichnung (optional), z. B. Rufnummer',
+      onChange: e => {
+        const v = e.target.value;
+        setPriceCalc(c => c ? {
+          ...c,
+          text: v
+        } : c);
+      },
+      style: {
+        width: '100%',
+        boxSizing: 'border-box',
+        height: '40px',
+        padding: '0 10px',
+        borderRadius: '6px',
+        border: '1px solid #d1d1d1',
+        fontSize: '16px',
+        fontFamily: font,
+        color: '#1b1b1b',
+        background: '#ffffff'
+      }
+    })) : null;
     return /*#__PURE__*/React.createElement("div", {
       "data-ps-calc": "1",
       onClick: () => setPriceCalc(null),
@@ -48639,7 +48875,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         color: '#616161',
         marginBottom: '6px'
       }
-    }, fieldLabel), /*#__PURE__*/React.createElement("div", {
+    }, fieldLabel), priceCalc.offerKey === 'bst' ? bstEditor : null, /*#__PURE__*/React.createElement("div", {
       "data-ps-calc-display": "1",
       style: {
         textAlign: 'right',
