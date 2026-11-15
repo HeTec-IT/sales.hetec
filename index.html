@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.150';
+    window.APP_VERSION = '55.151';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -21854,7 +21854,7 @@ const psArchIsoWeek = ms => {
   const w1 = new Date(d.getFullYear(), 0, 4);
   return 1 + Math.round(((d.getTime() - w1.getTime()) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7);
 };
-const ArchivProtokollView = () => {
+const ArchivProtokollView = ({ heute, onAlle } = {}) => {
   const h = React.createElement;
   const [st, setSt] = React.useState({ loading: true, rows: [], error: '', verifyAvailable: false });
   const [openWeeks, setOpenWeeks] = React.useState({}); // Standard: alle Wochen eingeklappt
@@ -21977,6 +21977,36 @@ const ArchivProtokollView = () => {
   })();
   const cnt = f => st.rows.filter(r => f(r.status)).length;
   const nOk = cnt(x => x === 'ok' || x === 'ok_unchecked'), nFail = cnt(x => x.indexOf('fail') === 0), nWait = cnt(x => x === 'wait' || x === 'wait_net' || x === 'parked');
+  if (heute) {
+    // Überblick: was habe ich HEUTE archiviert (Name, Art, Uhrzeit, Status)
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const hr = st.rows.filter(r => (r.e.ts || 0) >= d0.getTime());
+    const zeit = ts => { try { return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+    const KURZ = { ok: 'abgelegt', ok_unchecked: 'gesendet', wait: 'wird abgelegt \u2026', wait_net: 'wartet auf Verbindung', parked: 'geparkt', fail: 'fehlgeschlagen', fail_send: 'fehlgeschlagen' };
+    const MAXH = 5;
+    const zeile = (r, i, arr) => {
+      const e = r.e, I = INFO[r.status];
+      const isAbs = e.typ === 'abschluss' || e.type === 'abschluss';
+      const name = e.kunde || e.ruf || '\u2013';
+      return h('div', { key: r.key, style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 0', borderBottom: i < arr.length - 1 ? '1px solid #f1f5f9' : 'none' } },
+        h('div', { style: { fontSize: '15px', width: '22px', textAlign: 'center', flexShrink: 0 } }, I.icon),
+        h('div', { style: { flex: 1, minWidth: 0 } },
+          h('div', { style: { fontSize: '13px', fontWeight: 800, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, name),
+          h('div', { style: { fontSize: '11px', color: '#64748b' } }, (isAbs ? 'Abschluss' : 'Angebot') + ' \u00B7 ' + zeit(e.ts) + (e.kunde && e.ruf ? ' \u00B7 ' + e.ruf : ''))),
+        h('div', { style: { fontSize: '11px', fontWeight: 800, color: I.color, whiteSpace: 'nowrap' } }, KURZ[r.status] || I.text));
+    };
+    return h('div', { style: { background: '#fff', borderRadius: '14px', border: '1px solid ' + (hr.some(r => r.status.indexOf('fail') === 0) ? '#fecaca' : '#e2e8f0'), padding: '13px 16px' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' } },
+        h('div', { style: { fontSize: '13px', fontWeight: 900, color: '#0f172a' } }, 'Heute archiviert'),
+        !st.loading && h('div', { style: { fontSize: '11px', fontWeight: 700, color: '#64748b' } }, hr.length + (hr.length === 1 ? ' Pencil Selling' : ' Pencil Sellings')),
+        h('button', { type: 'button', onClick: load, title: 'Aktualisieren', 'aria-label': 'Aktualisieren', style: { marginLeft: 'auto', padding: '5px 9px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, background: '#fff', color: '#1e3a8a', border: '1px solid #cbd5e1', cursor: 'pointer' } }, '\u21BB'),
+        typeof onAlle === 'function' && h('button', { type: 'button', onClick: onAlle, style: { padding: '5px 11px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, background: '#fff', color: '#1e3a8a', border: '1px solid #cbd5e1', cursor: 'pointer' } }, 'Alle im Archiv \u203A')),
+      st.error && h('div', { style: { fontSize: '11px', fontWeight: 700, color: '#b45309', padding: '4px 0' } }, '\u26A0\uFE0F ' + st.error),
+      st.loading ? h('div', { style: { padding: '10px 0', color: '#94a3b8', fontSize: '12px', fontWeight: 600 } }, 'Lade \u2026')
+        : hr.length === 0 ? (st.error ? null : h('div', { style: { padding: '8px 0 2px', color: '#94a3b8', fontSize: '12px', fontWeight: 600 } }, 'Heute noch nichts archiviert.'))
+        : h('div', null, hr.slice(0, MAXH).map(zeile),
+            hr.length > MAXH && h('div', { style: { fontSize: '11px', fontWeight: 700, color: '#64748b', paddingTop: '6px' } }, '+' + (hr.length - MAXH) + ' weitere \u00B7 unter \u201EAlle im Archiv\u201C')));
+  }
   const chip = (txt, c, bg, bd) => h('div', { style: { fontSize: '11px', fontWeight: 800, color: c, background: bg, border: '1px solid ' + bd, borderRadius: '8px', padding: '3px 8px' } }, txt);
   return h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
@@ -22012,6 +22042,23 @@ const ArchivProtokollView = () => {
     h('div', { style: { fontSize: '10.5px', color: '#94a3b8', lineHeight: 1.5 } }, st.verifyAvailable ? '\u201EErfolgreich\u201C = Datei wurde in SharePoint gefunden. Dauert die Ablage l\u00E4nger als ' + PS_ARCH_ABLAGE_MIN + ' Minuten, gilt sie als fehlgeschlagen. Angezeigt werden die letzten 4 Wochen.' : '\u201EErfolgreich\u201C = vom Archiv-Ablauf angenommen (die Ablage in SharePoint wird noch nicht gepr\u00FCft). Angezeigt werden die letzten 4 Wochen.'));
 };
 
+// ═════════════════════════════════════════════════════════════════
+// STATISTIK VEREINFACHT: Einklapp-Schalter. Inhalt bleibt vollständig erhalten,
+// ist nur standardmäßig eingeklappt. Zustand wird pro Gerät gemerkt.
+// ═════════════════════════════════════════════════════════════════
+const PsStatsMehr = ({ id, auf, zu, children }) => {
+  const h = React.createElement;
+  const KEY = 'ps_stats_mehr_' + id;
+  const [open, setOpen] = React.useState(() => { try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; } });
+  const toggle = () => setOpen(o => { const n = !o; try { localStorage.setItem(KEY, n ? '1' : '0'); } catch (e) {} return n; });
+  return h(React.Fragment, null,
+    h('button', {
+      type: 'button', 'aria-expanded': open, onClick: toggle,
+      style: { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '11px 14px', borderRadius: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#1e3a8a', fontSize: '12px', fontWeight: 800, cursor: 'pointer', textAlign: 'left' }
+    }, h('span', null, open ? zu : auf), h('span', { style: { fontSize: '11px', color: '#64748b' } }, open ? '\u25B2' : '\u25BC')),
+    open ? React.Children.toArray(children) : null);
+};
+
 const StatsModal = ({
   isOpen,
   onClose,
@@ -22028,7 +22075,7 @@ const StatsModal = ({
   const [fbLoading, setFbLoading] = useState(false);
   const [fbError, setFbError] = useState('');
   const [selectedAgent, setSelectedAgent] = useState(employeeMode ? lockedAgent || '__all__' : '__all__');
-  const [activeTab, setActiveTab] = useState(employeeMode ? 'coaching' : 'uebersicht');
+  const [activeTab, setActiveTab] = useState('uebersicht');
   const [skipAgentsData, setSkipAgentsData] = useState({}); // { agentName: {count, limit} }
   const [range, setRange] = useState('31');
   const [rangeFrom, setRangeFrom] = useState('');
@@ -22684,7 +22731,7 @@ const StatsModal = ({
       padding: '3px',
       gap: '2px'
     }
-  }, TAB('uebersicht', 'Übersicht', '📈'), TAB('entwicklung', 'Entwicklung', '📅'), TAB('coaching', 'Coaching', '🎯'), TAB('vorgaenge', 'Vorgänge', '📋'), TAB('archiv', 'Archiv', '🗂️'), isDiegoAdmin && TAB('skip-management', 'Skip-Limits', '⏭'))), /*#__PURE__*/React.createElement("div", {
+  }, TAB('uebersicht', 'Überblick', '📈'), TAB('coaching', 'Coaching', '🎯'), TAB('vorgaenge', 'Archiv und Vorgänge', '🗂️'), isDiegoAdmin && TAB('skip-management', 'Skip-Limits', '⏭'))), /*#__PURE__*/React.createElement("div", {
     className: "custom-scrollbar",
     style: {
       overflowY: 'auto',
@@ -22702,84 +22749,7 @@ const StatsModal = ({
       fontSize: '14px',
       fontWeight: 600
     }
-  }, "⏳ Firebase Daten werden geladen..."), !fbLoading && /*#__PURE__*/React.createElement(React.Fragment, null, activeTab === 'uebersicht' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(3,1fr)',
-      gap: '8px'
-    }
-  }, [{
-    label: 'Vorgänge',
-    value: total,
-    color: '#2563eb',
-    bg: '#eff6ff',
-    border: '#bfdbfe',
-    icon: '📋'
-  }, {
-    label: 'Anfragen',
-    value: totalAnfrage,
-    color: '#0891b2',
-    bg: '#ecfeff',
-    border: '#a5f3fc',
-    icon: '🔍'
-  }, {
-    label: 'Angebote',
-    value: totalAngebot,
-    color: '#7c3aed',
-    bg: '#f5f3ff',
-    border: '#ddd6fe',
-    icon: '📄'
-  }, {
-    label: 'Abschlüsse',
-    value: totalAbschluss,
-    color: '#059669',
-    bg: '#ecfdf5',
-    border: '#a7f3d0',
-    icon: '✅'
-  }, {
-    label: 'Abgebrochen',
-    value: totalAbgebr,
-    color: '#d97706',
-    bg: '#fffbeb',
-    border: '#fde68a',
-    icon: '⏹'
-  }, {
-    label: 'Abschluss-Quote',
-    value: `${convRate}%`,
-    color: convRate >= 30 ? '#059669' : convRate >= 15 ? '#d97706' : '#dc2626',
-    bg: convRate >= 30 ? '#ecfdf5' : convRate >= 15 ? '#fffbeb' : '#fef2f2',
-    border: convRate >= 30 ? '#a7f3d0' : convRate >= 15 ? '#fde68a' : '#fecaca',
-    icon: '🎯'
-  }].map(k => /*#__PURE__*/React.createElement("div", {
-    key: k.label,
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      padding: '13px 12px',
-      border: `1.5px solid ${k.border}`
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '17px',
-      marginBottom: '5px'
-    }
-  }, k.icon), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '22px',
-      fontWeight: 900,
-      color: k.color,
-      lineHeight: 1
-    }
-  }, k.value), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '9px',
-      fontWeight: 700,
-      color: '#94a3b8',
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      marginTop: '4px'
-    }
-  }, k.label)))), /*#__PURE__*/React.createElement("div", {
+  }, "⏳ Firebase Daten werden geladen..."), !fbLoading && /*#__PURE__*/React.createElement(React.Fragment, null, activeTab === 'uebersicht' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ArchivProtokollView, { heute: true, onAlle: () => setActiveTab('vorgaenge') }), React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
@@ -22884,6 +22854,215 @@ const StatsModal = ({
       marginTop: '4px'
     }
   }, skipped, " von ", total, " Pencil Sellings"))), (() => {
+    // Trichter: ersetzt die 6 Einzelkacheln (Vorgänge, Anfragen, Angebote, Abschlüsse, Abgebrochen, Quote)
+    const h = React.createElement;
+    const seg = [{ l: 'Abschlüsse', v: totalAbschluss, c: '#1e3a8a' }, { l: 'Angebote', v: totalAngebot, c: '#3b82f6' }, { l: 'Anfragen', v: totalAnfrage, c: '#93c5fd' }, { l: 'Abgebrochen', v: totalAbgebr, c: '#cbd5e1' }];
+    const rest = Math.max(0, total - seg.reduce((s, x) => s + x.v, 0));
+    if (rest > 0) seg.push({ l: 'Sonstige', v: rest, c: '#e2e8f0' });
+    const lab = { fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' };
+    const big = { fontSize: '30px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 };
+    return h('div', { style: { background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '14px 16px' } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '12px' } },
+        h('div', null, h('div', { style: lab }, 'Vorgänge'), h('div', { style: big }, total)),
+        h('div', { style: { textAlign: 'right' } }, h('div', { style: lab }, 'Abschluss-Quote'), h('div', { style: { ...big, color: convRate >= 30 ? '#059669' : convRate >= 15 ? '#d97706' : '#dc2626' } }, convRate + '%'))),
+      h('div', { style: { display: 'flex', gap: '2px', height: '18px', borderRadius: '6px', overflow: 'hidden', background: '#f1f5f9' } },
+        total > 0 ? seg.filter(x => x.v > 0).map(x => h('div', { key: x.l, title: x.l + ': ' + x.v, style: { width: x.v / total * 100 + '%', background: x.c } })) : null),
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(104px,1fr))', gap: '8px 10px', marginTop: '12px' } },
+        seg.map(x => h('div', { key: x.l, style: { minWidth: 0 } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' } }, h('span', { style: { width: '10px', height: '10px', borderRadius: '3px', background: x.c, flexShrink: 0 } }), x.l),
+          h('div', { style: { fontSize: '18px', fontWeight: 900, color: '#0f172a' } }, x.v)))));
+  })(), React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: '14px',
+      border: '1px solid #e2e8f0',
+      padding: '16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: 700,
+      color: '#64748b',
+      textTransform: 'uppercase',
+      letterSpacing: '0.07em',
+      marginBottom: '14px'
+    }
+  }, "📋 Pencil Sellings pro Monat"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'flex-end',
+      gap: '6px',
+      height: '80px'
+    }
+  }, trend6m.map(m => {
+    const h = trendMax ? Math.max(4, Math.round(m.total / trendMax * 76)) : 4;
+    const ah = m.total ? Math.round(m.abschluss / m.total * h) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.key,
+      style: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '3px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '9px',
+        fontWeight: 800,
+        color: m.total > 0 ? '#2563eb' : '#cbd5e1'
+      }
+    }, m.total || ''), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '100%',
+        borderRadius: '5px 5px 0 0',
+        background: m.total > 0 ? '#bfdbfe' : '#f1f5f9',
+        height: `${h}px`,
+        position: 'relative',
+        overflow: 'hidden'
+      }
+    }, ah > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: '#059669',
+        height: `${ah}px`
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '9px',
+        color: '#94a3b8',
+        fontWeight: 600,
+        whiteSpace: 'nowrap'
+      }
+    }, m.label));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '14px',
+      marginTop: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '8px',
+      height: '8px',
+      borderRadius: '2px',
+      background: '#bfdbfe'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '10px',
+      color: '#64748b',
+      fontWeight: 600
+    }
+  }, "Vorgänge")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '8px',
+      height: '8px',
+      borderRadius: '2px',
+      background: '#059669'
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '10px',
+      color: '#64748b',
+      fontWeight: 600
+    }
+  }, "Abschlüsse")))), React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: '14px',
+      border: '1px solid #e2e8f0',
+      padding: '16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: 700,
+      color: '#64748b',
+      textTransform: 'uppercase',
+      letterSpacing: '0.07em',
+      marginBottom: '12px'
+    }
+  }, "📈 Qualität & Übersprungen pro Monat"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px'
+    }
+  }, trend6m.map(m => {
+    const qR = m.total ? Math.round(m.qPassed / m.total * 100) : 0;
+    const sR = m.total ? Math.round(m.skipped / m.total * 100) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.key,
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '52px 1fr 1fr',
+        gap: '10px',
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '11px',
+        fontWeight: 700,
+        color: '#475569'
+      }
+    }, m.label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px'
+      }
+    }, BAR(qR, qR >= 75 ? '#059669' : qR >= 50 ? '#d97706' : '#dc2626'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '10px',
+        fontWeight: 800,
+        color: qR >= 75 ? '#059669' : qR >= 50 ? '#d97706' : '#dc2626',
+        width: '32px',
+        textAlign: 'right'
+      }
+    }, m.total ? qR + '%' : '–'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '9px',
+        color: '#94a3b8',
+        width: '28px'
+      }
+    }, "Qual.")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px'
+      }
+    }, BAR(sR, sR > 20 ? '#dc2626' : sR > 10 ? '#d97706' : '#94a3b8'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '10px',
+        fontWeight: 800,
+        color: sR > 20 ? '#dc2626' : sR > 10 ? '#d97706' : '#64748b',
+        width: '32px',
+        textAlign: 'right'
+      }
+    }, m.total ? sR + '%' : '–'), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '9px',
+        color: '#94a3b8',
+        width: '28px'
+      }
+    }, "Skip")));
+  }))), /*#__PURE__*/React.createElement(PsStatsMehr, { id: 'uebersicht', auf: 'Mehr anzeigen \u00B7 Papier und Digital, DSL-Anbieter', zu: 'Weniger anzeigen' }, (() => {
     const counters = getOutputCounters();
     const PAGES = 7;
     // Aktueller Monat + Gesamt
@@ -23055,393 +23234,7 @@ const StatsModal = ({
         textAlign: 'center'
       }
     }, "Schätzung: 7 Seiten/Angebot · echte Druckerseiten nicht messbar (OS-Dialog)"));
-  })()), activeTab === 'entwicklung' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '1px solid #e2e8f0',
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '11px',
-      fontWeight: 700,
-      color: '#64748b',
-      textTransform: 'uppercase',
-      letterSpacing: '0.07em',
-      marginBottom: '14px'
-    }
-  }, "📋 Pencil Sellings pro Monat"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'flex-end',
-      gap: '6px',
-      height: '80px'
-    }
-  }, trend6m.map(m => {
-    const h = trendMax ? Math.max(4, Math.round(m.total / trendMax * 76)) : 4;
-    const ah = m.total ? Math.round(m.abschluss / m.total * h) : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: m.key,
-      style: {
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '3px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '9px',
-        fontWeight: 800,
-        color: m.total > 0 ? '#2563eb' : '#cbd5e1'
-      }
-    }, m.total || ''), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '100%',
-        borderRadius: '5px 5px 0 0',
-        background: m.total > 0 ? '#bfdbfe' : '#f1f5f9',
-        height: `${h}px`,
-        position: 'relative',
-        overflow: 'hidden'
-      }
-    }, ah > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: '#059669',
-        height: `${ah}px`
-      }
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '9px',
-        color: '#94a3b8',
-        fontWeight: 600,
-        whiteSpace: 'nowrap'
-      }
-    }, m.label));
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: '14px',
-      marginTop: '8px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '5px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: '8px',
-      height: '8px',
-      borderRadius: '2px',
-      background: '#bfdbfe'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '10px',
-      color: '#64748b',
-      fontWeight: 600
-    }
-  }, "Vorgänge")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '5px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: '8px',
-      height: '8px',
-      borderRadius: '2px',
-      background: '#059669'
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: '10px',
-      color: '#64748b',
-      fontWeight: 600
-    }
-  }, "Abschlüsse")))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '1px solid #e2e8f0',
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '11px',
-      fontWeight: 700,
-      color: '#64748b',
-      textTransform: 'uppercase',
-      letterSpacing: '0.07em',
-      marginBottom: '12px'
-    }
-  }, "📈 Qualität & Übersprungen pro Monat"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px'
-    }
-  }, trend6m.map(m => {
-    const qR = m.total ? Math.round(m.qPassed / m.total * 100) : 0;
-    const sR = m.total ? Math.round(m.skipped / m.total * 100) : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: m.key,
-      style: {
-        display: 'grid',
-        gridTemplateColumns: '52px 1fr 1fr',
-        gap: '10px',
-        alignItems: 'center'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '11px',
-        fontWeight: 700,
-        color: '#475569'
-      }
-    }, m.label), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px'
-      }
-    }, BAR(qR, qR >= 75 ? '#059669' : qR >= 50 ? '#d97706' : '#dc2626'), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '10px',
-        fontWeight: 800,
-        color: qR >= 75 ? '#059669' : qR >= 50 ? '#d97706' : '#dc2626',
-        width: '32px',
-        textAlign: 'right'
-      }
-    }, m.total ? qR + '%' : '–'), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '9px',
-        color: '#94a3b8',
-        width: '28px'
-      }
-    }, "Qual.")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px'
-      }
-    }, BAR(sR, sR > 20 ? '#dc2626' : sR > 10 ? '#d97706' : '#94a3b8'), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '10px',
-        fontWeight: 800,
-        color: sR > 20 ? '#dc2626' : sR > 10 ? '#d97706' : '#64748b',
-        width: '32px',
-        textAlign: 'right'
-      }
-    }, m.total ? sR + '%' : '–'), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '9px',
-        color: '#94a3b8',
-        width: '28px'
-      }
-    }, "Skip")));
-  })))), activeTab === 'coaching' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '1px solid #e2e8f0',
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '11px',
-      fontWeight: 700,
-      color: '#64748b',
-      textTransform: 'uppercase',
-      letterSpacing: '0.07em',
-      marginBottom: '12px'
-    }
-  }, "🔍 Ist-Analyse – wie oft abgefragt"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '7px'
-    }
-  }, IST_KEYS.map(({
-    key,
-    label
-  }) => {
-    const count = filtered.filter(r => {
-      const v = (r.canvasStats || {})[key];
-      return v && v.used;
-    }).length;
-    const pct = total ? Math.round(count / total * 100) : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: key,
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '130px',
-        fontSize: '12px',
-        fontWeight: 600,
-        color: '#475569',
-        flexShrink: 0
-      }
-    }, label), BAR(pct, '#3b82f6'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '36px',
-        textAlign: 'right',
-        fontSize: '12px',
-        fontWeight: 800,
-        color: '#1e293b',
-        flexShrink: 0
-      }
-    }, count, "×"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '34px',
-        textAlign: 'right',
-        fontSize: '11px',
-        fontWeight: 700,
-        color: '#94a3b8',
-        flexShrink: 0
-      }
-    }, pct, "%"));
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '1px solid #e2e8f0',
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '11px',
-      fontWeight: 700,
-      color: '#64748b',
-      textTransform: 'uppercase',
-      letterSpacing: '0.07em',
-      marginBottom: '12px'
-    }
-  }, "📄 Angebote – wie oft präsentiert"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '7px'
-    }
-  }, OFFER_KEYS.map(({
-    key,
-    label
-  }) => {
-    const count = filtered.filter(r => {
-      const v = (r.canvasStats || {})[key];
-      return v && v.used;
-    }).length;
-    const pct = total ? Math.round(count / total * 100) : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: key,
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '200px',
-        fontSize: '12px',
-        fontWeight: 600,
-        color: '#475569',
-        flexShrink: 0
-      }
-    }, label), BAR(pct, '#7c3aed'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '36px',
-        textAlign: 'right',
-        fontSize: '12px',
-        fontWeight: 800,
-        color: '#1e293b',
-        flexShrink: 0
-      }
-    }, count, "×"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '34px',
-        textAlign: 'right',
-        fontSize: '11px',
-        fontWeight: 700,
-        color: '#94a3b8',
-        flexShrink: 0
-      }
-    }, pct, "%"));
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: '#fff',
-      borderRadius: '14px',
-      border: '1px solid #e2e8f0',
-      padding: '16px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '11px',
-      fontWeight: 700,
-      color: '#64748b',
-      textTransform: 'uppercase',
-      letterSpacing: '0.07em',
-      marginBottom: '12px'
-    }
-  }, "💰 Kostenübersicht – wie oft Preise eingetragen"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '7px'
-    }
-  }, COST_KEYS.map(({
-    key,
-    label
-  }) => {
-    const count = filtered.filter(r => {
-      const v = (r.canvasStats || {})[key];
-      return v && v.used;
-    }).length;
-    const pct = total ? Math.round(count / total * 100) : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: key,
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '200px',
-        fontSize: '12px',
-        fontWeight: 600,
-        color: '#475569',
-        flexShrink: 0
-      }
-    }, label), BAR(pct, '#059669'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '36px',
-        textAlign: 'right',
-        fontSize: '12px',
-        fontWeight: 800,
-        color: '#1e293b',
-        flexShrink: 0
-      }
-    }, count, "×"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '34px',
-        textAlign: 'right',
-        fontSize: '11px',
-        fontWeight: 700,
-        color: '#94a3b8',
-        flexShrink: 0
-      }
-    }, pct, "%"));
-  }))), /*#__PURE__*/React.createElement("div", {
+  })(), React.createElement("div", {
     style: {
       background: '#fff',
       borderRadius: '14px',
@@ -23544,7 +23337,217 @@ const StatsModal = ({
       color: '#94a3b8',
       textAlign: 'center'
     }
-  }, "Sobald neue Beratungen abgeschlossen werden, erscheint hier die Verteilung.")), /*#__PURE__*/React.createElement("div", {
+  }, "Sobald neue Beratungen abgeschlossen werden, erscheint hier die Verteilung.")))), activeTab === 'coaching' && /*#__PURE__*/React.createElement(React.Fragment, null, total > 0 && (() => {
+    // Coaching auf einen Blick: die 3 am seltensten abgefragten Felder der Ist-Analyse
+    const h = React.createElement;
+    const list = IST_KEYS.map(({ key, label }) => {
+      const count = filtered.filter(r => { const v = (r.canvasStats || {})[key]; return v && v.used; }).length;
+      return { key, label, count, pct: Math.round(count / total * 100) };
+    }).sort((a, b) => a.pct - b.pct).slice(0, 3);
+    return h('div', { style: { background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '14px 16px' } },
+      h('div', { style: { fontSize: '13px', fontWeight: 900, color: '#0f172a' } }, employeeMode ? 'Hier fragst du am seltensten' : 'Am seltensten abgefragt'),
+      h('div', { style: { fontSize: '11px', color: '#64748b', marginBottom: '12px' } }, 'Die 3 schwächsten Felder der Ist-Analyse'),
+      h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } }, list.map(x => h('div', { key: x.key, style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+        h('div', { style: { width: '120px', fontSize: '12px', fontWeight: 700, color: '#0f172a', flexShrink: 0 } }, x.label),
+        BAR(x.pct, x.pct >= 75 ? '#3b82f6' : '#d97706'),
+        h('div', { style: { width: '34px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#94a3b8' } }, x.count + '\u00D7'),
+        h('div', { style: { width: '40px', textAlign: 'right', fontSize: '13px', fontWeight: 900, color: '#0f172a' } }, x.pct + '%')))));
+  })(), /*#__PURE__*/React.createElement(PsStatsMehr, { id: 'coaching', auf: 'Alle Felder anzeigen \u00B7 Ist-Analyse, Angebote, Kosten, Qualität, Skip-Gründe', zu: 'Weniger anzeigen' }, React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: '14px',
+      border: '1px solid #e2e8f0',
+      padding: '16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: 700,
+      color: '#64748b',
+      textTransform: 'uppercase',
+      letterSpacing: '0.07em',
+      marginBottom: '12px'
+    }
+  }, "🔍 Ist-Analyse – wie oft abgefragt"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '7px'
+    }
+  }, IST_KEYS.map(({
+    key,
+    label
+  }) => {
+    const count = filtered.filter(r => {
+      const v = (r.canvasStats || {})[key];
+      return v && v.used;
+    }).length;
+    const pct = total ? Math.round(count / total * 100) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: key,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '130px',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: '#475569',
+        flexShrink: 0
+      }
+    }, label), BAR(pct, '#3b82f6'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '36px',
+        textAlign: 'right',
+        fontSize: '12px',
+        fontWeight: 800,
+        color: '#1e293b',
+        flexShrink: 0
+      }
+    }, count, "×"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '34px',
+        textAlign: 'right',
+        fontSize: '11px',
+        fontWeight: 700,
+        color: '#94a3b8',
+        flexShrink: 0
+      }
+    }, pct, "%"));
+  }))), React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: '14px',
+      border: '1px solid #e2e8f0',
+      padding: '16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: 700,
+      color: '#64748b',
+      textTransform: 'uppercase',
+      letterSpacing: '0.07em',
+      marginBottom: '12px'
+    }
+  }, "📄 Angebote – wie oft präsentiert"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '7px'
+    }
+  }, OFFER_KEYS.map(({
+    key,
+    label
+  }) => {
+    const count = filtered.filter(r => {
+      const v = (r.canvasStats || {})[key];
+      return v && v.used;
+    }).length;
+    const pct = total ? Math.round(count / total * 100) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: key,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '200px',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: '#475569',
+        flexShrink: 0
+      }
+    }, label), BAR(pct, '#7c3aed'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '36px',
+        textAlign: 'right',
+        fontSize: '12px',
+        fontWeight: 800,
+        color: '#1e293b',
+        flexShrink: 0
+      }
+    }, count, "×"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '34px',
+        textAlign: 'right',
+        fontSize: '11px',
+        fontWeight: 700,
+        color: '#94a3b8',
+        flexShrink: 0
+      }
+    }, pct, "%"));
+  }))), React.createElement("div", {
+    style: {
+      background: '#fff',
+      borderRadius: '14px',
+      border: '1px solid #e2e8f0',
+      padding: '16px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      fontWeight: 700,
+      color: '#64748b',
+      textTransform: 'uppercase',
+      letterSpacing: '0.07em',
+      marginBottom: '12px'
+    }
+  }, "💰 Kostenübersicht – wie oft Preise eingetragen"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '7px'
+    }
+  }, COST_KEYS.map(({
+    key,
+    label
+  }) => {
+    const count = filtered.filter(r => {
+      const v = (r.canvasStats || {})[key];
+      return v && v.used;
+    }).length;
+    const pct = total ? Math.round(count / total * 100) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: key,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '200px',
+        fontSize: '12px',
+        fontWeight: 600,
+        color: '#475569',
+        flexShrink: 0
+      }
+    }, label), BAR(pct, '#059669'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '36px',
+        textAlign: 'right',
+        fontSize: '12px',
+        fontWeight: 800,
+        color: '#1e293b',
+        flexShrink: 0
+      }
+    }, count, "×"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '34px',
+        textAlign: 'right',
+        fontSize: '11px',
+        fontWeight: 700,
+        color: '#94a3b8',
+        flexShrink: 0
+      }
+    }, pct, "%"));
+  }))), React.createElement("div", {
     style: {
       background: '#fff',
       borderRadius: '14px',
@@ -23734,7 +23737,7 @@ const StatsModal = ({
         fontStyle: 'italic'
       }
     }, "Nur getippte Gründe werden erfasst. Handschriftliche Gründe sind nicht auswertbar."));
-  })(), total === 0 && /*#__PURE__*/React.createElement("div", {
+  })()), total === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '40px',
       textAlign: 'center',
@@ -23745,7 +23748,7 @@ const StatsModal = ({
       borderRadius: '14px',
       border: '1px solid #e2e8f0'
     }
-  }, "📭 Keine Daten im gewählten Zeitraum")), activeTab === 'vorgaenge' && (filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, "📭 Keine Daten im gewählten Zeitraum")), activeTab === 'vorgaenge' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ArchivProtokollView, null), filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: '40px',
       textAlign: 'center',
@@ -23855,7 +23858,7 @@ const StatsModal = ({
       background: '#f8fafc',
       borderTop: '1px solid #f1f5f9'
     }
-  }, "+", filtered.length - 25, " weitere · Export via CSV"))), activeTab === 'archiv' && /*#__PURE__*/React.createElement(ArchivProtokollView, null), activeTab === 'skip-management' && isDiegoAdmin && (() => {
+  }, "+", filtered.length - 25, " weitere · Export via CSV"))), activeTab === 'skip-management' && isDiegoAdmin && (() => {
     const allAgents = Object.keys(skipAgentsData);
     return /*#__PURE__*/React.createElement("div", {
       style: {
