@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.156';
+    window.APP_VERSION = '55.157';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12248,6 +12248,100 @@ function PsToolIcon({ id, color, active, size }) {
   }
   return h('svg', { viewBox: '0 0 32 32', width: size || 28, height: size || 28, 'aria-hidden': true, style: { display: 'block' } },
     h('g', { transform: 'rotate(-45 16 16)' }, g));
+}
+// === v55.157 WERKZEUG-FENSTER (Samsung-Notes-Stil): Vorschau, Dicke, Deckkraft (Marker), Schnellfarben, Farbrad ===
+function PsToolPreview({ tool, color, width, opacity }) {
+  const h = React.createElement;
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const W = 272, H = 64, d = window.devicePixelRatio || 1;
+    c.width = Math.round(W * d);
+    c.height = Math.round(H * d);
+    const ctx = c.getContext('2d');
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const vw = Math.max(1, Math.min(12, width));
+    const N = 90, raw = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      raw.push({ x: 16 + (W - 32) * t, y: H / 2 + Math.sin(t * Math.PI * 2.4) * H * 0.2 });
+    }
+    const ink = psInkStyle(color, 1);
+    ctx.strokeStyle = ink.color;
+    ctx.fillStyle = ink.color;
+    if (tool === 'highlighter') {
+      ctx.globalAlpha = opacity;
+      ctx.lineWidth = vw * 3;
+      ctx.beginPath();
+      raw.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.stroke();
+    } else {
+      const s = { tool, points: [], baseLineWidth: Math.max(1.8, vw) };
+      raw.forEach((p, i) => psInkAddPoint(s, { pointerType: 'pen', pressure: 0.12 + 0.5 * Math.sin(Math.PI * i / N), timeStamp: i * 8, altitudeAngle: 1.2 }, p.x, p.y));
+      drawVariableWidthPath(ctx, s.points, s.points, s.baseLineWidth);
+    }
+    ctx.globalAlpha = 1;
+  }, [tool, color, width, opacity]);
+  return h('canvas', { ref, style: { width: 272, height: 64, display: "block", borderRadius: 12, background: "#f1f5f9" } });
+}
+function PsToolWindow({ tool, color, onColor, width, onWidth, markerOpacity, onMarkerOpacity, onClose }) {
+  const h = React.createElement;
+  const [wheel, setWheel] = React.useState(false);
+  const names = { pen: 'Stift', fountain: 'Füller', ballpen: 'Kugelschreiber', highlighter: 'Marker' };
+  const quick = ['#ff0000', '#ff8a00', '#ffcc00', '#14b8a6', '#2563eb', '#1e3a8a', '#8800ff', '#000000'];
+  const isMarker = tool === 'highlighter';
+  const lc = String(color).toLowerCase();
+  const stepBtn = (label, fn) => h('button', {
+    type: 'button',
+    onClick: fn,
+    onPointerUp: e => { if (e.pointerType === 'pen') { e.preventDefault(); e.stopPropagation(); fn(); } },
+    style: { width: 30, height: 30, borderRadius: 15, border: 'none', background: '#f1f5f9', fontSize: 18, fontWeight: 700, color: '#334155', lineHeight: '30px', padding: 0, cursor: 'pointer', flexShrink: 0 }
+  }, label);
+  const row = (label, value, slider, minus, plus) => h('div', { style: { marginTop: 14 } },
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 4 } }, h('span', null, label), h('span', { style: { color: '#334155' } }, value)),
+    h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, stepBtn('−', minus), slider, stepBtn('+', plus)));
+  const dotStyle = (c, on) => ({
+    width: 26, height: 26, borderRadius: 13, background: c, border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
+    boxShadow: on ? '0 0 0 2px #fff, 0 0 0 4px #334155' : 'inset 0 0 0 1px rgba(0,0,0,.12)'
+  });
+  const pct = Math.round(markerOpacity * 100);
+  return h('div', {
+    className: 'bg-white rounded-2xl shadow-2xl border border-slate-200',
+    style: { position: 'fixed', left: 12, bottom: 70, width: 300, padding: 14, zIndex: 999999, maxHeight: 'calc(100vh - 90px)', overflowY: 'auto' }
+  },
+  h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
+    h('div', { style: { fontSize: 15, fontWeight: 800, color: '#0f172a' } }, names[tool] || 'Stift'),
+    h('button', {
+      type: 'button',
+      'aria-label': 'Schließen',
+      onClick: onClose,
+      onPointerUp: e => { if (e.pointerType === 'pen') { e.preventDefault(); e.stopPropagation(); onClose(); } },
+      style: { width: 32, height: 32, borderRadius: 16, border: 'none', background: '#f1f5f9', fontSize: 16, color: '#334155', cursor: 'pointer', padding: 0 }
+    }, '✕')),
+  h(PsToolPreview, { tool, color, width, opacity: markerOpacity }),
+  row('Dicke', width, h('input', {
+    type: 'range', min: 1, max: 12, step: 1, value: width,
+    onChange: e => onWidth(parseInt(e.target.value, 10)),
+    style: { flex: 1, minWidth: 0, accentColor: '#334155', height: 28 }
+  }), () => onWidth(Math.max(1, width - 1)), () => onWidth(Math.min(12, width + 1))),
+  isMarker ? row('Deckkraft', pct + ' %', h('input', {
+    type: 'range', min: 10, max: 60, step: 1, value: pct,
+    onChange: e => onMarkerOpacity(parseInt(e.target.value, 10) / 100),
+    style: { flex: 1, minWidth: 0, accentColor: color, height: 28 }
+  }), () => onMarkerOpacity(Math.max(0.1, markerOpacity - 0.05)), () => onMarkerOpacity(Math.min(0.6, markerOpacity + 0.05))) : null,
+  h('div', { style: { display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' } },
+    quick.map(c => h('button', { key: c, type: 'button', 'aria-label': c, onClick: () => onColor(c), style: dotStyle(c, lc === c) })),
+    h('button', {
+      type: 'button',
+      'aria-label': 'Farbrad',
+      onClick: () => setWheel(v => !v),
+      style: Object.assign(dotStyle('conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)', wheel), { background: 'conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)' })
+    })),
+  wheel ? h('div', { style: { marginTop: 12, display: 'flex', justifyContent: 'center' } }, h(PsColorWheel, { color, onPick: onColor })) : null);
 }
 const COLORS = [{
   id: 'black',
@@ -30306,6 +30400,7 @@ function App() {
   const [showPenToolPicker, setShowPenToolPicker] = useState(false);
   const [showStrokePicker, setShowStrokePicker] = useState(false);
   const [showEraserPicker, setShowEraserPicker] = useState(false);
+  const [markerOpacity, setMarkerOpacity] = useState(0.35); // v55.157: Marker-Deckkraft (10–60 %)
   const [eraserSize, setEraserSize] = useState(4); // Multiplikator für Radierer-Größe (1-10)
   const lastPenTapRef = useRef(0);
   const [color, setColor] = useState('#0044ff');
@@ -30320,6 +30415,7 @@ function App() {
   const strokeWidthRef = useRef(4);
   const eraserSizeRef = useRef(4);
   const opacityRef = useRef(0.85);
+  const markerOpacityRef = useRef(0.35);
   const colorRef = useRef('#0044ff');
   const drawnStrokesRef = useRef(drawnStrokes);
   useEffect(() => {
@@ -30359,7 +30455,7 @@ function App() {
     if (toolId === 'highlighter') {
       return {
         width: bw,
-        opacity: Math.max(0.10, Math.min(0.4, baseOpacity * 0.35)),
+        opacity: Math.max(0.10, Math.min(0.6, markerOpacityRef.current)),
         smooth: 0
       };
     }
@@ -30698,6 +30794,9 @@ function App() {
   useEffect(() => {
     opacityRef.current = opacity;
   }, [opacity]);
+  useEffect(() => {
+    markerOpacityRef.current = markerOpacity;
+  }, [markerOpacity]);
   const [isWritingEnabled, setIsWritingEnabled] = useState(true);
   const [inputMode, setInputMode] = useState('pen');
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -36147,95 +36246,16 @@ function App() {
         active: isActive,
         size: 28
       }));
-    }), showStrokePicker && (tool === 'pen' || tool === 'fountain' || tool === 'ballpen' || tool === 'highlighter') && /*#__PURE__*/React.createElement("div", {
-      className: "bg-white p-3 rounded-xl shadow-2xl border border-slate-200",
-      style: {
-        position: 'fixed',
-        left: '12px',
-        bottom: '70px',
-        width: '240px',
-        zIndex: 999999
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center mb-2"
-    }, tool === 'fountain' ? 'Füller' : tool === 'ballpen' ? 'Kugelschreiber' : tool === 'highlighter' ? 'Marker' : 'Stift', " — Dicke"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        width: '100%'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: Math.max(4, strokeWidth * 1.5) + 'px',
-        height: Math.max(4, strokeWidth * 1.5) + 'px',
-        background: '#2563eb',
-        borderRadius: '50%',
-        flexShrink: 0,
-        minWidth: '4px'
-      }
-    }), /*#__PURE__*/React.createElement("input", {
-      type: "range",
-      min: "1",
-      max: "12",
-      step: "1",
-      value: strokeWidth,
-      onChange: e => setStrokeWidth(parseInt(e.target.value, 10)),
-      style: {
-        width: '140px',
-        minWidth: '140px',
-        accentColor: '#2563eb',
-        height: '28px',
-        display: 'block'
-      }
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: '16px',
-        fontWeight: 900,
-        color: '#1d4ed8',
-        width: '24px',
-        textAlign: 'center',
-        flexShrink: 0
-      }
-    }, strokeWidth)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: '10px',
-        height: '28px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f8fafc',
-        borderRadius: '8px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '80%',
-        height: Math.max(1, strokeWidth) + 'px',
-        background: '#1e293b',
-        borderRadius: '99px'
-      }
-    })), /*#__PURE__*/React.createElement("button", {
-      onClick: () => setShowStrokePicker(false),
-      onPointerUp: e => {
-        if (e.pointerType === 'pen') {
-          e.preventDefault();
-          e.stopPropagation();
-          setShowStrokePicker(false);
-        }
-      },
-      style: {
-        marginTop: '8px',
-        width: '100%',
-        padding: '9px',
-        borderRadius: '8px',
-        background: '#2563eb',
-        color: '#fff',
-        border: 'none',
-        fontSize: '12px',
-        fontWeight: 700,
-        cursor: 'pointer'
-      }
-    }, "Fertig ✓")), showEraserPicker && tool === 'eraser' && /*#__PURE__*/React.createElement("div", {
+    }), showStrokePicker && (tool === 'pen' || tool === 'fountain' || tool === 'ballpen' || tool === 'highlighter') && /*#__PURE__*/React.createElement(PsToolWindow, {
+      tool,
+      color,
+      onColor: setColor,
+      width: strokeWidth,
+      onWidth: setStrokeWidth,
+      markerOpacity,
+      onMarkerOpacity: setMarkerOpacity,
+      onClose: () => setShowStrokePicker(false)
+    }), showEraserPicker && tool === 'eraser' && /*#__PURE__*/React.createElement("div", {
       className: "bg-white p-3 rounded-xl shadow-2xl border border-slate-200",
       style: {
         position: 'fixed',
