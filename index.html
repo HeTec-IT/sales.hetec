@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.151';
+    window.APP_VERSION = '55.152';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -11983,10 +11983,18 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
       ctx.globalAlpha = t.opacity * 0.4;
       ctx.globalCompositeOperation = 'destination-over';
     } else {
-      ctx.lineWidth = vw;
-      ctx.strokeStyle = t.color;
-      ctx.globalAlpha = t.opacity;
+      // v55.152: Tinten-Engine wie Haupt-Canvas (Druck, Tempo, Bezier, deckende Tinte)
+      const lw = Math.max(1.8, vw);
+      const ink = psInkStyle(t.color, Math.min(1, (t.opacity == null ? 1 : t.opacity) * 1.35));
+      ctx.strokeStyle = ink.color;
+      ctx.globalAlpha = ink.alpha;
       ctx.globalCompositeOperation = 'source-over';
+      const s = { tool: t.tool, color: t.color, width: t.width, opacity: t.opacity, points: [], baseWidth: r.width, baseHeight: r.height, baseLineWidth: lw, ink: true };
+      psInkAddPoint(s, e.nativeEvent || e, p.x, p.y);
+      psInkDrawLast(ctx, s);
+      drawRef.current = s;
+      try { c.setPointerCapture(e.pointerId); } catch (_) {}
+      return;
     }
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
@@ -12002,6 +12010,12 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
     const r = c.getBoundingClientRect();
     const ne = e.nativeEvent;
     const evs = ne && ne.getCoalescedEvents ? ne.getCoalescedEvents() : null;
+    if (s.ink) {
+      (evs && evs.length ? evs : [ne || e]).forEach(ev => {
+        if (psInkAddPoint(s, ev, ev.clientX - r.left, ev.clientY - r.top)) psInkDrawLast(ctx, s);
+      });
+      return;
+    }
     (evs && evs.length ? evs : [ne || e]).forEach(ev => {
       const p = { x: ev.clientX - r.left, y: ev.clientY - r.top };
       s.points.push(p);
@@ -12015,10 +12029,15 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
     drawRef.current = null;
     const c = ref.current;
     if (c) {
+      if (s.ink) { try { psInkDrawTail(c.getContext('2d'), s); } catch (_) {} }
       try { c.getContext('2d').restore(); } catch (_) {}
       try { c.releasePointerCapture(e.pointerId); } catch (_) {}
     }
-    if (s.points.length === 1) s.points.push({ x: s.points[0].x + 0.01, y: s.points[0].y });
+    if (s.ink) {
+      delete s.ink;
+      delete s.smoothedPressure; delete s.smoothedVelocity; delete s.lastTime; delete s.lastWf;
+    }
+    if (s.points.length === 1) s.points.push(Object.assign({}, s.points[0], { x: s.points[0].x + 0.01 }));
     onStroke(s);
   };
   return h('div', { className: 'sit-pad-wrap' }, h('canvas', {
@@ -24166,6 +24185,96 @@ function computeInkWidthFactor(dyn, pressure, velNorm) {
   const vf = 1 + (0.35 - velNorm) * 2 * dyn.vGain;
   return Math.max(dyn.fMin, Math.min(dyn.fMax, pf * vf));
 }
+// === v55.152 PAPIER-GEFÜHL ===
+// 1) Druckkurve: Apple Pencil / S Pen liefern beim normalen Schreiben nur ca. 0.2–0.35.
+//    Linear wirkte die Linie dadurch dünn und "hart". Die Kurve hebt leichten Druck an
+//    (0.3 → ~0.49 = neutral), fester Druck bleibt kräftig – wie ein Stift auf Papier.
+function psInkPressure(ev) {
+  if (!ev || ev.pointerType !== 'pen' || !(ev.pressure > 0)) return 0.5;
+  return Math.max(0.05, Math.min(1, Math.pow(ev.pressure, 0.6)));
+}
+// 2) Deckende Tinte: Transparenz wird mit Papierweiß vorgemischt (alpha = 1).
+//    Vorher überlagerten sich die runden Segment-Enden mit alpha < 1 → dunkle "Perlen"
+//    im Strich (digitaler Marker-Look). Jetzt gleichmäßige Tinte wie auf Papier.
+const __psInkMixCache = {};
+function psInkStyle(color, opacity) {
+  const a = opacity == null ? 1 : Math.max(0, Math.min(1, opacity));
+  const c = String(color || '#1d4ed8').trim();
+  if (a >= 0.999) return { color: c, alpha: 1 };
+  const k = c + '|' + a.toFixed(3);
+  if (__psInkMixCache[k]) return __psInkMixCache[k];
+  let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+  if (!m) return { color: c, alpha: a }; // unbekanntes Format → alte Darstellung
+  let hx = m[1];
+  if (hx.length === 3) hx = hx[0] + hx[0] + hx[1] + hx[1] + hx[2] + hx[2];
+  const ch = i => Math.round(parseInt(hx.substr(i, 2), 16) * a + 255 * (1 - a));
+  const res = { color: 'rgb(' + ch(0) + ',' + ch(2) + ',' + ch(4) + ')', alpha: 1 };
+  __psInkMixCache[k] = res;
+  return res;
+}
+// Live-Stil des laufenden Strichs (nicht im Strich-Objekt gespeichert → Datenformat unverändert)
+const __psInkLive = new WeakMap();
+// Gemeinsame Tinten-Engine für zusätzliche Stift-Felder (z. B. Notiz-Fenster Seite 1):
+// gleiche Druck-/Tempo-Logik wie der Haupt-Canvas → identisches Schreibgefühl überall.
+function psInkAddPoint(stroke, ev, x, y) {
+  const pts = stroke.points;
+  const lp = pts.length ? pts[pts.length - 1] : null;
+  if (lp && Math.abs(x - lp.x) < 0.15 && Math.abs(y - lp.y) < 0.15) return false;
+  const dyn = stroke.tool !== 'eraser' && stroke.tool !== 'highlighter' ? getInkToolDynamics(stroke.tool) : null;
+  const pr = psInkPressure(ev);
+  stroke.smoothedPressure = stroke.smoothedPressure == null ? pr : stroke.smoothedPressure * 0.6 + pr * 0.4;
+  const t = ev && ev.timeStamp || 0;
+  const dt = Math.max(1, t - (stroke.lastTime || t));
+  const vel = lp ? Math.hypot(x - lp.x, y - lp.y) / dt : 0;
+  stroke.smoothedVelocity = (stroke.smoothedVelocity || 0) * 0.65 + vel * 0.35;
+  const vN = Math.min(1, stroke.smoothedVelocity / 1.4);
+  let wf = 1;
+  if (dyn) {
+    const tg = computeInkWidthFactor(dyn, stroke.smoothedPressure, lp ? vN : 0.35);
+    const pv = stroke.lastWf == null ? tg : stroke.lastWf;
+    let nx = pv + (tg - pv) * dyn.smooth;
+    nx = Math.max(pv - 0.06, Math.min(pv + 0.06, nx));
+    wf = Math.max(dyn.fMin, Math.min(dyn.fMax, nx));
+    stroke.lastWf = wf;
+  }
+  stroke.lastTime = t;
+  pts.push({ x, y, pressure: pr, width: Math.max(0.5, (stroke.baseLineWidth || 2) * wf), wf });
+  return true;
+}
+// Zeichnet nur das neueste Segment (Midpoint-Bezier, Breite = Mittel der Punktbreiten)
+function psInkDrawLast(ctx, stroke) {
+  const pts = stroke.points, n = pts.length;
+  if (n >= 3) {
+    const p0 = pts[n - 3], p1 = pts[n - 2], p2 = pts[n - 1];
+    ctx.lineWidth = Math.max(0.5, (p1.width + p2.width) / 2);
+    ctx.beginPath();
+    ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+    ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+    ctx.stroke();
+  } else if (n === 2) {
+    ctx.lineWidth = Math.max(0.5, pts[1].width);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[1].x, pts[1].y);
+    ctx.stroke();
+  } else if (n === 1) {
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.arc(pts[0].x, pts[0].y, Math.max(0.5, pts[0].width / 2), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+// Endstück beim Abheben: Live-Kurve endet bei mid(a,b) → letztes Stück bis b
+function psInkDrawTail(ctx, stroke) {
+  const pts = stroke.points, n = pts.length;
+  if (n < 3) return;
+  const a = pts[n - 2], b = pts[n - 1];
+  ctx.lineWidth = Math.max(0.5, b.width);
+  ctx.beginPath();
+  ctx.moveTo((a.x + b.x) / 2, (a.y + b.y) / 2);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+}
 // Hat der Stroke pro Punkt gespeicherte Breitenfaktoren (wf)?
 function strokeHasVariableWidth(stroke) {
   return !!(stroke && (stroke.tool === 'pen' || stroke.tool === 'fountain') && Array.isArray(stroke.points) && stroke.points.length > 1 && stroke.points.some(p => p && p.wf != null));
@@ -24488,9 +24597,10 @@ const redrawCanvas = (canvas, strokes, scaleFactor = 1, key = '') => {
       ctx.globalAlpha = stroke.opacity;
       ctx.globalCompositeOperation = 'destination-over';
     } else {
+      const __is = psInkStyle(stroke.color, finalOpacity);
       ctx.lineWidth = finalLineWidth;
-      ctx.strokeStyle = stroke.color;
-      ctx.globalAlpha = finalOpacity;
+      ctx.strokeStyle = __is.color;
+      ctx.globalAlpha = __is.alpha;
       ctx.globalCompositeOperation = 'source-over';
     }
     if (stroke.points.length > 0) {
@@ -35176,7 +35286,7 @@ function App() {
 
     // === v44.0 TINTEN-ENGINE: Startbreite aus echtem Stylus-Druck ===
     const dynStart = currentTool !== 'eraser' && currentTool !== 'highlighter' ? getInkToolDynamics(currentTool) : null;
-    const pressure = e.pointerType === 'pen' && e.pressure > 0 ? e.pressure : 0.5;
+    const pressure = psInkPressure(e);
     const wf0 = dynStart ? computeInkWidthFactor(dynStart, pressure, 0.35) : 1;
     const initWidth = Math.max(0.5, finalLineWidth * wf0);
     const newStroke = {
@@ -35219,8 +35329,12 @@ function App() {
     ctx.save();
 
     // Canvas-Context für Live-Drawing einrichten
-    ctx.strokeStyle = currentColor;
-    ctx.globalAlpha = currentOpacity;
+    // v55.152: deckende Tinte (Transparenz vorgemischt) – gleiche Formel wie redrawCanvas
+    const __liveOp = key && key.startsWith('sit_') && currentTool !== 'eraser' && currentTool !== 'highlighter' ? Math.min(1, currentOpacity * 1.35) : currentOpacity;
+    const __liveInk = psInkStyle(currentColor, __liveOp);
+    __psInkLive.set(newStroke, __liveInk);
+    ctx.strokeStyle = currentTool === 'highlighter' ? currentColor : __liveInk.color;
+    ctx.globalAlpha = currentTool === 'highlighter' ? currentOpacity : __liveInk.alpha;
     ctx.lineWidth = Math.max(0.5, initWidth);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -35362,9 +35476,10 @@ function App() {
       ctx.globalAlpha = stroke.opacity != null ? stroke.opacity : 0.4;
       ctx.strokeStyle = stroke.color || colorRefGlobal();
     } else {
+      const __li = __psInkLive.get(stroke) || psInkStyle(stroke.color || colorRefGlobal(), stroke.opacity);
       ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = stroke.opacity != null ? stroke.opacity : 1;
-      ctx.strokeStyle = stroke.color || colorRefGlobal();
+      ctx.globalAlpha = __li.alpha;
+      ctx.strokeStyle = __li.color;
     }
     for (const ev of events) {
       const {
@@ -35395,7 +35510,7 @@ function App() {
       const dyn = currentTool !== 'eraser' && currentTool !== 'highlighter' ? getInkToolDynamics(currentTool) : null;
 
       // Echter Stylus-Druck (Apple Pencil / S Pen); Fallback neutral 0.5
-      const prRaw = ev.pointerType === 'pen' && ev.pressure > 0 ? ev.pressure : 0.5;
+      const prRaw = psInkPressure(ev);
       stroke.smoothedPressure = stroke.smoothedPressure == null ? prRaw : stroke.smoothedPressure * 0.6 + prRaw * 0.4;
       const pressure = stroke.smoothedPressure;
 
@@ -35466,7 +35581,7 @@ function App() {
       } else if (pts.length === 1) {
         // Einzelner Punkt: kleiner Kreis in Stiftfarbe
         const prevFill = ctx.fillStyle;
-        ctx.fillStyle = stroke.color || colorRefGlobal();
+        ctx.fillStyle = ctx.strokeStyle;
         ctx.beginPath();
         ctx.arc(x, y, Math.max(0.5, smoothedWidth / 2), 0, Math.PI * 2);
         ctx.fill();
@@ -35616,8 +35731,9 @@ function App() {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = finishedStroke.opacity != null ? finishedStroke.opacity : 1;
-        ctx.strokeStyle = finishedStroke.color || colorRefGlobal();
+        const __le = __psInkLive.get(finishedStroke) || psInkStyle(finishedStroke.color || colorRefGlobal(), finishedStroke.opacity);
+        ctx.globalAlpha = __le.alpha;
+        ctx.strokeStyle = __le.color;
         const fp = finishedStroke.points;
         const a = fp[fp.length - 2];
         const b = fp[fp.length - 1];
@@ -36472,9 +36588,10 @@ function App() {
           ctx.globalAlpha = stroke.opacity != null ? stroke.opacity : 1;
           ctx.globalCompositeOperation = 'destination-over';
         } else {
+          const __ps = psInkStyle(stroke.color || '#1d4ed8', stroke.opacity);
           ctx.lineWidth = lw;
-          ctx.strokeStyle = stroke.color || '#1d4ed8';
-          ctx.globalAlpha = stroke.opacity != null ? stroke.opacity : 1;
+          ctx.strokeStyle = __ps.color;
+          ctx.globalAlpha = __ps.alpha;
           ctx.globalCompositeOperation = 'source-over';
         }
         const pts = stroke.points.map(p => ({
@@ -44912,10 +45029,18 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         ctx.globalAlpha = op * 0.4;
         ctx.globalCompositeOperation = 'destination-over';
       } else {
-        ctx.lineWidth = vw;
-        ctx.strokeStyle = col;
-        ctx.globalAlpha = op;
+        // v55.152: Tinten-Engine (Druck, Tempo, Bezier, deckende Tinte)
+        const ink = psInkStyle(col, Math.min(1, (op == null ? 1 : op) * 1.35));
+        ctx.strokeStyle = ink.color;
+        ctx.globalAlpha = ink.alpha;
         ctx.globalCompositeOperation = 'source-over';
+        const s = { tool, color: col, width: w, opacity: op, points: [], baseWidth: rect.width, baseHeight: rect.height, baseLineWidth: Math.max(1.8, vw), ink: true };
+        psInkAddPoint(s, e.nativeEvent || e, rawX, rawY);
+        psInkDrawLast(ctx, s);
+        stepDrawingRef.current = true;
+        stepStrokeRef.current = s;
+        try { c.setPointerCapture(e.pointerId); } catch (_) {}
+        return;
       }
       ctx.beginPath();
       ctx.moveTo(rawX, rawY);
@@ -44943,9 +45068,20 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       if (!c) return;
       e.preventDefault();
       const rect = c.getBoundingClientRect();
+      const s = stepStrokeRef.current;
+      if (s.ink) {
+        const ctx = c.getContext('2d');
+        const ne = e.nativeEvent || e;
+        let evs = null;
+        try { evs = ne.getCoalescedEvents ? ne.getCoalescedEvents() : null; } catch (_) {}
+        (evs && evs.length ? evs : [ne]).forEach(ev => {
+          if (psInkAddPoint(s, ev, ev.clientX - rect.left, ev.clientY - rect.top)) psInkDrawLast(ctx, s);
+        });
+        return;
+      }
       const rawX = e.clientX - rect.left;
       const rawY = e.clientY - rect.top;
-      stepStrokeRef.current.points.push({
+      s.points.push({
         x: rawX,
         y: rawY
       });
@@ -44961,7 +45097,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       const c = stepCanvasRef.current;
       if (c) {
         const ctx = c.getContext('2d');
+        if (stroke && stroke.ink) { try { psInkDrawTail(ctx, stroke); } catch (_) {} }
         ctx.restore();
+      }
+      if (stroke && stroke.ink) {
+        delete stroke.ink;
+        delete stroke.smoothedPressure; delete stroke.smoothedVelocity; delete stroke.lastTime; delete stroke.lastWf;
       }
       // Strich in State speichern → Grid-Kacheln zeigen ihn sofort
       if (stroke && stroke.points.length > 1) {
