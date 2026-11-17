@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.161';
+    window.APP_VERSION = '55.162';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4353,6 +4353,18 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-pad-wrap{ width:min(100%,480px); margin:0 auto; height:130px; border-radius:12px; border:1.5px dashed #cbd5e1; background-color:#fbfdff; position:relative; overflow:hidden; flex-shrink:0; }
 .sit-pad-canvas{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; background:transparent; }
 .sit-note-ta{ width:100%; min-height:130px; border-radius:12px; border:1.5px solid #cbd5e1; padding:12px; font-size:16px; font-family:inherit; resize:none; box-sizing:border-box; }
+.sit-htr-btn{ border-color:#2563eb; color:#2563eb; }
+.sit-htr{ display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:14px; background:#eff6ff; border:1.5px solid #bfdbfe; }
+.sit-htr-lbl{ font-size:12px; font-weight:800; color:#1d4ed8; letter-spacing:.02em; }
+.sit-htr-in{ width:100%; border-radius:12px; border:1.5px solid #93c5fd; padding:10px 12px; font-size:20px; font-weight:600; font-family:inherit; box-sizing:border-box; background:#fff; color:#0f172a; resize:none; }
+.sit-htr-warn{ font-size:13px; font-weight:700; color:#b45309; }
+.sit-htr-err{ font-size:14px; font-weight:700; color:#b91c1c; }
+.sit-htr-busy{ display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; color:#1d4ed8; }
+.sit-htr-spin{ width:18px; height:18px; border-radius:50%; border:3px solid #bfdbfe; border-top-color:#2563eb; animation:sitHtrSpin .8s linear infinite; }
+@keyframes sitHtrSpin{ to{ transform:rotate(360deg); } }
+.sit-htr-btns{ display:flex; gap:8px; }
+.sit-htr-ok{ flex:1; height:44px; border-radius:12px; border:0; background:#2563eb; color:#fff; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit; }
+.sit-htr-ok:disabled{ opacity:.45; cursor:default; }
 .sit-dot{ width:44px; height:44px; border-radius:12px; border:1.5px solid #e2e8f0; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .sit-dot i{ display:block; width:20px; height:20px; border-radius:99px; }
 .sit-dot.on{ border-color:#2563eb; box-shadow:0 0 0 3px #dbeafe; }
@@ -12055,19 +12067,172 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
     onPointerCancel: onUp
   }));
 }
+// === v55.162 (Beta): HANDSCHRIFT -> TEXT ===============================================
+// Strichdaten eines Notiz-Feldes -> sauberes Schwarz-auf-Weiss-Bild -> Erkennungsdienst (Cloud Function, EU)
+// -> Ergebnis wird dem Mitarbeiter zur Kontrolle gezeigt und erst nach "Uebernehmen" als Text gespeichert.
+// Feldtyp (Name / Rufnummer / Freitext) steuert Hinweis an die KI und die Plausibilitaetspruefung.
+// Dienst-Adresse: window.PS_HTR_URL oder localStorage 'ps_htr_url' ueberschreiben den Standard.
+const PS_HTR_URL_DEFAULT = 'https://europe-west3-o2-pencil-selling.cloudfunctions.net/handwritingToText';
+const PS_HTR_KIND = { Kundenname: 'name', Rufnummer: 'phone' };
+const psHtrUrl = () => {
+  try { return localStorage.getItem('ps_htr_url') || window.PS_HTR_URL || PS_HTR_URL_DEFAULT; } catch (e) { return PS_HTR_URL_DEFAULT; }
+};
+function psHtrImage(strokes) {
+  const ink = (strokes || []).filter(s => s && s.points && s.points.length && s.tool !== 'highlighter');
+  const pen = ink.filter(s => s.tool !== 'eraser');
+  if (!pen.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  pen.forEach(s => {
+    const w = Math.max(1, s.baseLineWidth || s.width || 2);
+    s.points.forEach(p => {
+      if (p.x - w < x0) x0 = p.x - w;
+      if (p.y - w < y0) y0 = p.y - w;
+      if (p.x + w > x1) x1 = p.x + w;
+      if (p.y + w > y1) y1 = p.y + w;
+    });
+  });
+  const bw = Math.max(8, x1 - x0), bh = Math.max(8, y1 - y0);
+  const sc = Math.max(0.5, Math.min(3, 1600 / bw, 1000 / bh));
+  const PAD = 28;
+  const W = Math.ceil(bw * sc + PAD * 2), H = Math.ceil(bh * sc + PAD * 2);
+  const A = document.createElement('canvas');
+  A.width = W; A.height = H;
+  const a = A.getContext('2d');
+  a.lineCap = 'round'; a.lineJoin = 'round';
+  ink.forEach(s => {
+    const isE = s.tool === 'eraser';
+    const w0 = Math.max(1, s.baseLineWidth || s.width || 2);
+    a.globalCompositeOperation = isE ? 'destination-out' : 'source-over';
+    a.strokeStyle = '#000';
+    a.lineWidth = isE ? w0 * (s.eraserMult || 4) * sc : Math.min(12, Math.max(3, w0 * sc * 0.9));
+    const P = s.points.map(p => [(p.x - x0) * sc + PAD, (p.y - y0) * sc + PAD]);
+    a.beginPath();
+    a.moveTo(P[0][0], P[0][1]);
+    if (P.length === 1) a.lineTo(P[0][0] + 0.01, P[0][1]);
+    for (let i = 1; i < P.length - 1; i++) {
+      a.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2);
+    }
+    if (P.length > 1) a.lineTo(P[P.length - 1][0], P[P.length - 1][1]);
+    a.stroke();
+  });
+  const B = document.createElement('canvas');
+  B.width = W; B.height = H;
+  const b = B.getContext('2d');
+  b.fillStyle = '#fff';
+  b.fillRect(0, 0, W, H);
+  b.drawImage(A, 0, 0);
+  return B.toDataURL('image/png').split(',')[1];
+}
+const psHtrErr = (code, extra) => Object.assign(new Error('htr:' + code), { code, extra });
+function psHtrErrText(e) {
+  const c = e && e.code;
+  if (c === 'empty') return 'Nichts zum Erkennen – bitte zuerst schreiben.';
+  if (c === 'auth') return 'Bitte neu anmelden und nochmal versuchen.';
+  if (c === 'network') return 'Keine Verbindung zum Erkennungsdienst.';
+  if (c === 'timeout') return 'Die Erkennung dauert zu lange – bitte nochmal versuchen.';
+  if (c === 'noservice') return 'Die Handschrift-Erkennung ist noch nicht eingerichtet.';
+  if (c === 'busy') return 'Zu viele Anfragen – bitte kurz warten.';
+  if (c === 'unreadable') return 'Nicht lesbar – bitte deutlicher schreiben.';
+  return 'Erkennung fehlgeschlagen – bitte nochmal versuchen oder tippen.';
+}
+// Schickt die Handschrift an den Dienst. Liefert den erkannten Rohtext (String).
+async function psHtrRecognize(strokes, kind) {
+  const img = psHtrImage(strokes);
+  if (!img) throw psHtrErr('empty');
+  const u = window.__betaAuth && window.__betaAuth.currentUser;
+  if (!u) throw psHtrErr('auth');
+  let token;
+  try { token = await u.getIdToken(); } catch (e) { throw psHtrErr(e && e.code === 'auth/network-request-failed' ? 'network' : 'auth'); }
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), 25000) : null;
+  try {
+    let r;
+    try {
+      r = await fetch(psHtrUrl(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ image: img, mime: 'image/png', kind: kind || 'text', lang: 'de' }),
+        signal: ctl ? ctl.signal : undefined
+      });
+    } catch (e) {
+      throw psHtrErr(e && e.name === 'AbortError' ? 'timeout' : 'network');
+    }
+    let j = null;
+    try { j = await r.json(); } catch (e) {}
+    if (r.status === 401 || r.status === 403) throw psHtrErr('auth');
+    if (r.status === 404) throw psHtrErr('noservice');
+    if (r.status === 429) throw psHtrErr('busy');
+    if (!r.ok || !j || j.ok !== true) throw psHtrErr('server');
+    const t = String(j.text || '').trim();
+    if (!t || j.readable === false && t.length < 2) throw psHtrErr('unreadable');
+    return t;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+const psHtrTitle = s => s.replace(/(^|[\s\-'’])([a-zäöüß])/g, (m, a, b) => a + b.toUpperCase());
+// Bereinigung + Plausibilitaet je Feldtyp. Liefert { text, warn }.
+function psHtrFinish(raw, kind) {
+  let t = String(raw || '').replace(/\r/g, '').split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n');
+  let warn = '';
+  if (kind === 'phone') {
+    t = t.replace(/\n/g, ' ').replace(/[Oo]/g, '0').replace(/[Il|]/g, '1').replace(/[^0-9+()\/\-\s]/g, '').replace(/\s+/g, ' ').trim();
+    const d = t.replace(/\D/g, '').length;
+    if (d < 6) warn = 'Rufnummer wirkt unvollständig – bitte prüfen.';
+    else if (d > 15) warn = 'Rufnummer wirkt zu lang – bitte prüfen.';
+    else if (!/^(\+|0)/.test(t)) warn = 'Rufnummer beginnt nicht mit 0 oder +49 – bitte prüfen.';
+  } else if (kind === 'name') {
+    t = t.replace(/\n/g, ' ');
+    if (t && (t === t.toLowerCase() || t === t.toUpperCase())) t = psHtrTitle(t.toLowerCase());
+    if (/\d/.test(t)) warn = 'Name enthält Ziffern – bitte prüfen.';
+  }
+  return { text: t, warn };
+}
 // Notiz-Fenster zu einem Thema: Stift oder Tippen (landet in der Kachel des Themas)
+// v55.162: Stift-Modus hat "Als Text" – Handschrift wird erkannt, kontrolliert und als Text uebernommen.
 function SitNoteSheet({ item, text, strokes, sitKey, getTool, onText, onStroke, onUndo, onClear, onColor, color, startMode, onClose }) {
   const h = React.createElement;
   const [mode, setMode] = React.useState(startMode || 'pen');
+  const [htr, setHtr] = React.useState(null);
   const COLORS = [['#0f172a', 'Schwarz'], ['#0044ff', 'Blau'], ['#ff0000', 'Rot']];
   const hasInk = (strokes || []).some(s => s && s.tool !== 'eraser');
+  const kind = PS_HTR_KIND[item.id] || 'text';
+  const runHtr = async () => {
+    setHtr({ busy: true });
+    try {
+      const r = psHtrFinish(await psHtrRecognize(strokes, kind), kind);
+      const base = String(text || '').trim();
+      setHtr({ value: base && kind === 'text' ? base + ' ' + r.text : r.text, warn: r.warn });
+    } catch (e) {
+      setHtr({ error: psHtrErrText(e) });
+    }
+  };
+  const applyHtr = () => {
+    const v = String(htr && htr.value || '').trim();
+    if (!v) return;
+    onText(v);
+    onClear();
+    onClose();
+  };
+  const htrPanel = !htr ? null : h('div', { className: 'sit-htr', 'data-ps-htr': '1' }, htr.busy ? h('div', { className: 'sit-htr-busy' }, h('span', { className: 'sit-htr-spin' }), 'Handschrift wird gelesen …') : htr.error ? h(React.Fragment, null, h('div', { className: 'sit-htr-err' }, htr.error), h('div', { className: 'sit-htr-btns' }, h('button', { type: 'button', className: 'sit-pop-ghost', onClick: runHtr }, 'Nochmal'), h('button', { type: 'button', className: 'sit-pop-ghost', onClick: () => setHtr(null) }, 'Schließen'))) : h(React.Fragment, null, h('div', { className: 'sit-htr-lbl' }, 'Erkannt – bitte prüfen'), kind === 'text' ? h('textarea', {
+    className: 'sit-htr-in',
+    rows: 3,
+    value: htr.value,
+    onChange: e => setHtr({ ...htr, value: e.target.value })
+  }) : h('input', {
+    className: 'sit-htr-in',
+    type: 'text',
+    inputMode: kind === 'phone' ? 'tel' : 'text',
+    value: htr.value,
+    onChange: e => setHtr({ ...htr, value: e.target.value })
+  }), htr.warn ? h('div', { className: 'sit-htr-warn' }, htr.warn) : null, h('div', { className: 'sit-htr-btns' }, h('button', { type: 'button', className: 'sit-htr-ok', disabled: !String(htr.value || '').trim(), onClick: applyHtr }, 'Übernehmen'), h('button', { type: 'button', className: 'sit-pop-ghost', onClick: () => setHtr(null) }, 'Verwerfen'))));
   return h('div', { className: 'sit-pop-back', onClick: e => { if (e.target === e.currentTarget) onClose(); } }, h('div', { className: 'sit-pop sit-note-sheet' }, h('div', { className: 'sit-pop-hd' }, h('span', { className: 'ic' }, h(Icon, { d: item.icon, size: 18 })), h('div', null, h('div', { className: 't' }, item.label), h('div', { className: 's' }, SIT_NOTE_LABELS[item.id])), h('div', { className: 'sit-seg2' }, h('button', { type: 'button', className: mode === 'pen' ? 'on' : '', onClick: () => setMode('pen') }, 'Stift'), h('button', { type: 'button', className: mode === 'keyboard' ? 'on' : '', onClick: () => setMode('keyboard') }, 'Tippen')), h('button', { type: 'button', className: 'sit-x', style: { marginLeft: 0 }, 'aria-label': 'Schließen', onClick: onClose }, h(Icon, { d: SIT_ICO_CLOSE, size: 18 }))), mode === 'pen' ? h(React.Fragment, null, h(SitPenPad, { sitKey, strokes, getTool, onStroke }), h('div', { className: 'sit-pop-row' }, COLORS.map(([c, n]) => h('button', {
     key: c,
     type: 'button',
     'aria-label': n,
     className: 'sit-dot' + (String(color).toLowerCase() === c ? ' on' : ''),
     onClick: () => onColor(c)
-  }, h('i', { style: { background: c } }))), h('button', { type: 'button', className: 'sit-pop-ghost', style: { marginLeft: 'auto' }, disabled: !hasInk, onClick: onUndo }, 'Rückgängig'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onClear }, 'Löschen'))) : h('textarea', {
+  }, h('i', { style: { background: c } }))), h('button', { type: 'button', className: 'sit-pop-ghost sit-htr-btn', style: { marginLeft: 'auto' }, disabled: !hasInk || !!(htr && htr.busy), onClick: runHtr }, 'Als Text'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onUndo }, 'Rückgängig'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onClear }, 'Löschen')), htrPanel) : h('textarea', {
     className: 'sit-note-ta',
     value: text || '',
     autoFocus: true,
