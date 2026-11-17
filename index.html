@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.160';
+    window.APP_VERSION = '55.161';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12157,6 +12157,25 @@ const INITIAL_QUESTIONS_DATA = {
   'Gesamtkosten': ["Aktuelle Kosten?", "Budget?", "Mehrleistung?", "Zahlungsweise?", "Preisgarantie?"],
   'default': ["Offene Fragen?", "Details?"]
 };
+// === v55.161 PEN-TAP OHNE DOPPELAUSLÖSUNG ===
+// Apple Pencil löst pointerup UND click aus. Beide riefen dieselbe Umschalt-Aktion auf → Fenster öffnete
+// und schloss sich sofort wieder ("Flackern"). Jetzt zählt pro Tipp genau eine Auslösung.
+function psTapHandlers(fn) {
+  return {
+    onClick: e => {
+      if (Date.now() - (window.__psPenTapAt || 0) < 700) return;
+      fn(e);
+    },
+    onPointerUp: e => {
+      if (e.pointerType === 'pen') {
+        e.preventDefault();
+        e.stopPropagation();
+        window.__psPenTapAt = Date.now();
+        fn(e);
+      }
+    }
+  };
+}
 // === v55.158 KEILSPITZE (Textmarker wie echter Marker mit flacher, schräger Spitze) ===
 // Die Spitze ist ein schmales Rechteck (Länge L, Dicke T) im festen Winkel. Jeder Strichabschnitt
 // ist die konvexe Hülle von Spitze@Start und Spitze@Ende; alle Hüllen gleich orientiert und in EINEM
@@ -12338,8 +12357,7 @@ function PsToolWindow({ tool, color, onColor, width, onWidth, markerOpacity, onM
   const lc = String(color).toLowerCase();
   const stepBtn = (label, fn) => h('button', {
     type: 'button',
-    onClick: fn,
-    onPointerUp: e => { if (e.pointerType === 'pen') { e.preventDefault(); e.stopPropagation(); fn(); } },
+    ...psTapHandlers(fn),
     style: { width: 30, height: 30, borderRadius: 15, border: 'none', background: '#f1f5f9', fontSize: 18, fontWeight: 700, color: '#334155', lineHeight: '30px', padding: 0, cursor: 'pointer', flexShrink: 0 }
   }, label);
   const row = (label, value, slider, minus, plus) => h('div', { style: { marginTop: 14 } },
@@ -12360,8 +12378,7 @@ function PsToolWindow({ tool, color, onColor, width, onWidth, markerOpacity, onM
     h('button', {
       type: 'button',
       'aria-label': 'Schließen',
-      onClick: onClose,
-      onPointerUp: e => { if (e.pointerType === 'pen') { e.preventDefault(); e.stopPropagation(); onClose(); } },
+      ...psTapHandlers(onClose),
       style: { width: 32, height: 32, borderRadius: 16, border: 'none', background: '#f1f5f9', fontSize: 16, color: '#334155', cursor: 'pointer', padding: 0 }
     }, '✕')),
   h(PsToolPreview, { tool, color, width, opacity: markerOpacity }),
@@ -36285,14 +36302,7 @@ function App() {
       const isActive = tool === t.id;
       return /*#__PURE__*/React.createElement("button", {
         key: t.id,
-        onClick: () => handleToolTap(t.id),
-        onPointerUp: e => {
-          if (e.pointerType === 'pen') {
-            e.preventDefault();
-            e.stopPropagation();
-            handleToolTap(t.id);
-          }
-        },
+        ...psTapHandlers(() => handleToolTap(t.id)),
         className: `w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-slate-200' : 'hover:bg-slate-100'}`,
         title: t.label,
         'aria-label': t.label
@@ -50090,11 +50100,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }, renderPenToolButtons(), tool !== 'eraser' && /*#__PURE__*/React.createElement("div", {
     className: "toolbar-divider w-px h-6 bg-slate-200 mx-1"
   }), tool !== 'eraser' && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
+    ...psTapHandlers(() => {
       setShowStrokePicker(v => !v);
       setShowEraserPicker(false);
       setShowColorPicker(false);
-    },
+    }),
     className: "w-8 h-8 rounded-full border shadow-sm",
     style: {
       backgroundColor: color
@@ -50276,11 +50286,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }, renderPenToolButtons(), tool !== 'eraser' && /*#__PURE__*/React.createElement("div", {
     className: "toolbar-divider w-px h-6 bg-slate-200 mx-1"
   }), tool !== 'eraser' && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
+    ...psTapHandlers(() => {
       setShowStrokePicker(v => !v);
       setShowEraserPicker(false);
       setShowColorPicker(false);
-    },
+    }),
     className: "w-8 h-8 rounded-full border shadow-sm",
     style: {
       backgroundColor: color
