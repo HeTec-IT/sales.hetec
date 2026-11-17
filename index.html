@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.157';
+    window.APP_VERSION = '55.158';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12016,6 +12016,12 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
       });
       return;
     }
+    if (s.tool === 'highlighter') {
+      // v55.158: Keilmarker live über denselben Renderer wie das Endergebnis
+      (evs && evs.length ? evs : [ne || e]).forEach(ev => s.points.push({ x: ev.clientX - r.left, y: ev.clientY - r.top }));
+      try { redrawCanvas(c, (strokesRef.current || []).concat([s]), 1, sitKey); } catch (_) {}
+      return;
+    }
     (evs && evs.length ? evs : [ne || e]).forEach(ev => {
       const p = { x: ev.clientX - r.left, y: ev.clientY - r.top };
       s.points.push(p);
@@ -12151,6 +12157,42 @@ const INITIAL_QUESTIONS_DATA = {
   'Gesamtkosten': ["Aktuelle Kosten?", "Budget?", "Mehrleistung?", "Zahlungsweise?", "Preisgarantie?"],
   'default': ["Offene Fragen?", "Details?"]
 };
+// === v55.158 KEILSPITZE (Textmarker wie echter Marker mit flacher, schräger Spitze) ===
+// Die Spitze ist ein schmales Rechteck (Länge L, Dicke T) im festen Winkel. Jeder Strichabschnitt
+// ist die konvexe Hülle von Spitze@Start und Spitze@Ende; alle Hüllen gleich orientiert und in EINEM
+// Pfad gefüllt (nonzero) → Vereinigung, kein Nachdunkeln an Überlappungen. Waagrechte Züge werden
+// breit, senkrechte schmal – wie bei einem Keilmarker.
+const PS_CHISEL_ANG = 55 * Math.PI / 180;
+function psChiselPath(ctx, pts, lw) {
+  const n = pts ? pts.length : 0;
+  if (!n) return;
+  const L = Math.max(2, lw * 1.15), T = Math.max(1.2, L * 0.26);
+  const ax = Math.cos(PS_CHISEL_ANG) * L / 2, ay = -Math.sin(PS_CHISEL_ANG) * L / 2;
+  const bx = Math.sin(PS_CHISEL_ANG) * T / 2, by = Math.cos(PS_CHISEL_ANG) * T / 2;
+  const cr = p => [[p.x + ax + bx, p.y + ay + by], [p.x + ax - bx, p.y + ay - by], [p.x - ax - bx, p.y - ay - by], [p.x - ax + bx, p.y - ay + by]];
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const hull = P => {
+    P.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const lo = [];
+    for (const p of P) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    const up = [];
+    for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    lo.pop(); up.pop();
+    return lo.concat(up);
+  };
+  const emit = H => {
+    if (H.length < 3) return;
+    ctx.moveTo(H[0][0], H[0][1]);
+    for (let i = 1; i < H.length; i++) ctx.lineTo(H[i][0], H[i][1]);
+    ctx.closePath();
+  };
+  if (n === 1) { emit(hull(cr(pts[0]))); return; }
+  for (let i = 0; i < n - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    if (Math.abs(a.x - b.x) < 0.05 && Math.abs(a.y - b.y) < 0.05 && i > 0) continue;
+    emit(hull(cr(a).concat(cr(b))));
+  }
+}
 // === v55.155 FARBRAD (12 Farbtöne × 5 Helligkeitsstufen) ===
 const PS_WHEEL_HUES = [215, 240, 275, 315, 350, 8, 28, 50, 85, 130, 160, 190];
 const PS_WHEEL_LIGHT = [86, 72, 58, 44, 30];
@@ -12275,10 +12317,9 @@ function PsToolPreview({ tool, color, width, opacity }) {
     ctx.fillStyle = ink.color;
     if (tool === 'highlighter') {
       ctx.globalAlpha = opacity;
-      ctx.lineWidth = vw * 3;
       ctx.beginPath();
-      raw.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-      ctx.stroke();
+      psChiselPath(ctx, raw, vw * 3);
+      ctx.fill();
     } else {
       const s = { tool, points: [], baseLineWidth: Math.max(1.8, vw) };
       raw.forEach((p, i) => psInkAddPoint(s, { pointerType: 'pen', pressure: 0.12 + 0.5 * Math.sin(Math.PI * i / N), timeStamp: i * 8, altitudeAngle: 1.2 }, p.x, p.y));
@@ -24717,15 +24758,10 @@ function renderMarkerPreview(stroke) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = Math.max(0.5, (stroke.baseLineWidth || 2) * 3);
+    ctx.fillStyle = ctx.strokeStyle;
     ctx.beginPath();
-    if (fp.length === 1) {
-      ctx.fillStyle = stroke.color || colorRefGlobal();
-      ctx.arc(fp[0].x, fp[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      buildMidpointPath(ctx, fp);
-      ctx.stroke();
-    }
+    psChiselPath(ctx, fp, ctx.lineWidth);
+    ctx.fill();
   } catch (_) {}
 }
 function hideMarkerPreview() {
@@ -24911,6 +24947,14 @@ const redrawCanvas = (canvas, strokes, scaleFactor = 1, key = '') => {
         x: p.x * responsiveScaleFactor,
         y: p.y * responsiveScaleFactor
       }));
+      if (stroke.tool === 'highlighter') {
+        // v55.158: Keilspitze (gleiche Form wie live)
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        psChiselPath(ctx, pts, ctx.lineWidth);
+        ctx.fill();
+        ctx.beginPath();
+      } else
       // v44.0: pen/fountain mit gespeicherten Breitenfaktoren → identisch zum Live-Bild
       if (strokeHasVariableWidth(stroke) && stroke.tool !== 'eraser' && stroke.tool !== 'highlighter') {
         drawVariableWidthPath(ctx, pts, stroke.points, finalLineWidth);
@@ -36029,15 +36073,10 @@ function App() {
           ctx.globalAlpha = finishedStroke.opacity != null ? finishedStroke.opacity : 0.4;
           ctx.strokeStyle = finishedStroke.color || colorRefGlobal();
           ctx.lineWidth = Math.max(0.5, (finishedStroke.baseLineWidth || 2) * 3);
+          ctx.fillStyle = ctx.strokeStyle;
           ctx.beginPath();
-          if (fp.length === 1) {
-            ctx.fillStyle = finishedStroke.color || colorRefGlobal();
-            ctx.arc(fp[0].x, fp[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
-            ctx.fill();
-          } else {
-            buildMidpointPath(ctx, fp);
-            ctx.stroke();
-          }
+          psChiselPath(ctx, fp, ctx.lineWidth);
+          ctx.fill();
         }
       } catch (_) {}
       hideMarkerPreview();
@@ -36831,6 +36870,14 @@ function App() {
           x: p.x * useX + offsetX,
           y: p.y * useY + offsetY
         }));
+        if (stroke.tool === 'highlighter') {
+          // v55.158: Keilspitze auch im PDF
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.beginPath();
+          psChiselPath(ctx, pts, ctx.lineWidth);
+          ctx.fill();
+          ctx.beginPath();
+        } else
         // v44.0: pen/fountain mit Breitenfaktoren → Druckbild = Bildschirmbild
         if (strokeHasVariableWidth(stroke) && stroke.tool !== 'eraser' && stroke.tool !== 'highlighter') {
           drawVariableWidthPath(ctx, pts, stroke.points, lw);
@@ -45302,6 +45349,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       e.preventDefault();
       const rect = c.getBoundingClientRect();
       const s = stepStrokeRef.current;
+      if (s.tool === 'highlighter') {
+        // v55.158: Keilmarker live über denselben Renderer wie das Endergebnis
+        s.points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        try { redrawCanvas(c, (drawnStrokes[sitKey] || []).concat([s]), 1, sitKey); } catch (_) {}
+        return;
+      }
       if (s.ink) {
         const ctx = c.getContext('2d');
         const ne = e.nativeEvent || e;
