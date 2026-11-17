@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.158';
+    window.APP_VERSION = '55.159';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12352,6 +12352,7 @@ function PsToolWindow({ tool, color, onColor, width, onWidth, markerOpacity, onM
   const pct = Math.round(markerOpacity * 100);
   return h('div', {
     className: 'bg-white rounded-2xl shadow-2xl border border-slate-200',
+    'data-ps-tool-window': '1',
     style: { position: 'fixed', left: 12, bottom: 70, width: 300, padding: 14, zIndex: 999999, maxHeight: 'calc(100vh - 90px)', overflowY: 'auto' }
   },
   h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
@@ -36212,6 +36213,22 @@ function App() {
       capture: true
     });
   }, [showPenToolPicker]);
+  // v55.159: Sobald man auf einer Zeichenfläche zu schreiben beginnt, schließen sich alle Auswahlfenster
+  // (Werkzeug-Fenster, Radierer-Größe, Farbwahl) automatisch.
+  useEffect(() => {
+    if (!showStrokePicker && !showEraserPicker && !showColorPicker && !showPenToolPicker) return;
+    const onWrite = e => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      if (t.tagName !== 'CANVAS' || t.closest('[data-ps-tool-window]')) return;
+      setShowStrokePicker(false);
+      setShowEraserPicker(false);
+      setShowColorPicker(false);
+      setShowPenToolPicker(false);
+    };
+    window.addEventListener('pointerdown', onWrite, { capture: true });
+    return () => window.removeEventListener('pointerdown', onWrite, { capture: true });
+  }, [showStrokePicker, showEraserPicker, showColorPicker, showPenToolPicker]);
   const renderPenToolButtons = () => {
     // Samsung-Notes-Stil: alle Werkzeuge nebeneinander.
     // Tippt man auf das BEREITS aktive Werkzeug → Dicke-Regler öffnet sich.
