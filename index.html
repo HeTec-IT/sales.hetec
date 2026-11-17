@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.153';
+    window.APP_VERSION = '55.154';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12035,7 +12035,7 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
     }
     if (s.ink) {
       delete s.ink;
-      delete s.smoothedPressure; delete s.smoothedVelocity; delete s.lastTime; delete s.lastWf;
+      delete s.smoothedPressure; delete s.smoothedVelocity; delete s.lastTime; delete s.lastWf; delete s.rx; delete s.ry; delete s.sx; delete s.sy; delete s.travel;
     }
     if (s.points.length === 1) s.points.push(Object.assign({}, s.points[0], { x: s.points[0].x + 0.01 }));
     onStroke(s);
@@ -24225,8 +24225,55 @@ function psInkStyle(color, opacity) {
 const __psInkLive = new WeakMap();
 // Gemeinsame Tinten-Engine für zusätzliche Stift-Felder (z. B. Notiz-Fenster Seite 1):
 // gleiche Druck-/Tempo-Logik wie der Haupt-Canvas → identisches Schreibgefühl überall.
+// === v55.154 HIGHCLASS-TINTE ===
+// Neigung: Pencil normal (≥ 40°) = unverändert; flach gehalten bis 1,8× breiter (wie Bleistift/Füller)
+function psInkTiltFactor(ev) {
+  if (!ev || ev.pointerType !== 'pen') return 1;
+  let alt = null;
+  if (typeof ev.altitudeAngle === 'number' && ev.altitudeAngle > 0) alt = ev.altitudeAngle;
+  else if (ev.tiltX || ev.tiltY) {
+    const tx = Math.tan((ev.tiltX || 0) * Math.PI / 180), ty = Math.tan((ev.tiltY || 0) * Math.PI / 180);
+    const m = Math.sqrt(tx * tx + ty * ty);
+    alt = m > 0 ? Math.atan(1 / m) : Math.PI / 2;
+  }
+  if (alt == null || !isFinite(alt)) return 1;
+  const deg = alt * 180 / Math.PI;
+  const t = Math.max(0, Math.min(1, (40 - deg) / 25));
+  return 1 + t * t * 0.8;
+}
+// Feinglättung der Stiftposition (entfernt Mikro-Zittern, ~5 ms Verzögerung) + Duplikat-Filter auf Rohdaten
+function psInkSmooth(stroke, x, y) {
+  if (stroke.rx != null && Math.abs(x - stroke.rx) < 0.15 && Math.abs(y - stroke.ry) < 0.15) return null;
+  stroke.rx = x;
+  stroke.ry = y;
+  if (stroke.sx == null) {
+    stroke.sx = x;
+    stroke.sy = y;
+  } else {
+    stroke.sx += (x - stroke.sx) * 0.6;
+    stroke.sy += (y - stroke.sy) * 0.6;
+  }
+  return { x: stroke.sx, y: stroke.sy };
+}
+// Form-Faktor: Tinten-Ansatz (Strich beginnt schmaler, wie beim Aufsetzen auf Papier) × Neigung
+function psInkShape(stroke, ev, dist) {
+  stroke.travel = (stroke.travel || 0) + (dist || 0);
+  const isBall = stroke.tool === 'ballpen';
+  const r = Math.min(1, stroke.travel / 10);
+  const taper = isBall ? 0.85 + 0.15 * r : 0.6 + 0.4 * r;
+  return taper * (isBall ? 1 : psInkTiltFactor(ev));
+}
+function psInkClampWf(dyn, v) {
+  return Math.max(dyn.fMin * 0.55, Math.min(dyn.fMax * 1.8, v));
+}
 function psInkAddPoint(stroke, ev, x, y) {
   const pts = stroke.points;
+  if (stroke.tool !== 'eraser' && stroke.tool !== 'highlighter') {
+    const sm = psInkSmooth(stroke, x, y);
+    if (!sm) return false;
+    x = sm.x;
+    y = sm.y;
+  }
   const lp = pts.length ? pts[pts.length - 1] : null;
   if (lp && Math.abs(x - lp.x) < 0.15 && Math.abs(y - lp.y) < 0.15) return false;
   const dyn = stroke.tool !== 'eraser' && stroke.tool !== 'highlighter' ? getInkToolDynamics(stroke.tool) : null;
@@ -24234,16 +24281,17 @@ function psInkAddPoint(stroke, ev, x, y) {
   stroke.smoothedPressure = stroke.smoothedPressure == null ? pr : stroke.smoothedPressure * 0.6 + pr * 0.4;
   const t = ev && ev.timeStamp || 0;
   const dt = Math.max(1, t - (stroke.lastTime || t));
-  const vel = lp ? Math.hypot(x - lp.x, y - lp.y) / dt : 0;
+  const dist = lp ? Math.hypot(x - lp.x, y - lp.y) : 0;
+  const vel = dist / dt;
   stroke.smoothedVelocity = (stroke.smoothedVelocity || 0) * 0.65 + vel * 0.35;
   const vN = Math.min(1, stroke.smoothedVelocity / 1.4);
   let wf = 1;
   if (dyn) {
-    const tg = computeInkWidthFactor(dyn, stroke.smoothedPressure, lp ? vN : 0.35);
+    const tg = computeInkWidthFactor(dyn, stroke.smoothedPressure, lp ? vN : 0.35) * psInkShape(stroke, ev, dist);
     const pv = stroke.lastWf == null ? tg : stroke.lastWf;
     let nx = pv + (tg - pv) * dyn.smooth;
     nx = Math.max(pv - 0.08, Math.min(pv + 0.08, nx));
-    wf = Math.max(dyn.fMin, Math.min(dyn.fMax, nx));
+    wf = psInkClampWf(dyn, nx);
     stroke.lastWf = wf;
   }
   stroke.lastTime = t;
@@ -24292,39 +24340,90 @@ function strokeHasVariableWidth(stroke) {
 // pts = (skalierte) Koordinaten, rawPts = Original-Punkte mit wf, baseLW = Ziel-Basisbreite.
 // Identische Geometrie wie das Live-Rendering → Redraw sieht aus wie beim Schreiben.
 function drawVariableWidthPath(ctx, pts, rawPts, baseLW) {
+  // v55.154: Strich als EINE gefüllte Kontur (statt vieler Einzelsegmente mit Breitensprüngen).
+  // Mittellinie = dieselben Midpoint-Bezier-Kurven wie live, fein abgetastet; Breite fließend
+  // interpoliert → glatte, satte Kanten wie Tinte auf Papier (Bildschirm + PDF).
   const wf = i => {
     const p = rawPts[Math.min(i, rawPts.length - 1)];
     return p && p.wf != null ? p.wf : 1;
   };
   if (!pts || pts.length === 0) return;
+  const W = i => Math.max(0.5, baseLW * wf(i));
+  ctx.fillStyle = ctx.strokeStyle;
   if (pts.length === 1) {
     ctx.beginPath();
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.arc(pts[0].x, pts[0].y, Math.max(0.5, baseLW * wf(0)) / 2, 0, Math.PI * 2);
+    ctx.arc(pts[0].x, pts[0].y, W(0) / 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
     return;
   }
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  let prevX = pts[0].x,
-    prevY = pts[0].y;
-  for (let i = 1; i < pts.length; i++) {
-    const isLast = i === pts.length - 1;
-    const midX = isLast ? pts[i].x : (pts[i].x + pts[i + 1].x) / 2;
-    const midY = isLast ? pts[i].y : (pts[i].y + pts[i + 1].y) / 2;
-    ctx.beginPath();
-    ctx.lineWidth = Math.max(0.5, baseLW * ((wf(i - 1) + wf(i)) / 2));
-    ctx.moveTo(prevX, prevY);
-    if (isLast) {
-      ctx.lineTo(midX, midY);
-    } else {
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+  const cx = [], cy = [], cw = [];
+  const push = (x, y, w) => {
+    const k = cx.length;
+    if (k && Math.abs(cx[k - 1] - x) < 0.05 && Math.abs(cy[k - 1] - y) < 0.05) {
+      cw[k - 1] = Math.max(cw[k - 1], w);
+      return;
     }
-    ctx.stroke();
-    prevX = midX;
-    prevY = midY;
+    cx.push(x); cy.push(y); cw.push(w);
+  };
+  const n = pts.length;
+  push(pts[0].x, pts[0].y, W(0));
+  if (n === 2) {
+    push(pts[1].x, pts[1].y, W(1));
+  } else {
+    let sx = (pts[0].x + pts[1].x) / 2, sy = (pts[0].y + pts[1].y) / 2, sw = (W(0) + W(1)) / 2;
+    push(sx, sy, sw);
+    for (let i = 1; i < n - 1; i++) {
+      const qx = pts[i].x, qy = pts[i].y, qw = W(i);
+      const ex = (pts[i].x + pts[i + 1].x) / 2, ey = (pts[i].y + pts[i + 1].y) / 2, ew = (W(i) + W(i + 1)) / 2;
+      const len = Math.hypot(qx - sx, qy - sy) + Math.hypot(ex - qx, ey - qy);
+      const steps = Math.max(1, Math.min(8, Math.ceil(len / 1.5)));
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps, u = 1 - t;
+        push(u * u * sx + 2 * u * t * qx + t * t * ex, u * u * sy + 2 * u * t * qy + t * t * ey, u * u * sw + 2 * u * t * qw + t * t * ew);
+      }
+      sx = ex; sy = ey; sw = ew;
+    }
+    push(pts[n - 1].x, pts[n - 1].y, W(n - 1));
   }
+  const m = cx.length;
+  if (m < 2) {
+    ctx.beginPath();
+    ctx.arc(cx[0], cy[0], cw[0] / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    return;
+  }
+  // Kontur: linke Kante vorwärts, rechte Kante rückwärts (nonzero → Schleifen bleiben offen, Kreuzungen voll)
+  const lx = new Array(m), ly = new Array(m), rx = new Array(m), ry = new Array(m);
+  const tdx = new Array(m), tdy = new Array(m);
+  for (let i = 0; i < m; i++) {
+    const a = Math.max(0, i - 1), b = Math.min(m - 1, i + 1);
+    let dx = cx[b] - cx[a], dy = cy[b] - cy[a];
+    const d = Math.hypot(dx, dy) || 1;
+    dx /= d; dy /= d;
+    tdx[i] = dx; tdy[i] = dy;
+    const h = cw[i] / 2;
+    lx[i] = cx[i] - dy * h; ly[i] = cy[i] + dx * h;
+    rx[i] = cx[i] + dy * h; ry[i] = cy[i] - dx * h;
+  }
+  ctx.beginPath();
+  ctx.moveTo(lx[0], ly[0]);
+  for (let i = 1; i < m; i++) ctx.lineTo(lx[i], ly[i]);
+  for (let i = m - 1; i >= 0; i--) ctx.lineTo(rx[i], ry[i]);
+  ctx.closePath();
+  ctx.fill('nonzero');
+  // Runde Enden + runde Gelenke an Knicken (separat gefüllt → keine Auslöschung durch Windungsrichtung)
+  ctx.beginPath();
+  const dot = (x, y, r) => { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); };
+  dot(cx[0], cy[0], cw[0] / 2);
+  dot(cx[m - 1], cy[m - 1], cw[m - 1] / 2);
+  for (let i = 1; i < m - 1; i++) {
+    const ax = cx[i] - cx[i - 1], ay = cy[i] - cy[i - 1], bx = cx[i + 1] - cx[i], by = cy[i + 1] - cy[i];
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la > 0 && lb > 0 && (ax * bx + ay * by) / (la * lb) < 0.94) dot(cx[i], cy[i], cw[i] / 2);
+  }
+  ctx.fill();
   ctx.beginPath(); // Pfad leeren, damit nachfolgendes ctx.stroke() nichts doppelt zeichnet
 }
 
@@ -35296,7 +35395,7 @@ function App() {
     // === v44.0 TINTEN-ENGINE: Startbreite aus echtem Stylus-Druck ===
     const dynStart = currentTool !== 'eraser' && currentTool !== 'highlighter' ? getInkToolDynamics(currentTool) : null;
     const pressure = psInkPressure(e);
-    const wf0 = dynStart ? computeInkWidthFactor(dynStart, pressure, 0.35) : 1;
+    const wf0 = dynStart ? psInkClampWf(dynStart, computeInkWidthFactor(dynStart, pressure, 0.35) * (currentTool === 'ballpen' ? 0.85 : 0.6 * psInkTiltFactor(e))) : 1;
     const initWidth = Math.max(0.5, finalLineWidth * wf0);
     const newStroke = {
       tool: currentTool,
@@ -35318,7 +35417,12 @@ function App() {
       lastWf: wf0,
       smoothedPressure: pressure,
       lastTime: e.timeStamp,
-      smoothedVelocity: 0
+      smoothedVelocity: 0,
+      rx: x,
+      ry: y,
+      sx: x,
+      sy: y,
+      travel: 0
     };
 
     // v46.2: Textmarker → Vorschau-Ebene positionieren (voll deckend + CSS-opacity).
@@ -35496,8 +35600,15 @@ function App() {
         y: cssY
       } = getRelativeCoords(ev, canvas) || {};
       if (cssX == null || cssY == null) continue;
-      const x = cssX;
-      const y = cssY;
+      let x = cssX;
+      let y = cssY;
+      // v55.154: Feinglättung (nur Tinte; Radierer/Marker unverändert)
+      if (currentTool !== 'eraser' && currentTool !== 'highlighter') {
+        const __sm = psInkSmooth(stroke, x, y);
+        if (!__sm) continue;
+        x = __sm.x;
+        y = __sm.y;
+      }
 
       // === v56 DOPPELSTRICH-FIX (Apple Pencil / S Pen "Geisterlinie") ===
       // Manche Stylus-Geräte liefern via getCoalescedEvents() den aktuellen Punkt
@@ -35534,12 +35645,12 @@ function App() {
       // Ziel-Faktor → geglättet annähern (keine Breitensprünge)
       let wf = 1;
       if (dyn) {
-        const wfTarget = computeInkWidthFactor(dyn, pressure, velNorm);
+        const wfTarget = computeInkWidthFactor(dyn, pressure, velNorm) * psInkShape(stroke, ev, dist);
         const prevWf = stroke.lastWf == null ? wfTarget : stroke.lastWf;
         let next = prevWf + (wfTarget - prevWf) * dyn.smooth;
         // Max. ±0.08 Änderung pro Punkt (bei 120Hz immer noch sehr reaktiv)
         next = Math.max(prevWf - 0.08, Math.min(prevWf + 0.08, next));
-        wf = Math.max(dyn.fMin, Math.min(dyn.fMax, next));
+        wf = psInkClampWf(dyn, next);
         stroke.lastWf = wf;
       }
       const smoothedWidth = Math.max(0.5, baseLW * wf);
@@ -45111,7 +45222,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       }
       if (stroke && stroke.ink) {
         delete stroke.ink;
-        delete stroke.smoothedPressure; delete stroke.smoothedVelocity; delete stroke.lastTime; delete stroke.lastWf;
+        delete stroke.smoothedPressure; delete stroke.smoothedVelocity; delete stroke.lastTime; delete stroke.lastWf; delete stroke.rx; delete stroke.ry; delete stroke.sx; delete stroke.sy; delete stroke.travel;
       }
       // Strich in State speichern → Grid-Kacheln zeigen ihn sofort
       if (stroke && stroke.points.length > 1) {
