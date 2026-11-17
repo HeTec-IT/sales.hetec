@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.152';
+    window.APP_VERSION = '55.153';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -24163,20 +24163,29 @@ function colorRefGlobal() {
 }
 function getInkToolDynamics(toolId) {
   if (toolId === 'fountain') return {
-    pGain: 0.70,
+    pGain: 0.95,
     vGain: 0.55,
-    fMin: 0.55,
-    fMax: 1.50,
-    smooth: 0.22
+    fMin: 0.45,
+    fMax: 1.90,
+    smooth: 0.25
   };
+  // v55.153: deutlich spürbare Druckreaktion (vorher ±22 % → kaum sichtbar)
   if (toolId === 'pen') return {
-    pGain: 0.40,
-    vGain: 0.18,
-    fMin: 0.78,
-    fMax: 1.22,
-    smooth: 0.30
+    pGain: 0.85,
+    vGain: 0.25,
+    fMin: 0.50,
+    fMax: 1.70,
+    smooth: 0.35
   };
-  return null; // ballpen / eraser / highlighter: konstante Breite
+  // v55.153: Kugelschreiber reagiert jetzt leicht auf Druck (wie ein echter Kuli)
+  if (toolId === 'ballpen') return {
+    pGain: 0.45,
+    vGain: 0.10,
+    fMin: 0.75,
+    fMax: 1.30,
+    smooth: 0.35
+  };
+  return null; // eraser / highlighter: konstante Breite
 }
 // Breitenfaktor aus Druck (0..1, 0.5 neutral) und normiertem Tempo (0..1, 0.35 neutral)
 function computeInkWidthFactor(dyn, pressure, velNorm) {
@@ -24233,7 +24242,7 @@ function psInkAddPoint(stroke, ev, x, y) {
     const tg = computeInkWidthFactor(dyn, stroke.smoothedPressure, lp ? vN : 0.35);
     const pv = stroke.lastWf == null ? tg : stroke.lastWf;
     let nx = pv + (tg - pv) * dyn.smooth;
-    nx = Math.max(pv - 0.06, Math.min(pv + 0.06, nx));
+    nx = Math.max(pv - 0.08, Math.min(pv + 0.08, nx));
     wf = Math.max(dyn.fMin, Math.min(dyn.fMax, nx));
     stroke.lastWf = wf;
   }
@@ -24277,7 +24286,7 @@ function psInkDrawTail(ctx, stroke) {
 }
 // Hat der Stroke pro Punkt gespeicherte Breitenfaktoren (wf)?
 function strokeHasVariableWidth(stroke) {
-  return !!(stroke && (stroke.tool === 'pen' || stroke.tool === 'fountain') && Array.isArray(stroke.points) && stroke.points.length > 1 && stroke.points.some(p => p && p.wf != null));
+  return !!(stroke && (stroke.tool === 'pen' || stroke.tool === 'fountain' || stroke.tool === 'ballpen') && Array.isArray(stroke.points) && stroke.points.length > 1 && stroke.points.some(p => p && p.wf != null));
 }
 // Variable Strichbreite rendern: Midpoint-Quadratic-Segmente, lineWidth pro Segment.
 // pts = (skalierte) Koordinaten, rawPts = Original-Punkte mit wf, baseLW = Ziel-Basisbreite.
@@ -35528,8 +35537,8 @@ function App() {
         const wfTarget = computeInkWidthFactor(dyn, pressure, velNorm);
         const prevWf = stroke.lastWf == null ? wfTarget : stroke.lastWf;
         let next = prevWf + (wfTarget - prevWf) * dyn.smooth;
-        // Max. ±0.06 Änderung pro Punkt (bei 120Hz immer noch sehr reaktiv)
-        next = Math.max(prevWf - 0.06, Math.min(prevWf + 0.06, next));
+        // Max. ±0.08 Änderung pro Punkt (bei 120Hz immer noch sehr reaktiv)
+        next = Math.max(prevWf - 0.08, Math.min(prevWf + 0.08, next));
         wf = Math.max(dyn.fMin, Math.min(dyn.fMax, next));
         stroke.lastWf = wf;
       }
