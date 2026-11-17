@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.155';
+    window.APP_VERSION = '55.156';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12196,6 +12196,58 @@ function PsColorWheel({ color, onPick }) {
       className: 'w-8 h-8 rounded-full border-2 ' + (String(color).toLowerCase() === c ? 'border-slate-500' : 'border-slate-200'),
       style: { backgroundColor: c }
     }))));
+}
+// === v55.156 SAMSUNG-NOTES-WERKZEUGSYMBOLE (zweifarbig, diagonal, Farbe folgt der Stiftfarbe) ===
+function PsToolIcon({ id, color, active, size }) {
+  const h = React.createElement;
+  const ink = '#1f2937', line = '#374151';
+  const defaults = { pen: '#2563eb', fountain: '#b45309', ballpen: '#2563eb', highlighter: '#a78bfa' };
+  const acc = active && color ? color : defaults[id];
+  let g = [];
+  if (id === 'fountain') {
+    g = [
+      h('path', { key: 'n', d: 'M16 2.5 L21 11.5 Q21.5 14.5 19.2 16 H12.8 Q10.5 14.5 11 11.5 Z', fill: '#f8fafc', stroke: line, strokeWidth: 1.3, strokeLinejoin: 'round' }),
+      h('path', { key: 's', d: 'M16 6.5 V11.2', stroke: acc, strokeWidth: 1.4, strokeLinecap: 'round' }),
+      h('circle', { key: 'c', cx: 16, cy: 12.2, r: 1.3, fill: acc }),
+      h('rect', { key: 'r', x: 11, y: 16, width: 10, height: 3, rx: 1, fill: ink }),
+      h('rect', { key: 'b', x: 11, y: 19, width: 10, height: 10, rx: 2.4, fill: acc }),
+      h('rect', { key: 'h', x: 12.6, y: 20.5, width: 1.6, height: 7, rx: 0.8, fill: '#fff', opacity: 0.35 })
+    ];
+  } else if (id === 'pen') {
+    g = [
+      h('path', { key: 't', d: 'M16 2.5 L19.2 9.5 H12.8 Z', fill: '#e5e7eb', stroke: line, strokeWidth: 1.3, strokeLinejoin: 'round' }),
+      h('path', { key: 'i', d: 'M16 2.5 L17.3 5.4 H14.7 Z', fill: acc }),
+      h('rect', { key: 'b', x: 12, y: 9.5, width: 8, height: 19.5, rx: 2.4, fill: '#f8fafc', stroke: line, strokeWidth: 1.3 }),
+      h('rect', { key: 'a', x: 12, y: 17, width: 8, height: 4, fill: acc }),
+      h('rect', { key: 'e', x: 12, y: 25, width: 8, height: 4, rx: 2.4, fill: ink })
+    ];
+  } else if (id === 'ballpen') {
+    g = [
+      h('path', { key: 't', d: 'M16 2.5 L17.6 6.5 H14.4 Z', fill: '#94a3b8', stroke: line, strokeWidth: 1, strokeLinejoin: 'round' }),
+      h('path', { key: 'c', d: 'M14.4 6.5 H17.6 L19 12.5 H13 Z', fill: ink }),
+      h('rect', { key: 'b', x: 13, y: 12.5, width: 6, height: 16.5, rx: 2.2, fill: '#f1f5f9', stroke: line, strokeWidth: 1.3 }),
+      h('rect', { key: 'k', x: 19.6, y: 12.5, width: 1.7, height: 9, rx: 0.85, fill: '#64748b' }),
+      h('rect', { key: 'a', x: 13, y: 21, width: 6, height: 3.2, fill: acc }),
+      h('circle', { key: 'p', cx: 16, cy: 26.6, r: 1, fill: acc })
+    ];
+  } else if (id === 'highlighter') {
+    g = [
+      h('path', { key: 't', d: 'M12.2 11.5 L14.2 3.5 H17.8 L19.8 11.5 Z', fill: acc, opacity: 0.85, stroke: line, strokeWidth: 1.2, strokeLinejoin: 'round' }),
+      h('rect', { key: 'n', x: 11.5, y: 11.5, width: 9, height: 4.5, rx: 1, fill: ink }),
+      h('rect', { key: 'b', x: 10.8, y: 16, width: 10.4, height: 13, rx: 2.6, fill: acc }),
+      h('rect', { key: 'h', x: 12.4, y: 17.5, width: 1.6, height: 9, rx: 0.8, fill: '#fff', opacity: 0.4 })
+    ];
+  } else {
+    // Radierer
+    g = [
+      h('rect', { key: 'b', x: 9, y: 5.5, width: 14, height: 23, rx: 4.2, fill: '#fff' }),
+      h('path', { key: 'p', d: 'M9 17 H23 V24.3 A4.2 4.2 0 0 1 18.8 28.5 H13.2 A4.2 4.2 0 0 1 9 24.3 Z', fill: '#cbd5e1' }),
+      h('rect', { key: 'o', x: 9, y: 5.5, width: 14, height: 23, rx: 4.2, fill: 'none', stroke: line, strokeWidth: 1.4 }),
+      h('path', { key: 'l', d: 'M9 17 H23', stroke: line, strokeWidth: 1.2 })
+    ];
+  }
+  return h('svg', { viewBox: '0 0 32 32', width: size || 28, height: size || 28, 'aria-hidden': true, style: { display: 'block' } },
+    h('g', { transform: 'rotate(-45 16 16)' }, g));
 }
 const COLORS = [{
   id: 'black',
@@ -36086,20 +36138,15 @@ function App() {
             handleToolTap(t.id);
           }
         },
-        className: `px-1.5 py-1 rounded-lg flex flex-col items-center gap-0 min-w-[36px] transition-colors ${isActive ? t.activeC : 'text-slate-400 hover:bg-slate-50'}`,
-        title: t.label
-      }, /*#__PURE__*/React.createElement(Icon, {
-        d: t.Icon,
-        size: 16
-      }), /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: '7px',
-          fontWeight: 800,
-          lineHeight: 1,
-          marginTop: '2px',
-          whiteSpace: 'nowrap'
-        }
-      }, t.label));
+        className: `w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-slate-200' : 'hover:bg-slate-100'}`,
+        title: t.label,
+        'aria-label': t.label
+      }, /*#__PURE__*/React.createElement(PsToolIcon, {
+        id: t.id,
+        color,
+        active: isActive,
+        size: 28
+      }));
     }), showStrokePicker && (tool === 'pen' || tool === 'fountain' || tool === 'ballpen' || tool === 'highlighter') && /*#__PURE__*/React.createElement("div", {
       className: "bg-white p-3 rounded-xl shadow-2xl border border-slate-200",
       style: {
