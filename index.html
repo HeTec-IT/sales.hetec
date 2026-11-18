@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.176';
+    window.APP_VERSION = '55.177';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12715,7 +12715,7 @@ function psO2Warp(c, q) {
   return o;
 }
 // Zuschneiden/Entzerren nach dem Foto (wie beim Scannen): Ecken einzeln ziehen, Kanten verschieben je zwei Ecken, Mitte verschiebt alles.
-function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, onNext }) {
+function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake }) {
   const h = React.createElement;
   const [src, setSrc] = React.useState('');
   const [q, setQ] = React.useState(() => psO2QuadLoad());
@@ -12761,11 +12761,9 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, onNext }) {
     setQ(n);
   };
   const up = () => { dragRef.current = null; };
-  // Sofort starten (Kamera fuer "weiter" wird im selben Klick geoeffnet, sonst sperrt iOS sie); das Foto entsteht im Hintergrund.
-  const go = (whole, next) => {
+  const go = whole => {
     const c = baseRef.current;
     if (!c) return;
-    if (next) onNext();
     let q2 = whole ? [[0, 0], [1, 0], [1, 1], [0, 1]] : q;
     if (!whole) {
       if (!psO2Convex(q2)) { const xs = q2.map(p => p[0]), ys = q2.map(p => p[1]), a = Math.min.apply(null, xs), b = Math.max.apply(null, xs), c0 = Math.min.apply(null, ys), d = Math.max.apply(null, ys); q2 = [[a, c0], [b, c0], [b, d], [a, d]]; }
@@ -12799,65 +12797,56 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, onNext }) {
     h('div', { style: { display: 'flex', gap: 8, padding: '6px 12px 14px', justifyContent: 'center', flexWrap: 'wrap' } },
       h('button', { onClick: onCancel, style: bs(false, false) }, 'Abbrechen'),
       h('button', { onClick: onRetake, style: bs(false, false) }, '↻ Neu'),
-      h('button', { onClick: () => go(true, false), disabled: !src, style: bs(false, !src) }, 'Ganzes Bild'),
-      h('button', { onClick: () => go(false, false), disabled: !src, style: bs(true, !src) }, 'Lesen'),
-      h('button', { onClick: () => go(false, true), disabled: !src, style: bs(true, !src) }, 'Lesen + nächstes 📷')));
+      h('button', { onClick: () => go(true), disabled: !src, style: bs(false, !src) }, 'Ganzes Bild'),
+      h('button', { onClick: () => go(false), disabled: !src, style: bs(true, !src) }, 'Zuschneiden & lesen')));
 }
 function PsO2Import({ onApply, onClose }) {
   const h = React.createElement;
   const camRef = React.useRef(null);
   const libRef = React.useRef(null);
+  const stageRef = React.useRef('tarife');
   const libModeRef = React.useRef(false);
-  const chainRef = React.useRef(Promise.resolve());
-  const pendRef = React.useRef(0);
   const [d, setD] = React.useState({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' });
   const [busy, setBusy] = React.useState('');
   const [note, setNote] = React.useState('');
   const [crop, setCrop] = React.useState(null);
-  // Ein Eingang fuer alles: die App erkennt selbst, ob Tarif, Handy, Internet oder Kostenblock auf dem Foto ist.
-  // Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien), 🖼 = Foto aus der Mediathek.
-  const pick = lib => { libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
+  // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
+  // 🖼 = Foto aus der Mediathek.
+  const pick = (stage, lib) => { stageRef.current = stage; libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
   const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n') });
-  // Foto gewaehlt -> erst einrahmen/entzerren, dann lesen
+  // Foto gewaehlt -> erst zuschneiden, dann lesen
   const onFile = e => {
     const files = Array.from(e.target.files || []);
     const file = files.find(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name || ''));
     if (!file) { if (files.length) setNote('Bitte ein Foto auswählen (kein PDF).'); return; }
-    setCrop({ file });
+    setCrop({ file, stage: stageRef.current });
   };
-  // Lesen laeuft nacheinander im Hintergrund, waehrend schon das naechste Foto gemacht werden kann.
-  const readPhoto = jobP => {
-    pendRef.current++; setBusy('Foto wird vorbereitet …');
-    chainRef.current = chainRef.current.then(async () => {
-      try {
-        const file = await jobP;
-        const txt = await psO2Recognize(file, m => setBusy(m));
-        const r = psO2Parse(txt);
-        setD(p => {
-          const n = { ...p };
-          if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it)));
-          if (r.geraete.length) n.geraete = p.geraete.concat(r.geraete.map(it => conv('geraete', it)));
-          if (r.internet.length) n.internet = [conv('internet', r.internet[0])];
-          if (r.einmalig) n.einmalig = r.einmalig;
-          if (r.monatlich) n.monatlich = r.monatlich;
-          return n;
-        });
-        const parts = [];
-        if (r.tarife.length) parts.push(r.tarife.length + (r.tarife.length === 1 ? ' Tarif' : ' Tarife'));
-        if (r.geraete.length) parts.push(r.geraete.length + (r.geraete.length === 1 ? ' Handy' : ' Handys'));
-        if (r.internet.length) parts.push('Internet');
-        if (r.einmalig || r.monatlich) parts.push('Kosten');
-        const items = r.tarife.length || r.geraete.length || r.internet.length;
-        if (!parts.length) setNote('Nichts erkannt – Rahmen enger und gerader setzen oder näher ran und noch einmal fotografieren.');
-        else if (!items && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
-        else setNote('✓ Erkannt: ' + parts.join(', '));
-      } catch (err) {
-        console.error('[O2]', err);
-        setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
-      }
-      pendRef.current = Math.max(0, pendRef.current - 1);
-      if (!pendRef.current) setBusy('');
-    });
+  const readPhoto = async (jobP, stage) => {
+    try {
+      setBusy('Foto wird vorbereitet …');
+      const file = await jobP;
+      const txt = await psO2Recognize(file, m => setBusy(m));
+      const r = psO2Parse(txt);
+      setD(p => {
+        const n = { ...p };
+        if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it)));
+        if (r.geraete.length) n.geraete = p.geraete.concat(r.geraete.map(it => conv('geraete', it)));
+        if (r.internet.length) n.internet = [conv('internet', r.internet[0])];
+        if (r.einmalig) n.einmalig = r.einmalig;
+        if (r.monatlich) n.monatlich = r.monatlich;
+        return n;
+      });
+      const tip = ' – näher ran, gerade von vorne und noch einmal fotografieren.';
+      if (stage === 'tarife' && !r.tarife.length) setNote('Kein Tarif erkannt' + tip);
+      else if (stage === 'geraete' && !r.geraete.length) setNote('Kein Handy erkannt' + tip);
+      else if (stage === 'internet' && !r.internet.length) setNote('Kein Internet-Tarif erkannt' + tip);
+      else if (stage === 'kosten' && !(r.einmalig || r.monatlich)) setNote('Kostenblock nicht erkannt' + tip);
+      else if (stage === 'kosten' && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
+    } catch (err) {
+      console.error('[O2]', err);
+      setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
+    }
+    setBusy('');
   };
   const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
   const setItem = (key, i, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => k === i ? { ...x, [f]: v } : x) }));
@@ -12868,31 +12857,33 @@ function PsO2Import({ onApply, onClose }) {
       h('button', { onClick: () => delItem(key, i), className: 'text-slate-400 font-bold px-2 py-2', 'aria-label': 'Entfernen' }, '✕')),
     it.art ? h('div', { className: 'mt-1' }, inp(it.art, v => setItem(key, i, 'art', v), 'Vertragsart')) : null,
     h('textarea', { value: it.det || '', placeholder: 'Inhalte – eine Zeile pro Punkt', rows: Math.min(6, Math.max(2, String(it.det || '').split('\n').length)), onChange: e => setItem(key, i, 'det', e.target.value), className: 'w-full mt-1 px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: 14, fontWeight: 500 } }));
-  const sec = (title, n, body) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
-    h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n : '')), body);
+  const sBtn = 'px-3 py-2 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50';
+  const gBtn = 'px-3 py-2 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm disabled:opacity-50';
+  const sec = (title, n, stage, label, hideBtn, body) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
+    h('div', { className: 'flex items-center justify-between gap-2' },
+      h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n : '')),
+      hideBtn ? null : h('div', { className: 'flex gap-2' },
+        h('button', { onClick: () => pick(stage, false), disabled: !!busy, className: sBtn }, label),
+        h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
+    body);
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
-  const noteCls = /fehlgeschlagen/.test(note) ? 'text-red-600' : /^✓/.test(note) ? 'text-green-700' : 'text-amber-700';
   return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' }, onClick: e => { if (e.target === e.currentTarget && !busy) onClose(); } },
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'text-lg font-black text-[#0b1e42]' }, '📷 o2-Vorschlag einlesen'),
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file,
-        onOk: p => { setCrop(null); readPhoto(p); },
-        onSkip: () => { const f = crop.file; setCrop(null); readPhoto(Promise.resolve(f)); },
+        onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
+        onSkip: () => { const c = crop; setCrop(null); readPhoto(Promise.resolve(c.file), c.stage); },
         onCancel: () => setCrop(null),
-        onRetake: () => { const lib = libModeRef.current; setCrop(null); pick(lib); },
-        onNext: () => pick(false) }) : null,
+        onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
-      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'Je Foto ein Bereich: Tarif, Handy, Internet oder zuletzt der Kostenblock. Die App erkennt selbst, was drauf ist. Einzelpreise werden nicht gebraucht.'),
-      h('div', { className: 'flex gap-2 mt-3' },
-        h('button', { onClick: () => pick(false), className: 'flex-1 px-4 py-4 rounded-xl bg-blue-600 text-white font-black text-base' }, '📷 Foto aufnehmen'),
-        h('button', { onClick: () => pick(true), className: 'px-4 py-4 rounded-xl border border-slate-300 text-slate-600 font-bold text-base', 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼')),
+      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Gerade von vorne, nah ran – Einzelpreise werden nicht gebraucht.'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
-      note ? h('div', { className: 'mt-3 text-sm font-bold ' + noteCls }, note) : null,
-      d.tarife.length ? sec('TARIFE', d.tarife.length, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif'))) : null,
-      d.geraete.length ? sec('HANDYS', d.geraete.length, d.geraete.map((g, i) => item('geraete', g, i, 'Gerät'))) : null,
-      d.internet.length ? sec('INTERNET', d.internet.length, d.internet.map((t, i) => item('internet', t, i, 'Internet-Tarif'))) : null,
-      sec('KOSTENBLOCK', 0, h('div', null,
+      note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : 'text-amber-700') }, note) : null,
+      sec('TARIFE', d.tarife.length, 'tarife', '📷 + Tarif', false, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif'))),
+      sec('HANDYS', d.geraete.length, 'geraete', '📷 + Handy', false, d.geraete.map((g, i) => item('geraete', g, i, 'Gerät'))),
+      sec('INTERNET', d.internet.length, 'internet', '📷 Internet', d.internet.length > 0, d.internet.map((t, i) => item('internet', t, i, 'Internet-Tarif'))),
+      sec('KOSTENBLOCK', 0, 'kosten', '📷 Kosten', false, h('div', null,
         h('div', { className: 'flex gap-3 mt-2' },
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIG (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICH (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
