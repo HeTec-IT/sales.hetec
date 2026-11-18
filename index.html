@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.169';
+    window.APP_VERSION = '55.170';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12452,6 +12452,153 @@ function psTidyLive(strokes) {
     res.guides = { bw: RW, bh: RH, lines: gls, next: nx < RH - 4 ? nx : null, x0: Math.max(4, mh * 0.25), x1: RW - Math.max(4, mh * 0.25) };
   }
   return res;
+}
+// === v55.170 (Beta): o2-VORSCHLAG EINLESEN ==================================================
+// Foto vom Bildschirm (digitaler o2-Vorschlag) -> Texterkennung lokal auf dem Geraet (Tesseract, Deutsch)
+// -> Tarif(e), Geraet(e), Einmalige und Monatliche Kosten -> Kontrolle -> EINE Angebotskarte (digital) + Preise.
+const PS_O2_AMT = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*€?/g;
+const PS_O2_ARTEN = /(Vertragsverl[äa]ngerung|Neuvertrag|Neukunde|Tarifwechsel|Rufnummernmitnahme|Portierung|Zweitkarte|Partnerkarte)/i;
+function psO2Amounts(line) { const m = String(line || '').match(PS_O2_AMT); return m ? m.map(x => x.replace(/\s*€/, '').trim()) : []; }
+function psO2CleanName(line, kind) {
+  let s = String(line || '').replace(PS_O2_AMT, ' ').replace(/[€|\\\[\]{}_~„“"]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (kind === 'tarif') {
+    // o2-Tarife beginnen mit O2/o2 (OCR liest auch 02 oder O₂)
+    const m = s.match(/(?:^|\s)(?:O|o|0)[2₂]\s+\S/);
+    if (m) s = 'O2 ' + s.slice(m.index + m[0].length - 1).trim();
+    // nach "(2026)" o. ae. ist Schluss (Handschrift/Stoerzeichen dahinter)
+    const y = s.match(/\(\s*20\d\d\s*\)/);
+    if (y) s = s.slice(0, y.index + y[0].length);
+  }
+  // Stoerzeichen am Anfang (z. B. Symbol-Reste "a", "(oa") und kurze Reste am Ende entfernen
+  const t = s.split(' ');
+  while (t.length > 1 && (t[0].replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').length < 2 || /^\(/.test(t[0]) && !/\)$/.test(t[0]))) t.shift();
+  while (t.length > 1 && t[t.length - 1].replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').length < 3 && !/\d/.test(t[t.length - 1])) t.pop();
+  return t.join(' ').replace(/\s*,\s*$/, '').trim();
+}
+function psO2Parse(text) {
+  let lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const stop = lines.findIndex(l => /^\W*Aktuell\b/i.test(l));
+  if (stop > 0) lines = lines.slice(0, stop);
+  const out = { tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' };
+  const next = (i, re) => { for (let k = i + 1; k < Math.min(lines.length, i + 4); k++) if (re.test(lines[k])) return lines[k]; return ''; };
+  lines.forEach((l, i) => {
+    if (/^\W*TARIF\b/i.test(l) && lines[i + 1]) {
+      const name = psO2CleanName(lines[i + 1], 'tarif');
+      const am = next(i, PS_O2_ARTEN).match(PS_O2_ARTEN);
+      if (name) out.tarife.push({ name, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '' });
+    }
+    if (/^\W*(HANDY|SMARTPHONE|TABLET|GER[ÄA]T|HARDWARE|ZUBEH[ÖO]R)\b/i.test(l) && lines[i + 1]) {
+      const name = psO2CleanName(lines[i + 1], 'geraet');
+      const am = next(i, PS_O2_ARTEN).match(PS_O2_ARTEN);
+      if (name) out.geraete.push({ name, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '' });
+    }
+    if (!out.einmalig && /Einmalige\s*Kosten/i.test(l)) { const a = psO2Amounts(l); if (a.length) out.einmalig = a[a.length - 1]; }
+    if (!out.monatlich && /Monatliche\s*Kosten/i.test(l)) {
+      const a = psO2Amounts(l);
+      if (a.length) out.monatlich = a[a.length - 1];
+      const hm = l.match(/Ab\s*dem\s*(\d{1,2})\.?\s*\S*:?\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i);
+      if (hm) out.hinweis = 'Ab dem ' + hm[1] + '. Monat: ' + hm[2] + ' €';
+    }
+  });
+  return out;
+}
+// GROSSBUCHSTABEN-Geraetenamen lesbar machen: "IPHONE 18 PRO 256GB, BURGUNDER" -> "iPhone 18 Pro 256GB, Burgunder"
+function psO2Pretty(s) {
+  s = String(s || '');
+  if (s !== s.toUpperCase()) return s;
+  return s.split(' ').map(w => /\d/.test(w) && /[A-Z]/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase()).join(' ').replace(/\bIphone\b/g, 'iPhone').replace(/\bIpad\b/g, 'iPad').replace(/\bAirpods\b/g, 'AirPods');
+}
+// Foto vorbereiten: verkleinern (Tempo auf dem iPad), Graustufen, Kontrast spreizen (Bildschirmfotos sind oft flau)
+async function psO2Prepare(file) {
+  const bmp = await createImageBitmap(file);
+  const sc = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  const W = Math.round(bmp.width * sc), H = Math.round(bmp.height * sc);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(bmp, 0, 0, W, H);
+  const id = x.getImageData(0, 0, W, H), d = id.data, n = W * H, g = new Uint8ClampedArray(n);
+  const hist = new Uint32Array(256);
+  for (let i = 0, p = 0; i < n; i++, p += 4) { const v = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) | 0; g[i] = v; hist[v]++; }
+  let lo = 0, hi = 255, acc = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.01) { lo = v; break; } }
+  acc = 0;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.01) { hi = v; break; } }
+  const k = 255 / Math.max(1, hi - lo);
+  for (let i = 0, p = 0; i < n; i++, p += 4) { const q = (g[i] - lo) * k; d[p] = d[p + 1] = d[p + 2] = q; d[p + 3] = 255; }
+  x.putImageData(id, 0, 0);
+  return c;
+}
+let __psO2Worker = null;
+async function psO2Recognize(file, onMsg) {
+  onMsg && onMsg('Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
+  await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+  if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
+  onMsg && onMsg('Vorschlag wird gelesen …');
+  const c = await psO2Prepare(file);
+  const r = await __psO2Worker.recognize(c);
+  return r && r.data ? r.data.text : '';
+}
+const psO2Esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+// Digitale Angebotskarte (HTML, scharf im PDF) aus den gepruefen Werten
+function psO2Html(d) {
+  const row = (lbl, it) => '<div style="padding:14px 0;border-bottom:1px solid #e2e8f0"><div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:#0050b4">' + lbl + '</div><div style="font-size:22px;font-weight:800;color:#0f172a;margin-top:2px">' + psO2Esc(it.name) + '</div>' + (it.art ? '<div style="font-size:15px;color:#475569;margin-top:2px">' + psO2Esc(it.art) + '</div>' : '') + '</div>';
+  const tar = (d.tarife || []).filter(t => t.name).map(t => row('TARIF', t)).join('');
+  const ger = (d.geraete || []).filter(g => g.name).map(g => row('SMARTPHONE', { name: g.name })).join('');
+  const box = (lbl, v) => '<div style="flex:1;background:#f1f5f9;border-radius:14px;padding:14px 16px"><div style="font-size:13px;font-weight:700;color:#475569">' + lbl + '</div><div style="font-size:30px;font-weight:900;color:#0f172a;margin-top:2px">' + psO2Esc(v || '–') + (v ? ' €' : '') + '</div></div>';
+  return '<div style="font-family:Inter,\'Segoe UI\',system-ui,sans-serif;padding:18px 24px 22px;background:#fff;width:640px;box-sizing:border-box">' +
+    '<div style="font-size:13px;font-weight:800;color:#0050b4;letter-spacing:.04em">IHR PERSÖNLICHES ANGEBOT</div>' + tar + ger +
+    '<div style="display:flex;gap:12px;margin-top:16px">' + box('Einmalig', d.einmalig) + box('Monatlich', d.monatlich) + '</div>' +
+    (d.hinweis ? '<div style="font-size:13px;color:#64748b;margin-top:8px">* ' + psO2Esc(d.hinweis) + '</div>' : '') + '</div>';
+}
+function PsO2Import({ onApply, onClose }) {
+  const h = React.createElement;
+  const fileRef = React.useRef(null);
+  const [st, setSt] = React.useState({ step: 'start' });
+  const [d, setD] = React.useState(null);
+  const pick = () => { try { fileRef.current.value = ''; fileRef.current.click(); } catch (e) {} };
+  const onFile = async e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    setSt({ step: 'busy', msg: 'Foto wird vorbereitet …' });
+    try {
+      const txt = await psO2Recognize(f, m => setSt({ step: 'busy', msg: m }));
+      const p = psO2Parse(txt);
+      p.geraete = p.geraete.map(g => ({ ...g, name: psO2Pretty(g.name) }));
+      if (!p.tarife.length) p.tarife = [{ name: '', art: '' }];
+      setD(p);
+      const ok = p.einmalig && p.monatlich && p.tarife[0].name;
+      setSt({ step: 'check', warn: ok ? '' : 'Nicht alles erkannt – bitte ergänzen oder neues Foto (gerade, ohne Spiegelung, ganzer Vorschlag im Bild).' });
+    } catch (err) {
+      console.error('[O2]', err);
+      setSt({ step: 'start', err: 'Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.' });
+    }
+  };
+  const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
+  const setItem = (key, i, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => k === i ? { ...x, [f]: v } : x) }));
+  const lbl = t => h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700 mt-3 mb-1' }, t);
+  const money = v => String(v || '').replace(/[^\d,.]/g, '');
+  return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' }, onClick: e => { if (e.target === e.currentTarget && st.step !== 'busy') onClose(); } },
+    h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 520, maxHeight: '92vh', overflowY: 'auto' } },
+      h('div', { className: 'text-lg font-black text-[#0b1e42]' }, '📷 o2-Vorschlag einlesen'),
+      h('input', { ref: fileRef, type: 'file', accept: 'image/*', capture: 'environment', style: { display: 'none' }, onChange: onFile }),
+      st.step === 'start' && h('div', null,
+        h('div', { className: 'text-sm text-slate-600 mt-2' }, 'Vorschlag am Bildschirm öffnen und mit der iPad-Kamera fotografieren – gerade von vorne, ohne Spiegelung, der ganze Bereich bis „Monatliche Kosten“ im Bild.'),
+        st.err && h('div', { className: 'text-sm font-bold text-red-600 mt-3' }, st.err),
+        h('div', { className: 'flex gap-2 mt-4' },
+          h('button', { onClick: onClose, className: 'px-4 py-3 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm' }, 'Abbrechen'),
+          h('button', { onClick: pick, className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm' }, 'Foto aufnehmen'))),
+      st.step === 'busy' && h('div', { className: 'py-10 text-center text-sm font-bold text-slate-600' }, st.msg || '…'),
+      st.step === 'check' && d && h('div', null,
+        st.warn && h('div', { className: 'text-sm font-bold text-amber-700 mt-2' }, st.warn),
+        d.tarife.map((t, i) => h('div', { key: 't' + i }, lbl('TARIF'), inp(t.name, v => setItem('tarife', i, 'name', v), 'Tarif'), h('div', { className: 'mt-1' }, inp(t.art, v => setItem('tarife', i, 'art', v), 'Vertragsart')))),
+        d.geraete.map((g, i) => h('div', { key: 'g' + i }, lbl('SMARTPHONE'), inp(g.name, v => setItem('geraete', i, 'name', v), 'Gerät'))),
+        h('div', { className: 'flex gap-3' },
+          h('div', { className: 'flex-1' }, lbl('EINMALIG (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
+          h('div', { className: 'flex-1' }, lbl('MONATLICH (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
+        lbl('HINWEIS'), inp(d.hinweis, v => setD(p => ({ ...p, hinweis: v })), 'z. B. Ab dem 37. Monat: 14,99 €'),
+        h('div', { className: 'flex gap-2 mt-5' },
+          h('button', { onClick: pick, className: 'px-4 py-3 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm' }, 'Neues Foto'),
+          h('button', { onClick: () => onApply(d), disabled: !(d.einmalig || d.monatlich), className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, 'Ins Angebot übernehmen')))));
 }
 // === v55.162 (Beta): HANDSCHRIFT -> TEXT ===============================================
 // Strichdaten eines Notiz-Feldes -> sauberes Schwarz-auf-Weiss-Bild -> Erkennungsdienst (Cloud Function, EU)
@@ -32283,6 +32430,7 @@ function App() {
   const [pendingBundleImport, setPendingBundleImport] = useState(null); // {payload, key} wartet auf Ersetzen-Bestätigung
   const [mergedCanvases, setMergedCanvases] = useState(null); // v51.2: Fusion entfernt – bleibt null (Alt-Kompatibilität)
   const [maximizedOffer, setMaximizedOffer] = useState(null); // null | 'offer1' | 'offer2' | 'offer3'
+  const [o2ImportOpen, setO2ImportOpen] = useState(false); // v55.170: o2-Vorschlag per Kamera einlesen
   // Refs halten immer den aktuellen Canvas-Stand (gegen veraltete Closures)
   const canvasHtmlRef = useRef(canvasHtml);
   const canvasImagesRef = useRef(canvasImages);
@@ -33809,6 +33957,27 @@ function App() {
       setShowBundleModal(false);
     }
   }, [triggerToast, offerLayoutMode]);
+  // v55.170: o2-Vorschlag uebernehmen – drei Karten zu EINER verbinden, digitale Karte in Angebot 1,
+  // nur Gesamtpreise (einmalig / monatlich) in die Preisleiste von Angebot 1, Angebot 2+3 ohne Preis.
+  const applyO2Proposal = d => {
+    const pp = packagePrices || {};
+    const updated = {
+      ...pp,
+      offer1: { ...(pp.offer1 || {}), einmalig: d.einmalig || '', monatlich: d.monatlich || '' },
+      offer2: { ...(pp.offer2 || {}), einmalig: '', monatlich: '' },
+      offer3: { ...(pp.offer3 || {}), einmalig: '', monatlich: '' }
+    };
+    setPackagePrices(updated);
+    setOfferData(prev => ({
+      ...prev,
+      joined12: true,
+      joined23: true,
+      ...psPriceTotals(updated, true, true, prev.monatlich2Manual, canvasStatus)
+    }));
+    doImportBundle({ kind: 'html', html: psO2Html(d) }, 'offer1');
+    setO2ImportOpen(false);
+    setTimeout(() => { try { triggerToast('✓ o2-Vorschlag übernommen'); } catch (e) {} }, 50);
+  };
   const importBundleToCanvas = React.useCallback(payload => {
     if (!payload) return true;
     const key = bundleTargetKey || 'offer1';
@@ -49564,7 +49733,28 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         cursor: 'pointer',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
-    }, "+ Monatlich ab Monat 13") : null, bstBlock);
+    }, "+ Monatlich ab Monat 13") : null, bstBlock, typeof CURRENT_BRAND !== 'undefined' && CURRENT_BRAND === 'telekom' ? null : /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      "data-ps-noprint": "1",
+      "data-ps-o2-import": "1",
+      onClick: () => setO2ImportOpen(true),
+      style: {
+        marginTop: '8px',
+        marginLeft: '6px',
+        padding: '6px 12px',
+        background: '#0050b4',
+        border: '1px solid #0050b4',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontWeight: 700,
+        color: '#ffffff',
+        cursor: 'pointer',
+        fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
+      }
+    }, "📷 o2-Vorschlag einlesen"), o2ImportOpen ? ReactDOM.createPortal( /*#__PURE__*/React.createElement(PsO2Import, {
+      onApply: applyO2Proposal,
+      onClose: () => setO2ImportOpen(false)
+    }), document.body) : null);
   })(), /*#__PURE__*/React.createElement("div", {
     className: `grid grid-cols-3 gap-4 mt-3 cost-grid-years ${(showSecondYear && Array.isArray(drawnStrokes.cost_monatlich2) && drawnStrokes.cost_monatlich2.length > 0) ? 'ps-y2-open' : 'ps-y2-collapsed'}`
   }, /*#__PURE__*/React.createElement("div", {
