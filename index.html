@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.163';
+    window.APP_VERSION = '55.164';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4353,6 +4353,9 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-pad-wrap{ width:min(100%,480px); margin:0 auto; height:130px; border-radius:12px; border:1.5px dashed #cbd5e1; background-color:#fbfdff; position:relative; overflow:hidden; flex-shrink:0; }
 .sit-pad-canvas{ position:absolute; inset:0; width:100%; height:100%; touch-action:none; background:transparent; }
 .sit-note-ta{ width:100%; min-height:130px; border-radius:12px; border:1.5px solid #cbd5e1; padding:12px; font-size:16px; font-family:inherit; resize:none; box-sizing:border-box; }
+.sit-tidy-btn{ position:absolute; top:10px; right:10px; z-index:3; height:34px; padding:0 14px; border-radius:17px; border:1.5px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; font-size:13px; font-weight:800; cursor:pointer; font-family:inherit; box-shadow:0 1px 3px rgba(37,99,235,.12); }
+.sit-tidy-btn.on{ background:#fff; color:#334155; border-color:#e2e8f0; }
+@media print{ .sit-tidy-btn{ display:none !important; } }
 .sit-htr-btn{ border-color:#2563eb; color:#2563eb; }
 .sit-htr{ display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:14px; background:#eff6ff; border:1.5px solid #bfdbfe; }
 .sit-htr-lbl{ font-size:12px; font-weight:800; color:#1d4ed8; letter-spacing:.02em; }
@@ -12216,12 +12219,12 @@ function psTidyHandwriting(strokes, opts) {
   let out = [];
   lines.forEach(L => L.items.forEach(i => out.push(i.s)));
   if (o.smooth) out = out.map(s => {
-    if (s.points.length < 5) return s;
+    if (s.td || s.points.length < 5) return s;
     let P = s.points;
     for (let it = 0; it < 2; it++) {
       P = P.map((p, k) => k === 0 || k === P.length - 1 ? p : Object.assign({}, p, { x: (P[k - 1].x + 2 * p.x + P[k + 1].x) / 4, y: (P[k - 1].y + 2 * p.y + P[k + 1].y) / 4 }));
     }
-    return Object.assign({}, s, { points: P });
+    return Object.assign({}, s, { points: P, td: 1 });
   });
   // 9) Ins Feld einpassen (nichts darf aus dem Schreibfeld ragen)
   let X0 = Infinity, Y0 = Infinity, X1 = -Infinity, Y1 = -Infinity;
@@ -34953,6 +34956,51 @@ function App() {
     }));
     setRedrawCounter(r => r + 1);
   };
+  // v55.164: Handschrifthilfe AUTOMATISCH (wie Samsung Notes): kurz nach dem Absetzen wird die Schrift eines
+  // Situationsfeldes geordnet. "Original" in der Kachel stellt den Stand davor wieder her (bis neu geschrieben wird).
+  // Abschalten: localStorage ps_auto_tidy = '0'.
+  const sitTidyRef = useRef({});
+  const sitTidySeenRef = useRef({});
+  const sitTidyTimers = useRef({});
+  const sitTidyToggle = key => {
+    const cur = drawnStrokesRef.current && drawnStrokesRef.current[key] || drawnStrokes[key] || [];
+    const m = sitTidyRef.current[key];
+    if (m && m.out === cur) {
+      sitTidyRef.current[key] = { off: m.orig };
+      sitNoteReplace(key, m.orig);
+    }
+  };
+  useEffect(() => {
+    let auto = true;
+    try { auto = localStorage.getItem('ps_auto_tidy') !== '0'; } catch (e) {}
+    if (!auto || !drawnStrokes) return;
+    Object.keys(drawnStrokes).forEach(key => {
+      if (key.indexOf('sit_') !== 0) return;
+      const cur = drawnStrokes[key];
+      const prev = sitTidySeenRef.current[key];
+      if (prev === cur) return;
+      sitTidySeenRef.current[key] = cur;
+      // Nur wenn gerade EIN Strich dazugeschrieben wurde (nicht beim Laden/Wiederherstellen oder Radieren)
+      const prevArr = prev || [];
+      if (!cur || cur.length !== prevArr.length + 1 || !prevArr.every((x, i) => cur[i] === x)) return;
+      const m = sitTidyRef.current[key];
+      if (m && (m.out === cur || m.off === cur)) return;
+      if (!cur || !cur.some(st => st && st.tool !== 'eraser')) return;
+      clearTimeout(sitTidyTimers.current[key]);
+      const fire = () => {
+        if (isDrawingRef.current || window.__activeDrawingCanvas) { sitTidyTimers.current[key] = setTimeout(fire, 500); return; }
+        const now = drawnStrokesRef.current && drawnStrokesRef.current[key];
+        if (now !== cur) return;
+        let out = null;
+        try { out = psTidyHandwriting(now); } catch (e) { out = null; }
+        if (!out) return;
+        sitTidyRef.current[key] = { orig: now, out };
+        sitNoteReplace(key, out);
+      };
+      sitTidyTimers.current[key] = setTimeout(fire, 1300);
+    });
+  }, [drawnStrokes]);
+  useEffect(() => () => { Object.values(sitTidyTimers.current).forEach(t => clearTimeout(t)); }, []);
   const sitNoteClear = key => {
     setDrawnStrokes(prev => ({
       ...prev,
@@ -45347,11 +45395,21 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           visibility: 'hidden',
           pointerEvents: 'none'
         } : {}),
+        position: 'relative',
         ...(_bigTab ? {
           gridRow: 'span 2'
         } : {})
       }
-    }, /*#__PURE__*/React.createElement("button", {
+    }, _pen > 0 && !_hideTab && sitTidyRef.current[sitKey] && sitTidyRef.current[sitKey].out === drawnStrokes[sitKey] ? /*#__PURE__*/React.createElement("button", {
+      type: 'button',
+      "data-html2canvas-ignore": "true",
+      className: 'sit-tidy-btn on',
+      onPointerDown: e => e.stopPropagation(),
+      onClick: e => {
+        e.stopPropagation();
+        sitTidyToggle(sitKey);
+      }
+    }, 'Original') : null, /*#__PURE__*/React.createElement("button", {
       "data-print-keep": "1",
       onClick: e => {
         e.stopPropagation();
@@ -45634,7 +45692,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onStroke: s => sitNoteStroke(nkey, s),
       onUndo: () => sitNoteUndo(nkey),
       onClear: () => sitNoteClear(nkey),
-      onReplace: arr => sitNoteReplace(nkey, arr),
       onColor: sitNoteColor,
       color,
       startMode: inputMode === 'keyboard' ? 'keyboard' : 'pen',
