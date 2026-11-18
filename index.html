@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.178';
+    window.APP_VERSION = '55.179';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12628,11 +12628,27 @@ async function psO2Recognize(file, onMsg) {
 }
 const psO2Esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 // Digitale Angebotskarte (HTML, scharf im PDF) aus den gepruefen Werten
-function psO2Html(d) {
+// Verteilung auf die drei Angebotskarten: Karte 1 = Tarif 1 + Handy 1, Karte 2 = Tarif 2 + Handy 2 und alle weiteren, Karte 3 = Internet.
+// Liefert je Karte das HTML (oder null, wenn nichts drauf soll). Der Hinweis kommt auf die letzte belegte Karte.
+function psO2Cards(d) {
+  const tar = (d.tarife || []).filter(t => t && t.name), ger = (d.geraete || []).filter(g => g && g.name), net = (d.internet || []).filter(t => t && t.name);
+  const tot = { tTot: tar.length, gTot: ger.length, nTot: net.length };
+  const parts = [
+    { tarife: tar.slice(0, 1), geraete: ger.slice(0, 1), internet: [], ctx: { ...tot, tOff: 0, gOff: 0, nOff: 0 } },
+    { tarife: tar.slice(1), geraete: ger.slice(1), internet: [], ctx: { ...tot, tOff: 1, gOff: 1, nOff: 0 } },
+    { tarife: [], geraete: [], internet: net, ctx: { ...tot, tOff: 0, gOff: 0, nOff: 0 } }
+  ];
+  const has = p => p.tarife.length || p.geraete.length || p.internet.length;
+  let last = -1;
+  parts.forEach((p, i) => { if (has(p)) last = i; });
+  return parts.map((p, i) => has(p) ? psO2Html({ internet: p.internet, tarife: p.tarife, geraete: p.geraete, hinweis: i === last ? d.hinweis : '' }, p.ctx) : null);
+}
+function psO2Html(d, ctx) {
   // Bis zu 6 Tarife, 6 Handys, 2 Internet. Bis 3 Positionen: Spalten nebeneinander (Internet | Tarif | Smartphone).
   // Ab 4: nach Art gruppiert (Tarife, Handys, Internet), je Zeile gleich breite Spalten, Schrift etwas kleiner.
   // Hinweis: die App-CSS zwingt im Angebotsfeld alle Textfarben auf eine Farbe, deshalb Hervorhebung ueber Groesse/Fett/Hintergrund.
   const net = (d.internet || []).filter(t => t.name), tar = (d.tarife || []).filter(t => t.name), ger = (d.geraete || []).filter(g => g.name);
+  const cx = ctx || {};
   const n = net.length + tar.length + ger.length, dense = n > 3, mid = n > 8;
   const fN = mid ? 17 : dense ? 19 : 22, fD = mid ? 13 : dense ? 14 : 16, fA = mid ? 12 : dense ? 13 : 14, gap = mid ? 5 : 7;
   const col = (lbl, it, num, grid) => {
@@ -12643,14 +12659,15 @@ function psO2Html(d) {
       (it.art ? '<div style="font-size:' + fA + 'px;font-weight:600;margin-top:2px">' + psO2Esc(it.art) + '</div>' : '') +
       det.map(x => '<div style="display:flex;gap:8px;font-size:' + fD + 'px;font-weight:500;margin-top:' + gap + 'px;line-height:1.3"><span style="flex:0 0 auto;font-weight:900">✓</span><span>' + psO2Esc(x) + '</span></div>').join('') + '</div>';
   };
-  const group = (lbl, arr) => arr.map((t, i) => col(lbl, t, arr.length > 1 ? i + 1 : 0, dense));
+  const group = (lbl, arr, off, tot) => arr.map((t, i) => col(lbl, t, (tot == null ? arr.length : tot) > 1 ? (off || 0) + i + 1 : 0, dense));
   let body;
   if (!dense) {
-    body = '<div style="display:flex;flex-wrap:wrap;gap:16px 28px">' + group('INTERNET', net).concat(group('TARIF', tar), group('SMARTPHONE', ger)).join('') + '</div>';
+    body = '<div style="display:flex;flex-wrap:wrap;gap:16px 28px">' + group('INTERNET', net, cx.nOff, cx.nTot).concat(group('TARIF', tar, cx.tOff, cx.tTot), group('SMARTPHONE', ger, cx.gOff, cx.gTot)).join('') + '</div>';
   } else {
     const per = c => c <= 3 ? c : c === 4 ? 2 : 3;
-    body = [['INTERNET', net], ['TARIF', tar], ['SMARTPHONE', ger]].filter(g => g[1].length).map((g, k) =>
-      '<div style="display:grid;grid-template-columns:repeat(' + per(g[1].length) + ',minmax(0,1fr));gap:14px 24px;' + (k ? 'margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0' : '') + '">' + group(g[0], g[1]).join('') + '</div>').join('');
+    // Spaltenzahl richtet sich nach der Kartenbreite: hoechstens per(n), auf schmalen Karten weniger (mind. 160 px je Spalte)
+    body = [['INTERNET', net, cx.nOff, cx.nTot], ['TARIF', tar, cx.tOff, cx.tTot], ['SMARTPHONE', ger, cx.gOff, cx.gTot]].filter(g => g[1].length).map((g, k) =>
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(max(160px,calc((100% - ' + (per(g[1].length) - 1) * 24 + 'px)/' + per(g[1].length) + ')),1fr));gap:14px 24px;' + (k ? 'margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0' : '') + '">' + group(g[0], g[1], g[2], g[3]).join('') + '</div>').join('');
   }
   return '<div style="width:100%;box-sizing:border-box"><div style="font-family:Inter,\'Segoe UI\',system-ui,sans-serif;padding:16px 22px 14px;background:#fff;box-sizing:border-box">' + body +
     (d.hinweis ? '<div style="font-size:14px;font-weight:600;margin-top:14px">' + psO2Esc(d.hinweis) + '</div>' : '') + '</div></div>';
@@ -12889,7 +12906,7 @@ function PsO2Import({ onApply, onClose }) {
         onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
-      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Gerade von vorne, nah ran – Einzelpreise werden nicht gebraucht.'),
+      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet.'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : 'text-amber-700') }, note) : null,
       sec('TARIFE', d.tarife.length, 'tarife', '📷 + Tarif', d.tarife.length >= PS_O2_MAX.tarife, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif')), PS_O2_MAX.tarife),
@@ -34209,7 +34226,7 @@ function App() {
 
   // ===== Bundle -> Ziel-Canva (HTML bevorzugt, Fallback Bild) =====
   // Eigentlicher Import (ohne Abfrage) – ersetzt den Canvas-Inhalt
-  const doImportBundle = React.useCallback((payload, key) => {
+  const doImportBundle = React.useCallback((payload, key, quiet) => {
     if (!payload) return;
     // Bundle passt sich an Canvas an: keine Verschiebung, volle Breite, unter Status
     const applyFit = () => {
@@ -34238,7 +34255,7 @@ function App() {
         [key]: (prev[key] || 0) + 1
       }));
       requestAnimationFrame(() => requestAnimationFrame(applyFit));
-      triggerToast('✓ Bundle eingefügt.');
+      if (!quiet) triggerToast('✓ Bundle eingefügt.');
       setShowBundleModal(false);
       return;
     }
@@ -34261,43 +34278,45 @@ function App() {
       setShowBundleModal(false);
     }
   }, [triggerToast, offerLayoutMode]);
-  // v55.170: o2-Vorschlag uebernehmen – drei Karten zu EINER verbinden, digitale Karte in Angebot 1,
-  // nur Gesamtpreise (einmalig / monatlich) in die Preisleiste von Angebot 1, Angebot 2+3 ohne Preis.
-  // v55.172: Beim Verbinden aller drei Karten wird der Inhalt von Karte 1 gegen das Blatt getauscht (Effekt "sheetActive").
-  // Die digitale Karte muss deshalb erst NACH diesem Tausch eingefuegt werden – sonst wird sie sofort wieder weggeraeumt.
+  // v55.179: o2-Vorschlag uebernehmen – die Karten werden NICHT mehr verbunden, sondern verteilt:
+  // Karte 1 = Tarif 1 + Handy 1, Karte 2 = Tarif 2 + Handy 2 und alle weiteren, Karte 3 = Internet.
+  // Nur die Gesamtpreise (einmalig / monatlich) kommen in die Preisleiste der letzten belegten Karte (wie im o2-Vorschlag unten).
+  // War vorher das grosse Blatt (alle drei verbunden) aktiv, wird erst getrennt (Effekt "sheetActive" tauscht Karte 1 zurueck)
+  // und DANACH eingefuegt – sonst raeumt der Tausch die neuen Karten sofort wieder weg.
   const o2PendingHtmlRef = React.useRef(null);
+  const flushO2Pending = () => {
+    const it = o2PendingHtmlRef.current;
+    if (!it) return;
+    o2PendingHtmlRef.current = null;
+    it.forEach(x => doImportBundle({ kind: 'html', html: x[1] }, x[0], true));
+  };
   const applyO2Proposal = d => {
-    const willJoin = psWide && offerLayoutMode !== 'step';
+    const cards = psO2Cards(d);
+    const items = cards.map((hh, i) => hh ? ['offer' + (i + 1), hh] : null).filter(Boolean);
+    const lastKey = items.length ? items[items.length - 1][0] : 'offer1';
     const pp = packagePrices || {};
-    const updated = {
-      ...pp,
-      offer1: { ...(pp.offer1 || {}), einmalig: d.einmalig || '', monatlich: d.monatlich || '' },
-      offer2: { ...(pp.offer2 || {}), einmalig: '', monatlich: '' },
-      offer3: { ...(pp.offer3 || {}), einmalig: '', monatlich: '' }
-    };
+    const updated = { ...pp };
+    ['offer1', 'offer2', 'offer3'].forEach(k => {
+      updated[k] = { ...(pp[k] || {}), einmalig: k === lastKey ? (d.einmalig || '') : '', monatlich: k === lastKey ? (d.monatlich || '') : '' };
+    });
     setPackagePrices(updated);
     setOfferData(prev => ({
       ...prev,
-      ...(willJoin ? { joined12: true, joined23: true } : {}),
-      ...psPriceTotals(updated, willJoin, willJoin, prev.monatlich2Manual, canvasStatus)
+      joined12: false,
+      joined23: false,
+      ...psPriceTotals(updated, false, false, prev.monatlich2Manual, canvasStatus)
     }));
-    const hasCard = ['internet', 'tarife', 'geraete'].some(k => (d[k] || []).some(x => x && x.name)) || !!d.hinweis;
-    const html = psO2Html(d);
-    if (!hasCard) { /* nur Preise */ } else if (willJoin && !offerData.sheetActive) {
-      o2PendingHtmlRef.current = html;
-      setTimeout(() => {
-        if (o2PendingHtmlRef.current) { const hh = o2PendingHtmlRef.current; o2PendingHtmlRef.current = null; doImportBundle({ kind: 'html', html: hh }, 'offer1'); }
-      }, 1500);
-    } else doImportBundle({ kind: 'html', html }, 'offer1');
+    if (items.length) {
+      if (offerData.sheetActive) {
+        o2PendingHtmlRef.current = items;
+        setTimeout(flushO2Pending, 1500);
+      } else items.forEach(x => doImportBundle({ kind: 'html', html: x[1] }, x[0], true));
+    }
     setO2ImportOpen(false);
     setTimeout(() => { try { triggerToast('✓ o2-Vorschlag übernommen'); } catch (e) {} }, 50);
   };
   React.useEffect(() => {
-    if (offerData.sheetActive && o2PendingHtmlRef.current) {
-      const hh = o2PendingHtmlRef.current;
-      o2PendingHtmlRef.current = null;
-      doImportBundle({ kind: 'html', html: hh }, 'offer1');
-    }
+    if (!offerData.sheetActive && o2PendingHtmlRef.current) flushO2Pending();
   }, [offerData.sheetActive]);
   const importBundleToCanvas = React.useCallback(payload => {
     if (!payload) return true;
