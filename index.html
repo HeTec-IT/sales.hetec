@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.179';
+    window.APP_VERSION = '55.180';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12828,13 +12828,20 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake }) {
 }
 // Obergrenzen je Foto-Etappe (mehr passt nicht sinnvoll auf die Angebotskarte)
 const PS_O2_MAX = { tarife: 6, geraete: 6, internet: 2 };
-function PsO2Import({ onApply, onClose }) {
+function PsO2Import({ onApply, onClose, initial }) {
   const h = React.createElement;
   const camRef = React.useRef(null);
   const libRef = React.useRef(null);
   const stageRef = React.useRef('tarife');
   const libModeRef = React.useRef(false);
-  const [d, setD] = React.useState({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' });
+  // Beim erneuten Oeffnen (nachtraeglich Tarif/Handy dazu) sind die bisherigen Eintraege schon da.
+  const [d, setD] = React.useState(() => {
+    const i = initial || {};
+    const arr = v => Array.isArray(v) ? v.map(x => ({ ...x })) : [];
+    return { internet: arr(i.internet), tarife: arr(i.tarife), geraete: arr(i.geraete), einmalig: i.einmalig || '', monatlich: i.monatlich || '', hinweis: i.hinweis || '' };
+  });
+  const had = !!(initial && (['internet', 'tarife', 'geraete'].some(k => (initial[k] || []).length) || initial.einmalig || initial.monatlich));
+  const dRef = React.useRef(d); dRef.current = d;
   const [busy, setBusy] = React.useState('');
   const [note, setNote] = React.useState('');
   const [crop, setCrop] = React.useState(null);
@@ -12870,6 +12877,7 @@ function PsO2Import({ onApply, onClose }) {
       else if (stage === 'internet' && !r.internet.length) setNote('Kein Internet-Tarif erkannt' + tip);
       else if (stage === 'kosten' && !(r.einmalig || r.monatlich)) setNote('Kostenblock nicht erkannt' + tip);
       else if (stage === 'kosten' && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
+      else if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich)) setNote('Neu dazu – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
     } catch (err) {
       console.error('[O2]', err);
       setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
@@ -12898,7 +12906,9 @@ function PsO2Import({ onApply, onClose }) {
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
   return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' }, onClick: e => { if (e.target === e.currentTarget && !busy) onClose(); } },
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
-      h('div', { className: 'text-lg font-black text-[#0b1e42]' }, '📷 o2-Vorschlag einlesen'),
+      h('div', { className: 'flex items-center justify-between gap-2' },
+        h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '📷 o2-Vorschlag ergänzen' : '📷 o2-Vorschlag einlesen'),
+        any ? h('button', { onClick: () => setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }), disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file,
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
         onSkip: () => { const c = crop; setCrop(null); readPhoto(Promise.resolve(c.file), c.stage); },
@@ -34304,6 +34314,7 @@ function App() {
       ...prev,
       joined12: false,
       joined23: false,
+      o2Proposal: JSON.parse(JSON.stringify(d)),
       ...psPriceTotals(updated, false, false, prev.monatlich2Manual, canvasStatus)
     }));
     if (items.length) {
@@ -50091,7 +50102,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         cursor: 'pointer',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
-    }, "📷 o2-Vorschlag einlesen"), o2ImportOpen ? ReactDOM.createPortal( /*#__PURE__*/React.createElement(PsO2Import, {
+    }, offerData.o2Proposal ? "📷 o2-Vorschlag ergänzen" : "📷 o2-Vorschlag einlesen"), o2ImportOpen ? ReactDOM.createPortal( /*#__PURE__*/React.createElement(PsO2Import, {
+      initial: offerData.o2Proposal,
       onApply: applyO2Proposal,
       onClose: () => setO2ImportOpen(false)
     }), document.body) : null);
