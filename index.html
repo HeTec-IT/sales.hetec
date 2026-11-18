@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.165';
+    window.APP_VERSION = '55.166';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12153,7 +12153,9 @@ function psTidyHandwriting(strokes, opts) {
         bLeft = bi.reduce((t, k) => t + k.b.cy, 0) / bi.length;
         pred = my + sl * (bi.reduce((t, k) => t + k.b.cx, 0) / bi.length - mx);
       }
-      if (ovX < mh * 0.5 && (ovY > Math.min(A.y1 - A.y0, B.y1 - B.y0) * 0.25 && Math.abs(lines[a].cy - lines[c].cy) < mh * 1.1 || pred != null && Math.abs(pred - bLeft) < mh * 1.25)) {
+      const inside = B.x0 >= A.x0 - mh && B.x1 <= A.x1 + mh && lines[c].items.length <= lines[a].items.length && (B.x1 - B.x0) < (A.x1 - A.x0) * 0.6;
+      const vGap = Math.max(A.y0 - B.y1, B.y0 - A.y1);
+      if (inside && vGap < mh * 0.6 || ovX < mh * 0.5 && (ovY > Math.min(A.y1 - A.y0, B.y1 - B.y0) * 0.25 && Math.abs(lines[a].cy - lines[c].cy) < mh * 1.1 || pred != null && Math.abs(pred - bLeft) < mh * 1.25)) {
         lines[a].items = lines[a].items.concat(lines[c].items);
         lines[a].cy = lines[a].items.reduce((t, k) => t + k.b.cy, 0) / lines[a].items.length;
         lines.splice(c, 1);
@@ -12230,19 +12232,33 @@ function psTidyHandwriting(strokes, opts) {
   const GAP = target * 0.75;
   lines.forEach(L => {
     const words = [];
-    L.items.forEach(i => {
+    const isBig = i => i.b.h >= mh * 0.35;
+    const bigs = L.items.filter(isBig), smalls = L.items.filter(i => !isBig(i));
+    (bigs.length ? bigs : L.items).forEach(i => {
       const W = words[words.length - 1];
-      if (W && i.b.x0 - W.x1 < target * 0.45) { W.items.push(i); W.x1 = Math.max(W.x1, i.b.x1); } else words.push({ items: [i], x0: i.b.x0, x1: i.b.x1 });
+      if (W && i.b.x0 - W.x1 < target * 0.6) { W.items.push(i); W.x1 = Math.max(W.x1, i.b.x1); } else words.push({ items: [i], x0: i.b.x0, x1: i.b.x1 });
     });
+    // Kleine Striche (t-Querstrich, i-Punkt, Umlaut, Bindestrich) wandern mit dem Wort, das sie am meisten ueberdecken
+    if (bigs.length) smalls.forEach(i => {
+      let best = words[0], bo = -Infinity;
+      words.forEach(W => {
+        const ov = Math.min(W.x1, i.b.x1) - Math.max(W.x0, i.b.x0);
+        if (ov > bo) { bo = ov; best = W; }
+      });
+      if (bo < -target * 0.6) words.push({ items: [i], x0: i.b.x0, x1: i.b.x1 });else best.items.push(i);
+    });
+    words.sort((u, v) => u.x0 - v.x0);
     const bls = words.map(wordBl).filter(v => v != null);
     const lineBl = bls.length ? med(bls) : L.cy;
     let cur = left;
     words.forEach((W, wi) => {
       // grosse Luecken auf einheitlichen Wortabstand kuerzen, kleine bleiben (z. B. zwischen Ziffern)
-      if (wi > 0) cur += Math.min(GAP, Math.max(target * 0.3, W.x0 - words[wi - 1].x1));
+      if (wi > 0) cur += Math.min(GAP, W.x0 - words[wi - 1].x1);
       const dx = cur - W.x0;
       const bl = wordBl(W);
-      const dy = bl == null ? 0 : Math.max(-target * 0.45, Math.min(target * 0.45, lineBl - bl));
+      // Nur echte Woerter (breit genug oder mehrere Striche) auf die Linie setzen – Einzelbuchstaben haben keine verlaessliche Grundlinie
+      const realWord = W.x1 - W.x0 >= target * 1.2 || W.items.filter(i => i.b.h >= mh * 0.35).length >= 2;
+      const dy = bl == null || !realWord ? 0 : Math.max(-target * 0.35, Math.min(target * 0.35, lineBl - bl));
       W.items.forEach(i => { i.s = Object.assign({}, i.s, { points: i.s.points.map(p => Object.assign({}, p, { x: p.x + dx, y: p.y + dy })) }); i.b = box(i.s); });
       cur += W.x1 - W.x0;
     });
