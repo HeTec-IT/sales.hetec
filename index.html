@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.162';
+    window.APP_VERSION = '55.163';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12067,6 +12067,171 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
     onPointerCancel: onUp
   }));
 }
+// === v55.163 (Beta): HANDSCHRIFTHILFE (lokal, ohne Cloud) ===================================
+// Macht Handschrift ordentlicher wie Samsung Notes: Zeilen erkennen, schief geschriebene Zeilen
+// geraderichten, Schriftgroesse angleichen, Wortabstaende und Zeilenabstaende vereinheitlichen,
+// alle Zeilen links buendig, leichtes Glaetten. Die Buchstabenformen bleiben die eigene Handschrift.
+// Liefert eine NEUE Strichliste (Original bleibt unveraendert -> Rueckgaengig moeglich) oder null.
+function psTidyHandwriting(strokes, opts) {
+  const o = Object.assign({ smooth: true }, opts || {});
+  const all = (strokes || []).filter(s => s && s.points && s.points.length);
+  if (!all.some(s => s.tool !== 'eraser' && s.tool !== 'highlighter')) return null;
+  const ref = all.find(s => s.baseWidth) || all[0];
+  const RW = ref.baseWidth || 480, RH = ref.baseHeight || 130;
+  const fOf = s => s.baseWidth ? RW / s.baseWidth : 1;
+  // 1) Alte Radierer-Striche einrechnen (Punkte unter dem Radierer entfernen)
+  let pen = all.filter(s => s.tool !== 'eraser' && s.tool !== 'highlighter').map(s => {
+    const f = fOf(s);
+    return Object.assign({}, s, { points: s.points.map(p => Object.assign({}, p, { x: p.x * f, y: p.y * f })), baseWidth: RW, baseHeight: RH });
+  });
+  const keep = all.filter(s => s.tool === 'highlighter');
+  all.filter(s => s.tool === 'eraser').forEach(er => {
+    const f = fOf(er);
+    const r = Math.max(2, (er.baseLineWidth || er.width || 2) * (er.eraserMult || 4) / 2) * f;
+    er.points.forEach(p => {
+      const nx = [];
+      pen.forEach(s => {
+        const cut = typeof eraseStrokeAt === 'function' ? eraseStrokeAt(s, p.x * f, p.y * f, r) : null;
+        if (cut) nx.push(...cut);else nx.push(s);
+      });
+      pen = nx;
+    });
+  });
+  pen = pen.filter(s => s.points.length >= 2 || s.points.length === 1);
+  if (!pen.length) return null;
+  // 2) Kennzahlen je Strich
+  const box = s => {
+    let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+    s.points.forEach(p => { if (p.x < a) a = p.x; if (p.y < b) b = p.y; if (p.x > c) c = p.x; if (p.y > d) d = p.y; });
+    return { x0: a, y0: b, x1: c, y1: d, cx: (a + c) / 2, cy: (b + d) / 2, w: c - a, h: d - b };
+  };
+  const med = arr => { const v = arr.slice().sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : 0; };
+  let items = pen.map(s => ({ s, b: box(s) }));
+  const bigH = items.map(i => i.b.h).filter(h => h > 3);
+  const mh = Math.max(6, med(bigH.length ? bigH : [12]));
+  // 3) Zeilen bilden (nach vertikaler Mitte; kleine Striche wie i-Punkte haengen sich an die naechste Zeile)
+  const big = items.filter(i => i.b.h >= mh * 0.35).sort((a, b) => a.b.cy - b.b.cy);
+  const small = items.filter(i => big.indexOf(i) < 0);
+  // Von links nach rechts zuordnen: Zeile, deren letzter Strich auf aehnlicher Hoehe liegt (folgt auch schraegen Zeilen)
+  const lines = [];
+  big.slice().sort((a, b) => a.b.x0 - b.b.x0).forEach(i => {
+    let best = null, bd = Infinity;
+    lines.forEach(L => {
+      // Hoehenband der letzten Striche dieser Zeile (wandert bei schraegen Zeilen mit)
+      const rec = L.items.slice(-4);
+      const y0 = Math.min(...rec.map(k => k.b.y0)), y1 = Math.max(...rec.map(k => k.b.y1));
+      const ov = Math.min(y1, i.b.y1) - Math.max(y0, i.b.y0);
+      const ratio = ov / Math.max(1, Math.min(y1 - y0, i.b.h));
+      const gapX = i.b.x0 - Math.max(...rec.map(k => k.b.x1));
+      if (ratio > 0.35 && gapX < mh * 12 && -ratio < bd) { bd = -ratio; best = L; }
+    });
+    if (best) {
+      best.items.push(i);
+      best.cy = best.items.reduce((t, k) => t + k.b.cy, 0) / best.items.length;
+      best.h = Math.max(best.h, i.b.h);
+    } else lines.push({ items: [i], cy: i.b.cy, h: i.b.h });
+  });
+  if (!lines.length) lines.push({ items: [], cy: small[0].b.cy, h: mh });
+  small.forEach(i => {
+    let best = lines[0], bd = Infinity;
+    lines.forEach(L => {
+      const xs = L.items.map(k => k.b), x0 = Math.min(...xs.map(b => b.x0), Infinity), x1 = Math.max(...xs.map(b => b.x1), -Infinity);
+      const dx = i.b.cx < x0 ? x0 - i.b.cx : i.b.cx > x1 ? i.b.cx - x1 : 0;
+      const d = Math.abs(i.b.cy - L.cy) + dx * 0.5 + (i.b.cy > L.cy + mh ? mh : 0);
+      if (d < bd) { bd = d; best = L; }
+    });
+    best.items.push(i);
+  });
+  lines.forEach(L => L.items.sort((a, b) => a.b.x0 - b.b.x0));
+  lines.sort((a, b) => a.cy - b.cy);
+  // 4) Je Zeile: Schraeglage messen und geraderichten (Drehung um den linken Rand der Zeile)
+  const rot = (p, cx, cy, ca, sa) => { const dx = p.x - cx, dy = p.y - cy; return { x: cx + dx * ca - dy * sa, y: cy + dx * sa + dy * ca }; };
+  lines.forEach(L => {
+    const P = [];
+    L.items.forEach(i => { if (i.b.h >= mh * 0.35) i.s.points.forEach(p => P.push(p)); });
+    let ang = 0;
+    if (P.length > 4) {
+      const mx = P.reduce((t, p) => t + p.x, 0) / P.length, my = P.reduce((t, p) => t + p.y, 0) / P.length;
+      let sxy = 0, sxx = 0;
+      P.forEach(p => { sxy += (p.x - mx) * (p.y - my); sxx += (p.x - mx) * (p.x - mx); });
+      const span = Math.max(...P.map(p => p.x)) - Math.min(...P.map(p => p.x));
+      if (sxx > 0 && span > mh * 2.5) ang = Math.atan(sxy / sxx);
+      ang = Math.max(-0.45, Math.min(0.45, ang));
+    }
+    const x0 = Math.min(...L.items.map(i => i.b.x0));
+    const ca = Math.cos(-ang), sa = Math.sin(-ang);
+    L.items.forEach(i => {
+      i.s = Object.assign({}, i.s, { points: i.s.points.map(p => Object.assign({}, p, rot(p, x0, L.cy, ca, sa))) });
+      i.b = box(i.s);
+    });
+  });
+  // 5) Schriftgroesse angleichen (Median-Hoehe der Zeile -> gemeinsamer Zielwert, sanft begrenzt)
+  const lineH = L => { const hs = L.items.map(i => i.b.h).filter(h => h >= mh * 0.35); return Math.max(4, med(hs.length ? hs : [mh])); };
+  const target = med(lines.map(lineH));
+  lines.forEach(L => {
+    const k = Math.max(0.75, Math.min(1.33, target / lineH(L)));
+    const x0 = Math.min(...L.items.map(i => i.b.x0));
+    const ys = []; L.items.forEach(i => i.s.points.forEach(p => ys.push(p.y)));
+    const cy = med(ys);
+    L.items.forEach(i => {
+      i.s = Object.assign({}, i.s, { points: i.s.points.map(p => Object.assign({}, p, { x: x0 + (p.x - x0) * k, y: cy + (p.y - cy) * k })) });
+      i.b = box(i.s);
+    });
+    L.cy = cy;
+  });
+  // 6) Woerter erkennen und Wortabstaende vereinheitlichen, Zeile links buendig
+  const left = Math.min(...lines.map(L => Math.min(...L.items.map(i => i.b.x0))));
+  const gapMin = target * 0.55, gapMax = target * 1.0;
+  lines.forEach(L => {
+    const words = [];
+    L.items.forEach(i => {
+      const W = words[words.length - 1];
+      if (W && i.b.x0 - W.x1 < target * 0.45) { W.items.push(i); W.x1 = Math.max(W.x1, i.b.x1); } else words.push({ items: [i], x0: i.b.x0, x1: i.b.x1 });
+    });
+    let cur = left;
+    words.forEach((W, wi) => {
+      if (wi > 0) {
+        const gap = W.x0 - words[wi - 1].x1;
+        cur += Math.max(gapMin, Math.min(gapMax, gap));
+      }
+      const dx = cur - W.x0;
+      W.items.forEach(i => { i.s = Object.assign({}, i.s, { points: i.s.points.map(p => Object.assign({}, p, { x: p.x + dx })) }); i.b = box(i.s); });
+      cur += W.x1 - W.x0;
+    });
+  });
+  // 7) Gleichmaessige Zeilenabstaende (ab der ersten Zeile)
+  if (lines.length > 1) {
+    const d = [];
+    for (let k = 1; k < lines.length; k++) d.push(lines[k].cy - lines[k - 1].cy);
+    let ext = 0;
+    lines.forEach(L => L.items.forEach(i => { ext = Math.max(ext, i.b.y1 - L.cy, L.cy - i.b.y0); }));
+    const step = Math.max(target * 1.6, ext * 2.0, Math.min(target * 2.6, med(d)));
+    lines.forEach((L, k) => {
+      const dy = lines[0].cy + step * k - L.cy;
+      L.items.forEach(i => { i.s = Object.assign({}, i.s, { points: i.s.points.map(p => Object.assign({}, p, { y: p.y + dy })) }); });
+      L.cy += dy;
+    });
+  }
+  // 8) Leicht glaetten (Zittern weg, Form bleibt; Endpunkte fest)
+  let out = [];
+  lines.forEach(L => L.items.forEach(i => out.push(i.s)));
+  if (o.smooth) out = out.map(s => {
+    if (s.points.length < 5) return s;
+    let P = s.points;
+    for (let it = 0; it < 2; it++) {
+      P = P.map((p, k) => k === 0 || k === P.length - 1 ? p : Object.assign({}, p, { x: (P[k - 1].x + 2 * p.x + P[k + 1].x) / 4, y: (P[k - 1].y + 2 * p.y + P[k + 1].y) / 4 }));
+    }
+    return Object.assign({}, s, { points: P });
+  });
+  // 9) Ins Feld einpassen (nichts darf aus dem Schreibfeld ragen)
+  let X0 = Infinity, Y0 = Infinity, X1 = -Infinity, Y1 = -Infinity;
+  out.forEach(s => s.points.forEach(p => { if (p.x < X0) X0 = p.x; if (p.y < Y0) Y0 = p.y; if (p.x > X1) X1 = p.x; if (p.y > Y1) Y1 = p.y; }));
+  const M = Math.max(4, target * 0.25);
+  const fit = Math.min(1, (RW - 2 * M) / Math.max(1, X1 - X0), (RH - 2 * M) / Math.max(1, Y1 - Y0));
+  const tx = Math.max(M, Math.min(X0, RW - M - (X1 - X0) * fit)), ty = Math.max(M, Math.min(Y0, RH - M - (Y1 - Y0) * fit));
+  out = out.map(s => Object.assign({}, s, { points: s.points.map(p => Object.assign({}, p, { x: tx + (p.x - X0) * fit, y: ty + (p.y - Y0) * fit })) }));
+  return out.concat(keep);
+}
 // === v55.162 (Beta): HANDSCHRIFT -> TEXT ===============================================
 // Strichdaten eines Notiz-Feldes -> sauberes Schwarz-auf-Weiss-Bild -> Erkennungsdienst (Cloud Function, EU)
 // -> Ergebnis wird dem Mitarbeiter zur Kontrolle gezeigt und erst nach "Uebernehmen" als Text gespeichert.
@@ -12074,6 +12239,10 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
 // Dienst-Adresse: window.PS_HTR_URL oder localStorage 'ps_htr_url' ueberschreiben den Standard.
 const PS_HTR_URL_DEFAULT = 'https://europe-west3-o2-pencil-selling.cloudfunctions.net/handwritingToText';
 const PS_HTR_KIND = { Kundenname: 'name', Rufnummer: 'phone' };
+// Button "Als Text" erscheint erst, wenn ein Erkennungsdienst eingetragen ist (spaeter Azure).
+const psHtrConfigured = () => {
+  try { return !!(localStorage.getItem('ps_htr_url') || window.PS_HTR_URL); } catch (e) { return !!window.PS_HTR_URL; }
+};
 const psHtrUrl = () => {
   try { return localStorage.getItem('ps_htr_url') || window.PS_HTR_URL || PS_HTR_URL_DEFAULT; } catch (e) { return PS_HTR_URL_DEFAULT; }
 };
@@ -12190,10 +12359,20 @@ function psHtrFinish(raw, kind) {
 }
 // Notiz-Fenster zu einem Thema: Stift oder Tippen (landet in der Kachel des Themas)
 // v55.162: Stift-Modus hat "Als Text" – Handschrift wird erkannt, kontrolliert und als Text uebernommen.
-function SitNoteSheet({ item, text, strokes, sitKey, getTool, onText, onStroke, onUndo, onClear, onColor, color, startMode, onClose }) {
+function SitNoteSheet({ item, text, strokes, sitKey, getTool, onText, onStroke, onUndo, onClear, onReplace, onColor, color, startMode, onClose }) {
   const h = React.createElement;
   const [mode, setMode] = React.useState(startMode || 'pen');
   const [htr, setHtr] = React.useState(null);
+  // v55.163: Handschrifthilfe – merkt sich das Original, solange nichts Neues geschrieben wurde
+  const [tidy, setTidy] = React.useState(null);
+  const tidyActive = !!(tidy && tidy.out === strokes);
+  const runTidy = () => {
+    if (tidyActive) { onReplace(tidy.orig); setTidy(null); return; }
+    const out = psTidyHandwriting(strokes);
+    if (!out) return;
+    onReplace(out);
+    setTidy({ orig: strokes, out });
+  };
   const COLORS = [['#0f172a', 'Schwarz'], ['#0044ff', 'Blau'], ['#ff0000', 'Rot']];
   const hasInk = (strokes || []).some(s => s && s.tool !== 'eraser');
   const kind = PS_HTR_KIND[item.id] || 'text';
@@ -12232,7 +12411,7 @@ function SitNoteSheet({ item, text, strokes, sitKey, getTool, onText, onStroke, 
     'aria-label': n,
     className: 'sit-dot' + (String(color).toLowerCase() === c ? ' on' : ''),
     onClick: () => onColor(c)
-  }, h('i', { style: { background: c } }))), h('button', { type: 'button', className: 'sit-pop-ghost sit-htr-btn', style: { marginLeft: 'auto' }, disabled: !hasInk || !!(htr && htr.busy), onClick: runHtr }, 'Als Text'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onUndo }, 'Rückgängig'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onClear }, 'Löschen')), htrPanel) : h('textarea', {
+  }, h('i', { style: { background: c } }))), onReplace ? h('button', { type: 'button', className: 'sit-pop-ghost sit-htr-btn', style: { marginLeft: 'auto' }, disabled: !hasInk && !tidyActive, onClick: runTidy }, tidyActive ? 'Original' : 'Handschrifthilfe') : null, psHtrConfigured() ? h('button', { type: 'button', className: 'sit-pop-ghost sit-htr-btn', disabled: !hasInk || !!(htr && htr.busy), onClick: runHtr }, 'Als Text') : null, h('button', { type: 'button', className: 'sit-pop-ghost', style: onReplace ? null : { marginLeft: 'auto' }, disabled: !hasInk, onClick: onUndo }, 'Rückgängig'), h('button', { type: 'button', className: 'sit-pop-ghost', disabled: !hasInk, onClick: onClear }, 'Löschen')), htrPanel) : h('textarea', {
     className: 'sit-note-ta',
     value: text || '',
     autoFocus: true,
@@ -34767,6 +34946,13 @@ function App() {
     }));
     setRedrawCounter(r => r + 1);
   };
+  const sitNoteReplace = (key, arr) => {
+    setDrawnStrokes(prev => ({
+      ...prev,
+      [key]: arr
+    }));
+    setRedrawCounter(r => r + 1);
+  };
   const sitNoteClear = key => {
     setDrawnStrokes(prev => ({
       ...prev,
@@ -45448,6 +45634,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       onStroke: s => sitNoteStroke(nkey, s),
       onUndo: () => sitNoteUndo(nkey),
       onClear: () => sitNoteClear(nkey),
+      onReplace: arr => sitNoteReplace(nkey, arr),
       onColor: sitNoteColor,
       color,
       startMode: inputMode === 'keyboard' ? 'keyboard' : 'pen',
