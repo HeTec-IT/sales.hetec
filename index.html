@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.186';
+    window.APP_VERSION = '55.187';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12483,6 +12483,42 @@ function psO2FixWords(s) {
     return best ? (/[A-ZÄÖÜ]/.test(w[0]) ? best[0].toUpperCase() : best[0].toLowerCase()) + best.slice(1) : w;
   });
 }
+// Preisspalten einer Zeile: [einmalig, monatlich]; "-" bedeutet kein Betrag. Nicht eindeutig lesbar -> undefined.
+function psO2Cols(raw) {
+  raw = String(raw || '');
+  const a = psO2Amounts(raw);
+  if (a.length >= 2) return [a[a.length - 2], a[a.length - 1]];
+  if (a.length === 1) {
+    const i = raw.lastIndexOf(a[0]);
+    if (/(^|\s)[-–—]\s*$/.test(raw.slice(0, i))) return [null, a[0]];
+    if (/^\s*€?\s*[-–—](\s|$)/.test(raw.slice(i + a[0].length))) return [a[0], null];
+  }
+  return undefined;
+}
+function psO2Cents(v) {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).replace(/\./g, '').replace(',', '.'));
+  return isFinite(n) ? Math.round(n * 100) : null;
+}
+function psO2Fmt(c) { return (c / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// Rabatt-/Vorteilszeilen eines Produkts (negative Betraege je Spalte). bad = Betrag vorhanden, aber nicht lesbar -> keine Gegenprobe.
+function psO2Adjust(lines, from) {
+  const o = { e: 0, m: 0, bad: false };
+  for (let k = from; k < Math.min(lines.length, from + 16); k++) {
+    const l = lines[k];
+    if (psO2HeadKind(l) || /(Einmalige|alige|Monatliche|natliche)\s*Kosten/i.test(l) || /Seite\s*(\d+\s*)?von|Telef[oó]nica|Brauchle/i.test(l)) break;
+    if (!/Rabatt|Vorteil|Gutschrift|Bonus|Nachlass/i.test(l)) continue;
+    const a = psO2Amounts(l);
+    if (!a.length) { if (/\d/.test(l.replace(/\b\d+\s*EUR\b/gi, ''))) o.bad = true; continue; }
+    let col;
+    if (/monatl|Grundgeb/i.test(l)) col = 'm';
+    else if (/Anschluss|einmal|Aktivier|Bereitstell/i.test(l)) col = 'e';
+    else { const c = psO2Cols(l); if (c) col = c[0] != null && c[1] == null ? 'e' : c[1] != null && c[0] == null ? 'm' : ''; }
+    if (!col) { o.bad = true; continue; }
+    o[col] -= Math.abs(psO2Cents(a[a.length - 1]) || 0);
+  }
+  return o;
+}
 function psO2Amounts(line) { const m = String(line || '').match(PS_O2_AMT); return m ? m.map(x => x.replace(/\s*€/, '').trim()) : []; }
 function psO2CleanName(line, kind) {
   line = String(line || '').replace(/\s+\S*\d\S*\s?€.*$/, ''); // Preisreste ("00€ 550€") hinter dem Namen
@@ -12578,7 +12614,9 @@ function psO2Parse(text) {
     if (!name || name.length < 4) return;
     if (dedupe && out[kind].some(x => psO2Similar(x.name, name))) return;
     const am = next(i, PS_O2_ARTEN).match(PS_O2_ARTEN);
-    out[kind].push({ name, idx: i, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', details: psO2Collect(lines, from) });
+    let cols = psO2Cols(raw);
+    if (!cols && kind === 'geraete') for (let k = from; k < Math.min(lines.length, from + 3) && !cols; k++) if (/MyHandy|Monate/i.test(lines[k])) cols = psO2Cols(lines[k].replace(/Gesamtpreis.*?€/i, ''));
+    out[kind].push({ name, idx: i, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', am: cols, rb: psO2Adjust(lines, from), details: psO2Collect(lines, from) });
   };
   lines.forEach((l, i) => {
     const kind = psO2HeadKind(l);
@@ -12624,6 +12662,20 @@ function psO2Pretty(s) {
   // haeufiger Lesefehler am Bildschirm: "iPhone 77" statt "iPhone 17"
   if (/Samsung|Galaxy/i.test(s)) s = s.replace(/\b5(2\d)\b/, 'S$1');
   return s.replace(/\biPhone 7(\d)\b/, 'iPhone 1$1');
+}
+// Gegenprobe: Summe der Einzelpreise (+ Rabattzeilen) gegen den gelesenen Kostenblock. null = nicht pruefbar.
+// Ob ein Rabatt schon im Produktpreis steckt, ist je Spalte verschieden -> beide Rechenwege gelten als "stimmt".
+function psO2Check(d) {
+  const E = psO2Cents(d.einmalig), M = psO2Cents(d.monatlich);
+  const items = [].concat(d.tarife || [], d.geraete || [], d.internet || []);
+  if (!items.length || E == null && M == null) return null;
+  let se = 0, sm = 0, re = 0, rm = 0;
+  for (const it of items) {
+    if (!it.am || !it.rb || it.rb.bad) return null;
+    se += psO2Cents(it.am[0]) || 0; sm += psO2Cents(it.am[1]) || 0; re += it.rb.e; rm += it.rb.m;
+  }
+  const mk = (val, sum, adj) => { if (val == null) return null; const c = adj ? [sum, sum + adj] : [sum]; return { val, calc: c, ok: c.indexOf(val) > -1 }; };
+  return { e: mk(E, se, re), m: mk(M, sm, rm) };
 }
 // Foto vorbereiten: verkleinern (Tempo auf dem iPad), Graustufen, Kontrast spreizen (Bildschirmfotos sind oft flau)
 async function psO2Prepare(file) {
@@ -12898,7 +12950,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
   // 🖼 = Foto aus der Mediathek.
   const pick = (stage, lib) => { stageRef.current = stage; libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
-  const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n'), ...(typeof it.t === 'number' ? { t: it.t } : {}) });
+  const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n'), ...(typeof it.t === 'number' ? { t: it.t } : {}), ...(it.am ? { am: it.am } : {}), ...(it.rb ? { rb: it.rb } : {}) });
   // Foto gewaehlt -> sofort lesen (Tarif/Handy/Internet/Kosten erkennt die App selbst an den Ueberschriften)
   const onFile = e => {
     const files = Array.from(e.target.files || []);
@@ -13002,6 +13054,20 @@ function PsO2Import({ onApply, onClose, initial }) {
         h('div', { className: 'flex gap-3 mt-2' },
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIGE KOSTEN (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICHE KOSTEN (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
+        (() => {
+          const c = psO2Check(d);
+          if (!c) return null;
+          const bad = [['einmalig', 'Einmalig', c.e], ['monatlich', 'Monatlich', c.m]].filter(x => x[2] && !x[2].ok);
+          if (!bad.length) return h('div', { className: 'mt-2 text-xs font-bold text-green-700' }, '✓ Summen stimmen mit den Einzelpreisen überein');
+          return h('div', { className: 'mt-2 rounded-lg bg-amber-50 border border-amber-300 p-2 text-xs font-bold text-amber-800' },
+            bad.map(([f, lbl, r]) => r.val > Math.max.apply(null, r.calc)
+              // Kostenblock hoeher als alles Gelesene: vermutlich fehlt noch ein Tarif / Handy / Internet@Home
+              ? h('div', { key: f, className: 'py-0.5' }, lbl + ': Kostenblock ' + psO2Fmt(r.val) + ' €, Einzelpreise ergeben bisher ' + psO2Fmt(Math.max.apply(null, r.calc)) + ' € – fehlt noch ein Tarif, Handy oder Internet@Home?')
+              : h('div', { key: f, className: 'flex flex-wrap items-center gap-1 py-0.5' },
+                h('span', null, lbl + ': gelesen ' + psO2Fmt(r.val) + ' €, Einzelpreise ergeben'),
+                r.calc.map(v => h('button', { key: v, onClick: () => setD(p => ({ ...p, [f]: psO2Fmt(v) })), className: 'px-2 py-1 rounded-md bg-white border border-amber-400 text-amber-900 font-black' }, psO2Fmt(v) + ' €')),
+                h('span', null, '– bitte prüfen'))));
+        })(),
         h('div', { className: 'mt-2' }, inp(d.hinweis, v => setD(p => ({ ...p, hinweis: v })), 'Hinweis (optional, wird nur bei Eingabe in die Karte geschrieben)')))),
       h('div', { className: 'flex gap-2 mt-4' },
         h('button', { onClick: onClose, disabled: !!busy, className: 'px-4 py-3 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm disabled:opacity-50' }, 'Abbrechen'),
