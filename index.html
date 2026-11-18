@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.173';
+    window.APP_VERSION = '55.174';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12674,7 +12674,6 @@ function PsO2Import({ onApply, onClose }) {
         if (r.internet.length) n.internet = [conv('internet', r.internet[0])];
         if (r.einmalig) n.einmalig = r.einmalig;
         if (r.monatlich) n.monatlich = r.monatlich;
-        if (r.hinweis) n.hinweis = r.hinweis;
         return n;
       });
       const tip = ' – näher ran, gerade von vorne und noch einmal fotografieren.';
@@ -12723,7 +12722,7 @@ function PsO2Import({ onApply, onClose }) {
         h('div', { className: 'flex gap-3 mt-2' },
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIG (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICH (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
-        h('div', { className: 'mt-2' }, inp(d.hinweis, v => setD(p => ({ ...p, hinweis: v })), 'Hinweis, z. B. Monatlich ab dem 25. Monat: 29,99 €')))),
+        h('div', { className: 'mt-2' }, inp(d.hinweis, v => setD(p => ({ ...p, hinweis: v })), 'Hinweis (optional, wird nur bei Eingabe in die Karte geschrieben)')))),
       h('div', { className: 'flex gap-2 mt-4' },
         h('button', { onClick: onClose, disabled: !!busy, className: 'px-4 py-3 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm disabled:opacity-50' }, 'Abbrechen'),
         h('button', { onClick: () => onApply(d), disabled: !!busy || !any, className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, 'Ins Angebot übernehmen'))));
@@ -45911,6 +45910,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         minHeight: '0',
         height: '100%',
         transition: 'border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease',
+        position: 'relative',
         ...(_hideTab ? {
           position: 'absolute',
           left: '-10000px',
@@ -45920,7 +45920,6 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           visibility: 'hidden',
           pointerEvents: 'none'
         } : {}),
-        position: 'relative',
         ...(_bigTab ? {
           gridRow: 'span 2'
         } : {})
