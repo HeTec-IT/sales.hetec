@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.184';
+    window.APP_VERSION = '55.185';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12508,7 +12508,7 @@ function psO2Junk(t) {
 // Eine Inhaltszeile (z. B. "Inklusiv Datenvolumen 50 GB") aus dem OCR-Text holen. Preisspalten rechts werden abgeschnitten;
 // Rabatt-/Preiszeilen, Adressen und Muell fliegen raus (Einzelpreise interessieren nicht, nur die Summen).
 function psO2Detail(line) {
-  line = String(line || '');
+  line = String(line || '').replace(/\s*\(?\s*Gesamtpreis.*$/i, '');
   if (/Rabatt|Anschlusspreis|Gesamtpreis|Ersparnis|Aktivierung|Bestell|m[öo]glich|E-?\s?Mail|Ausdrucken|Auftragsstatus|Jetzt im|Einmal|Monatl|Kosten|UMTS|Adresse|Grundgeb|\d+\s*EUR\b/i.test(line)) return '';
   const am = line.search(/\d{1,3}(?:\.\d{3})*,\d{2}/);
   if (am >= 0) { if (line.slice(0, am).replace(/[^A-Za-zÄÖÜäöüß]/g, '').length < 4) return ''; line = line.slice(0, am); }
@@ -12555,7 +12555,7 @@ function psO2Parse(text) {
     if (!name || name.length < 4) return;
     if (dedupe && out[kind].some(x => psO2Similar(x.name, name))) return;
     const am = next(i, PS_O2_ARTEN).match(PS_O2_ARTEN);
-    out[kind].push({ name, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', details: psO2Collect(lines, from) });
+    out[kind].push({ name, idx: i, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', details: psO2Collect(lines, from) });
   };
   lines.forEach((l, i) => {
     const kind = psO2HeadKind(l);
@@ -12594,7 +12594,7 @@ function psO2Similar(a, b) {
 }
 // GROSSBUCHSTABEN-Geraetenamen lesbar machen: "IPHONE 18 PRO 256GB, BURGUNDER" -> "iPhone 18 Pro 256GB, Burgunder"
 function psO2Pretty(s) {
-  s = String(s || '').split(' ').map(w => /^[A-ZÄÖÜ]{2,}[,.]?$/.test(w) && !/^(GB|TB|LTE|USB|SE|FE|XL|II|III)[,.]?$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(' ');
+  s = String(s || '').split(' ').map(w => /^SWZ[,.]?$/.test(w) ? w.replace('SWZ', 'Schwarz') : /^[A-ZÄÖÜ]{2,}[,.]?$/.test(w) && !/^(GB|TB|LTE|USB|SE|FE|XL|II|III)[,.]?$/.test(w) || /^[A-ZÄÖÜ]{3,}\d+[,.]?$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(' ');
   s = s.replace(/\bIphone\b/g, 'iPhone').replace(/\bIpad\b/g, 'iPad').replace(/\bAirpods\b/g, 'AirPods');
   // Marke steht im o2-Vorschlag teils doppelt ("Samsung SAMSUNG GALAXY ...")
   s = s.split(' ').filter((w, i, a) => !(i > 0 && w.toLowerCase() === a[i - 1].toLowerCase())).join(' ');
@@ -12638,9 +12638,12 @@ const psO2Esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', 
 function psO2Cards(d) {
   const tar = (d.tarife || []).filter(t => t && t.name), ger = (d.geraete || []).filter(g => g && g.name), net = (d.internet || []).filter(t => t && t.name);
   const tot = { tTot: tar.length, gTot: ger.length, nTot: net.length };
+  // Mit Zuordnung (aus dem PDF: Handy steht unter seinem Tarif) landet das Handy bei "seinem" Tarif, sonst der Reihe nach.
+  const paired = ger.length > 0 && ger.every(g => typeof g.t === 'number');
+  const g1 = paired ? ger.filter(g => g.t <= 1) : ger.slice(0, 1), g2 = paired ? ger.filter(g => g.t > 1) : ger.slice(1);
   const parts = [
-    { tarife: tar.slice(0, 1), geraete: ger.slice(0, 1), internet: [], ctx: { ...tot, tOff: 0, gOff: 0, nOff: 0 } },
-    { tarife: tar.slice(1), geraete: ger.slice(1), internet: [], ctx: { ...tot, tOff: 1, gOff: 1, nOff: 0 } },
+    { tarife: tar.slice(0, 1), geraete: g1, internet: [], ctx: { ...tot, tOff: 0, gOff: 0, nOff: 0 } },
+    { tarife: tar.slice(1), geraete: g2, internet: [], ctx: { ...tot, tOff: 1, gOff: g1.length, nOff: 0 } },
     { tarife: [], geraete: [], internet: net, ctx: { ...tot, tOff: 0, gOff: 0, nOff: 0 } }
   ];
   const has = p => p.tarife.length || p.geraete.length || p.internet.length;
@@ -12691,6 +12694,35 @@ function psO2Html(d, ctx) {
   }
   return '<div style="width:100%;box-sizing:border-box"><div style="font-family:Inter,\'Segoe UI\',system-ui,sans-serif;padding:16px 22px 14px;background:#fff;box-sizing:border-box">' + body +
     (d.hinweis ? '<div style="font-size:14px;font-weight:600;margin-top:14px">' + psO2Esc(d.hinweis) + '</div>' : '') + '</div></div>';
+}
+// === v55.185 (Beta): o2-VORSCHLAG ALS PDF ===============================================================
+// Das PDF aus Activate+ ("Ausdrucken" / "Als E-Mail senden") enthaelt echten Text -> exakt, ohne Texterkennung.
+// Zeilen werden aus den Textstuecken nach Hoehe/Position wieder zusammengesetzt und gehen durch denselben Parser wie die Fotos.
+async function psO2PdfText(file) {
+  if (!window.pdfjsLib) await psPortLoadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js');
+  const lib = window.pdfjsLib;
+  if (!lib) throw new Error('pdfjs');
+  try { if (!lib.GlobalWorkerOptions.workerSrc) lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; } catch (e) {}
+  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const out = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    const items = tc.items.filter(it => it.str && it.str.trim()).map(it => ({ s: it.str, x: it.transform[4], y: it.transform[5], h: Math.abs(it.transform[3]) || it.height || 8, w: it.width || 0 }));
+    const rows = [];
+    items.forEach(it => {
+      const r = rows.find(r => Math.abs(r.y - it.y) <= Math.max(2.5, r.h * 0.45));
+      if (r) { r.it.push(it); if (it.h > r.h) r.h = it.h; } else rows.push({ y: it.y, h: it.h, it: [it] });
+    });
+    rows.sort((a, b) => b.y - a.y);
+    rows.forEach(r => {
+      r.it.sort((a, b) => a.x - b.x);
+      let line = '', end = null;
+      r.it.forEach(it => { if (end !== null && it.x - end > r.h * 0.2) line += ' '; line += it.s; end = it.x + it.w; });
+      out.push(line.replace(/\s+/g, ' ').trim());
+    });
+  }
+  // Kopf-/Fusszeilen der Seiten und Werbetexte raus
+  return out.filter(l => l && !/^Seite\s+\d+\s+von\s+\d+/i.test(l) && !/Telef[oó]nica|Unverbindlich|Vorschlag kann|ausstellenden Shop|^Vorschlag$|^Artikel\b|Ersparnis/i.test(l)).join('\n');
 }
 // === v55.176 (Beta): FOTO ZUSCHNEIDEN + ENTZERREN ========================================================
 // Viereck (4 frei ziehbare Ecken, Bruchteile 0..1 des Fotos) -> gerades Rechteck. Das letzte Viereck wird gemerkt.
@@ -12853,6 +12885,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const camRef = React.useRef(null);
   const libRef = React.useRef(null);
   const stageRef = React.useRef('tarife');
+  const pdfRef = React.useRef(null);
   const libModeRef = React.useRef(false);
   // Beim erneuten Oeffnen (nachtraeglich Tarif/Handy dazu) sind die bisherigen Eintraege schon da.
   const [d, setD] = React.useState(() => {
@@ -12871,7 +12904,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
   // 🖼 = Foto aus der Mediathek.
   const pick = (stage, lib) => { stageRef.current = stage; libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
-  const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n') });
+  const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n'), ...(typeof it.t === 'number' ? { t: it.t } : {}) });
   // Foto gewaehlt -> sofort lesen (Tarif/Handy/Internet/Kosten erkennt die App selbst an den Ueberschriften)
   const onFile = e => {
     const files = Array.from(e.target.files || []);
@@ -12879,6 +12912,36 @@ function PsO2Import({ onApply, onClose, initial }) {
     if (!file) { if (files.length) setNote('Bitte ein Foto auswählen (kein PDF).'); return; }
     if (alwaysCrop) setCrop({ file, stage: stageRef.current });
     else readPhoto(Promise.resolve(file), stageRef.current, file);
+  };
+  // Ganzes o2-Vorschlag-PDF auf einmal: ersetzt die bisherigen Eintraege
+  const onPdf = async e => {
+    const f = (e.target.files || [])[0];
+    if (!f) return;
+    try {
+      setNote(''); setBusy('PDF wird gelesen …');
+      const r = psO2Parse(await psO2PdfText(f));
+      const n = r.tarife.length + r.geraete.length + r.internet.length;
+      if (!n && !r.einmalig && !r.monatlich) { setNote('Im PDF nichts erkannt – ist das der o2-Vorschlag (Activate+ → Ausdrucken / Als E-Mail senden)?'); }
+      else {
+        const hadAny = dRef.current.tarife.length || dRef.current.geraete.length || dRef.current.internet.length;
+        setD({
+          tarife: r.tarife.map(it => conv('tarife', it)).slice(0, PS_O2_MAX.tarife),
+          geraete: r.geraete.map(it => conv('geraete', { ...it, t: r.tarife.filter(x => x.idx < it.idx).length })).slice(0, PS_O2_MAX.geraete),
+          internet: r.internet.map(it => conv('internet', it)).slice(0, PS_O2_MAX.internet),
+          einmalig: r.einmalig || '', monatlich: r.monatlich || '', hinweis: ''
+        });
+        const parts = [];
+        if (r.tarife.length) parts.push(r.tarife.length + (r.tarife.length === 1 ? ' Tarif' : ' Tarife'));
+        if (r.geraete.length) parts.push(r.geraete.length + (r.geraete.length === 1 ? ' Handy' : ' Handys'));
+        if (r.internet.length) parts.push('Internet@Home');
+        if (r.einmalig || r.monatlich) parts.push('Kosten');
+        setNote('✓ PDF gelesen: ' + parts.join(', ') + (hadAny ? ' (bisherige Einträge ersetzt)' : ''));
+      }
+    } catch (err) {
+      console.error('[O2 PDF]', err);
+      setNote('PDF lesen fehlgeschlagen – bitte Internet prüfen und erneut versuchen.');
+    }
+    setBusy('');
   };
   const readPhoto = async (jobP, stage, retryFile) => {
     try {
@@ -12923,12 +12986,13 @@ function PsO2Import({ onApply, onClose, initial }) {
   };
   const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
   const setItem = (key, i, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => k === i ? { ...x, [f]: v } : x) }));
-  const delItem = (key, i) => setD(p => ({ ...p, [key]: p[key].filter((x, k) => k !== i) }));
+  const unpair = p => ({ ...p, geraete: p.geraete.map(g => { const c = { ...g }; delete c.t; return c; }) });
+  const delItem = (key, i) => setD(p => unpair({ ...p, [key]: p[key].filter((x, k) => k !== i) }));
   // Gleicher Tarif / gleiches Handy mehrfach: einfach "+1" statt nochmal fotografieren
   const dupItem = (key, i) => setD(p => {
     if (p[key].length >= PS_O2_MAX[key]) return p;
     const arr = p[key].slice(); arr.splice(i + 1, 0, { ...p[key][i] });
-    return { ...p, [key]: arr };
+    return unpair({ ...p, [key]: arr });
   });
   const money = v => String(v || '').replace(/[^\d,.]/g, '');
   const item = (key, it, i, ph) => h('div', { key: key + i, className: 'mt-2' },
@@ -12960,6 +13024,8 @@ function PsO2Import({ onApply, onClose, initial }) {
         onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
+      h('input', { ref: pdfRef, type: 'file', accept: 'application/pdf', hidden: true, onChange: onPdf, 'aria-label': 'PDF auswählen' }),
+      h('button', { onClick: () => { setNote(''); try { pdfRef.current.value = ''; pdfRef.current.click(); } catch (e) {} }, disabled: !!busy, className: 'w-full mt-3 px-4 py-3 rounded-xl bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, '📄 o2-Vorschlag als PDF einlesen (alles auf einmal)'),
       h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
       h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
