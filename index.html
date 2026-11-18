@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.182';
+    window.APP_VERSION = '55.183';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12755,7 +12755,7 @@ function psO2Warp(c, q) {
   return o;
 }
 // Zuschneiden/Entzerren nach dem Foto (wie beim Scannen): Ecken einzeln ziehen, Kanten verschieben je zwei Ecken, Mitte verschiebt alles.
-function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake }) {
+function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
   const h = React.createElement;
   const [src, setSrc] = React.useState('');
   const [q, setQ] = React.useState(() => psO2QuadLoad());
@@ -12824,7 +12824,7 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake }) {
   const pts = q.map(p => (p[0] * 100) + ',' + (p[1] * 100)).join(' ');
   const bs = (pri, dis) => ({ padding: '12px 16px', borderRadius: 10, fontWeight: 900, fontSize: 14, cursor: 'pointer', opacity: dis ? 0.5 : 1, color: pri ? '#fff' : '#e2e8f0', background: pri ? '#2563eb' : 'transparent', border: pri ? '1px solid #2563eb' : '1px solid #64748b' });
   return h('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100003, background: '#0b1220', display: 'flex', flexDirection: 'column', userSelect: 'none', WebkitUserSelect: 'none' } },
-    h('div', { style: { color: '#e2e8f0', fontWeight: 700, fontSize: 14, padding: '12px 16px 4px', textAlign: 'center' } }, 'Bereich einrahmen – Ecken einzeln ziehen (schräg ist ok, wird geradegerichtet)'),
+    h('div', { style: { color: '#e2e8f0', fontWeight: 700, fontSize: 14, padding: '12px 16px 4px', textAlign: 'center' } }, hint || 'Bereich einrahmen – Ecken einzeln ziehen (schräg ist ok, wird geradegerichtet)'),
     h('div', { style: { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 } },
       src ? h('div', { ref: wrapRef, style: { position: 'relative', lineHeight: 0, touchAction: 'none' } },
         h('img', { src, draggable: false, alt: '', style: { display: 'block', maxWidth: 'calc(100vw - 28px)', maxHeight: 'calc(100dvh - 190px)', width: 'auto', height: 'auto' } }),
@@ -12859,23 +12859,30 @@ function PsO2Import({ onApply, onClose, initial }) {
   const [busy, setBusy] = React.useState('');
   const [note, setNote] = React.useState('');
   const [crop, setCrop] = React.useState(null);
+  // Zuschneiden ist nur noetig, wenn das Foto nicht lesbar war (dann oeffnet sich der Rahmen von selbst) – oder per Haken immer.
+  const [alwaysCrop, setAlwaysCrop] = React.useState(() => { try { return localStorage.getItem('ps_o2_cropalways') === '1'; } catch (e) { return false; } });
+  const toggleAlwaysCrop = v => { setAlwaysCrop(v); try { localStorage.setItem('ps_o2_cropalways', v ? '1' : '0'); } catch (e) {} };
   // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
   // 🖼 = Foto aus der Mediathek.
   const pick = (stage, lib) => { stageRef.current = stage; libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
   const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n') });
-  // Foto gewaehlt -> erst zuschneiden, dann lesen
+  // Foto gewaehlt -> sofort lesen (Tarif/Handy/Internet/Kosten erkennt die App selbst an den Ueberschriften)
   const onFile = e => {
     const files = Array.from(e.target.files || []);
     const file = files.find(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name || ''));
     if (!file) { if (files.length) setNote('Bitte ein Foto auswählen (kein PDF).'); return; }
-    setCrop({ file, stage: stageRef.current });
+    if (alwaysCrop) setCrop({ file, stage: stageRef.current });
+    else readPhoto(Promise.resolve(file), stageRef.current, file);
   };
-  const readPhoto = async (jobP, stage) => {
+  const readPhoto = async (jobP, stage, retryFile) => {
     try {
       setBusy('Foto wird vorbereitet …');
       const file = await jobP;
       const txt = await psO2Recognize(file, m => setBusy(m));
       const r = psO2Parse(txt);
+      // Nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
+      const miss = stage === 'tarife' ? !r.tarife.length : stage === 'geraete' ? !r.geraete.length : stage === 'internet' ? !r.internet.length : stage === 'kosten' ? !(r.einmalig || r.monatlich) : false;
+      if (miss && retryFile) { setCrop({ file: retryFile, stage, auto: true }); setBusy(''); return; }
       setD(p => {
         const n = { ...p };
         if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it))).slice(0, PS_O2_MAX.tarife);
@@ -12940,7 +12947,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('div', { className: 'flex items-center justify-between gap-2' },
         h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '📷 o2-Vorschlag ergänzen' : '📷 o2-Vorschlag einlesen'),
         any ? h('button', { onClick: () => setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }), disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
-      crop ? h(PsO2Crop, { key: 'crop', file: crop.file,
+      crop ? h(PsO2Crop, { key: 'crop', file: crop.file, hint: crop.auto ? 'Nicht gut lesbar – bitte nur den Bereich einrahmen (Ecken ziehen, schräg ist ok)' : '',
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
         onSkip: () => { const c = crop; setCrop(null); readPhoto(Promise.resolve(c.file), c.stage); },
         onCancel: () => setCrop(null),
@@ -12948,6 +12955,8 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
       h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet.'),
+      h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
+        h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : /^✓/.test(note) ? 'text-green-700' : 'text-amber-700') }, note) : null,
       sec('TARIFE', d.tarife.length, 'tarife', '📷 + Tarif', d.tarife.length >= PS_O2_MAX.tarife, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif')), PS_O2_MAX.tarife),
