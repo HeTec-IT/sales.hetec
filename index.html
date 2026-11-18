@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.181';
+    window.APP_VERSION = '55.182';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12649,25 +12649,39 @@ function psO2Html(d, ctx) {
   // Hinweis: die App-CSS zwingt im Angebotsfeld alle Textfarben auf eine Farbe, deshalb Hervorhebung ueber Groesse/Fett/Hintergrund.
   const net = (d.internet || []).filter(t => t.name), tar = (d.tarife || []).filter(t => t.name), ger = (d.geraete || []).filter(g => g.name);
   const cx = ctx || {};
-  const n = net.length + tar.length + ger.length, dense = n > 3, mid = n > 8;
+  // Gleiche Eintraege hintereinander (z. B. 3x Mobile S) werden EINE Spalte: "TARIF 2–4 · 3×"
+  const group = (lbl, arr, off, tot) => {
+    const T = tot == null ? arr.length : tot, o = off || 0, res = [];
+    const key = x => [x.name, x.art || '', x.det || ''].join('\u0001');
+    for (let i = 0; i < arr.length;) {
+      let j = i;
+      while (j + 1 < arr.length && key(arr[j + 1]) === key(arr[i])) j++;
+      const c = j - i + 1;
+      res.push({ it: arr[i], label: lbl + (T > 1 ? ' ' + (c > 1 ? (o + i + 1) + '–' + (o + j + 1) : (o + i + 1)) : '') + (c > 1 ? ' · ' + c + '×' : '') });
+      i = j + 1;
+    }
+    return res;
+  };
+  const gNet = group('INTERNET', net, cx.nOff, cx.nTot), gTar = group('TARIF', tar, cx.tOff, cx.tTot), gGer = group('SMARTPHONE', ger, cx.gOff, cx.gTot);
+  const n = gNet.length + gTar.length + gGer.length, dense = n > 3, mid = n > 8;
   const fN = mid ? 17 : dense ? 19 : 22, fD = mid ? 13 : dense ? 14 : 16, fA = mid ? 12 : dense ? 13 : 14, gap = mid ? 5 : 7;
-  const col = (lbl, it, num, grid) => {
+  const col = (g, grid) => {
+    const lbl = g.label, it = g.it;
     const det = String(it.det || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
     return '<div style="' + (grid ? '' : 'flex:1 1 260px;') + 'min-width:0;box-sizing:border-box">' +
-      '<span style="display:inline-block;background:#dbeafe;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:800;letter-spacing:.08em">' + lbl + (num ? ' ' + num : '') + '</span>' +
+      '<span style="display:inline-block;background:#dbeafe;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:800;letter-spacing:.08em">' + lbl + '</span>' +
       '<div style="font-size:' + fN + 'px;font-weight:800;margin-top:8px;line-height:1.25">' + psO2Esc(it.name) + '</div>' +
       (it.art ? '<div style="font-size:' + fA + 'px;font-weight:600;margin-top:2px">' + psO2Esc(it.art) + '</div>' : '') +
       det.map(x => '<div style="display:flex;gap:8px;font-size:' + fD + 'px;font-weight:500;margin-top:' + gap + 'px;line-height:1.3"><span style="flex:0 0 auto;font-weight:900">✓</span><span>' + psO2Esc(x) + '</span></div>').join('') + '</div>';
   };
-  const group = (lbl, arr, off, tot) => arr.map((t, i) => col(lbl, t, (tot == null ? arr.length : tot) > 1 ? (off || 0) + i + 1 : 0, dense));
   let body;
   if (!dense) {
-    body = '<div style="display:flex;flex-wrap:wrap;gap:16px 28px">' + group('INTERNET', net, cx.nOff, cx.nTot).concat(group('TARIF', tar, cx.tOff, cx.tTot), group('SMARTPHONE', ger, cx.gOff, cx.gTot)).join('') + '</div>';
+    body = '<div style="display:flex;flex-wrap:wrap;gap:16px 28px">' + gNet.concat(gTar, gGer).map(g => col(g, false)).join('') + '</div>';
   } else {
     const per = c => c <= 3 ? c : c === 4 ? 2 : 3;
     // Spaltenzahl richtet sich nach der Kartenbreite: hoechstens per(n), auf schmalen Karten weniger (mind. 160 px je Spalte)
-    body = [['INTERNET', net, cx.nOff, cx.nTot], ['TARIF', tar, cx.tOff, cx.tTot], ['SMARTPHONE', ger, cx.gOff, cx.gTot]].filter(g => g[1].length).map((g, k) =>
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(max(160px,calc((100% - ' + (per(g[1].length) - 1) * 24 + 'px)/' + per(g[1].length) + ')),1fr));gap:14px 24px;' + (k ? 'margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0' : '') + '">' + group(g[0], g[1], g[2], g[3]).join('') + '</div>').join('');
+    body = [gNet, gTar, gGer].filter(g => g.length).map((g, k) =>
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(max(160px,calc((100% - ' + (per(g.length) - 1) * 24 + 'px)/' + per(g.length) + ')),1fr));gap:14px 24px;' + (k ? 'margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0' : '') + '">' + g.map(x => col(x, true)).join('') + '</div>').join('');
   }
   return '<div style="width:100%;box-sizing:border-box"><div style="font-family:Inter,\'Segoe UI\',system-ui,sans-serif;padding:16px 22px 14px;background:#fff;box-sizing:border-box">' + body +
     (d.hinweis ? '<div style="font-size:14px;font-weight:600;margin-top:14px">' + psO2Esc(d.hinweis) + '</div>' : '') + '</div></div>';
@@ -12897,10 +12911,17 @@ function PsO2Import({ onApply, onClose, initial }) {
   const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
   const setItem = (key, i, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => k === i ? { ...x, [f]: v } : x) }));
   const delItem = (key, i) => setD(p => ({ ...p, [key]: p[key].filter((x, k) => k !== i) }));
+  // Gleicher Tarif / gleiches Handy mehrfach: einfach "+1" statt nochmal fotografieren
+  const dupItem = (key, i) => setD(p => {
+    if (p[key].length >= PS_O2_MAX[key]) return p;
+    const arr = p[key].slice(); arr.splice(i + 1, 0, { ...p[key][i] });
+    return { ...p, [key]: arr };
+  });
   const money = v => String(v || '').replace(/[^\d,.]/g, '');
   const item = (key, it, i, ph) => h('div', { key: key + i, className: 'mt-2' },
     d[key].length > 1 ? h('div', { className: 'text-[11px] font-black text-slate-400 mb-0.5' }, ph.toUpperCase() + ' ' + (i + 1)) : null,
     h('div', { className: 'flex items-center gap-1' }, h('div', { className: 'flex-1' }, inp(it.name, v => setItem(key, i, 'name', v), ph)),
+      key !== 'internet' ? h('button', { onClick: () => dupItem(key, i), disabled: d[key].length >= PS_O2_MAX[key], className: 'px-2 py-2 rounded-lg border border-blue-300 text-blue-700 font-black text-sm disabled:opacity-30', title: 'Gleichen Eintrag noch einmal hinzufügen', 'aria-label': 'Gleichen Eintrag noch einmal hinzufügen' }, '+1') : null,
       h('button', { onClick: () => delItem(key, i), className: 'text-slate-400 font-bold px-2 py-2', 'aria-label': 'Entfernen' }, '✕')),
     it.art ? h('div', { className: 'mt-1' }, inp(it.art, v => setItem(key, i, 'art', v), 'Vertragsart')) : null,
     h('textarea', { value: it.det || '', placeholder: 'Inhalte – eine Zeile pro Punkt', rows: Math.min(6, Math.max(2, String(it.det || '').split('\n').length)), onChange: e => setItem(key, i, 'det', e.target.value), className: 'w-full mt-1 px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: 14, fontWeight: 500 } }));
