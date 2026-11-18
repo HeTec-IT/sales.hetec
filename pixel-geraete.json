@@ -1,19 +1,19 @@
 {
   "quelle": "https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden",
-  "geprueft": "17.11.2026",
-  "stand": "17.11.2026 20:45",
-  "geaendertAm": "04.11.2026",
+  "geprueft": "18.11.2026",
+  "stand": "18.11.2026 20:22",
+  "geaendertAm": "18.11.2026",
   "geraete": [
     {
       "name": "Google Pixel 11",
       "modell": "Pixel 11",
       "gen": 11,
       "stufe": "basis",
-      "speicher": "256 GB",
-      "speicherGb": 256,
-      "preis": 991,
-      "url": "https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2320596/846fd960e877033173999f13dce979f4/png/article-item-frost-imagemed-mit-yt-stoerer-picture-data.webp"
+      "speicher": "",
+      "speicherGb": 0,
+      "preis": 130,
+      "url": "https://www.o2online.de/geraete/google/",
+      "bild": "https://static2.o9.de/resource/blob/2394040/91669740b88ce0ec5f3e78fa6ae7c93a/png/samsung-galaxy-s26-ultra-bild-data.webp"
     },
     {
       "name": "Google Pixel 11 Pro",
@@ -25,17 +25,6 @@
       "preis": 1189,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2311270/9559b7d4720eee03a997b43c840b0b12/png/article-item-canyon-imagemed-picture-data.webp"
-    },
-    {
-      "name": "Google Pixel 11 Pro XL",
-      "modell": "Pixel 11 Pro XL",
-      "gen": 11,
-      "stufe": "pro-xl",
-      "speicher": "256 GB",
-      "speicherGb": 256,
-      "preis": 1405,
-      "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2311666/d3fc5c6e290b452c0a6a7bb36e2b3b61/png/article-item-canyon-imagemed-picture-data.webp"
     },
     {
       "name": "Google Pixel 11 Pro Fold",
@@ -66,7 +55,7 @@
       "stufe": "a",
       "speicher": "128 GB",
       "speicherGb": 128,
-      "preis": 541,
+      "preis": 523,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-10a-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=24&vertragsart=ratenzahlung",
       "bild": "https://static2.o9.de/resource/blob/2188102/ecaeec87805c503a6a1fc960a63ca3ad/png/article-item-4510-320257-00-imagemed-picture-data.webp"
     },
