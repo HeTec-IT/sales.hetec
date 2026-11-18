@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.166';
+    window.APP_VERSION = '55.167';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12074,7 +12074,9 @@ function SitPenPad({ sitKey, strokes, getTool, onStroke }) {
 // alle Zeilen links buendig, leichtes Glaetten. Die Buchstabenformen bleiben die eigene Handschrift.
 // Liefert eine NEUE Strichliste (Original bleibt unveraendert -> Rueckgaengig moeglich) oder null.
 function psTidyHandwriting(strokes, opts) {
-  const o = Object.assign({ smooth: true }, opts || {});
+  // live: waehrend des Schreibens nur vertikal ausrichten (keine Seitwaerts-Verschiebung, keine Groessenaenderung),
+  // damit der naechste Buchstabe/das naechste Wort genau dort landet, wo man hinschreibt.
+  const o = Object.assign({ smooth: true, live: false }, opts || {});
   const all = (strokes || []).filter(s => s && s.points && s.points.length);
   if (!all.some(s => s.tool !== 'eraser' && s.tool !== 'highlighter')) return null;
   const ref = all.find(s => s.baseWidth) || all[0];
@@ -12202,7 +12204,7 @@ function psTidyHandwriting(strokes, opts) {
   const lineH = L => { const hs = L.items.map(i => i.b.h).filter(h => h >= mh * 0.35); return Math.max(4, med(hs.length ? hs : [mh])); };
   const target = med(lines.map(lineH));
   lines.forEach(L => {
-    const k = Math.max(0.75, Math.min(1.35, target / lineH(L)));
+    const k = o.live ? 1 : Math.max(0.75, Math.min(1.35, target / lineH(L)));
     const x0 = Math.min(...L.items.map(i => i.b.x0));
     const ys = []; L.items.forEach(i => i.s.points.forEach(p => ys.push(p.y)));
     const cy = med(ys);
@@ -12254,7 +12256,7 @@ function psTidyHandwriting(strokes, opts) {
     words.forEach((W, wi) => {
       // grosse Luecken auf einheitlichen Wortabstand kuerzen, kleine bleiben (z. B. zwischen Ziffern)
       if (wi > 0) cur += Math.min(GAP, W.x0 - words[wi - 1].x1);
-      const dx = cur - W.x0;
+      const dx = o.live ? 0 : cur - W.x0;
       const bl = wordBl(W);
       // Nur echte Woerter (breit genug oder mehrere Striche) auf die Linie setzen – Einzelbuchstaben haben keine verlaessliche Grundlinie
       const realWord = W.x1 - W.x0 >= target * 1.2 || W.items.filter(i => i.b.h >= mh * 0.35).length >= 2;
@@ -12301,6 +12303,124 @@ function psTidyHandwriting(strokes, opts) {
   const gl = lines.map(L => ty + (L.bl - Y0) * fit);
   const nx = gl[gl.length - 1] + step * fit;
   res.guides = { bw: RW, bh: RH, lines: gl, next: nx < RH - M * 0.5 ? nx : null, x0: tx, x1: RW - M };
+  return res;
+}
+// v55.167: Handschrifthilfe LIVE (wie Samsung Notes): festes Linienraster je Feld. Bereits ausgerichtete Striche
+// bleiben unveraendert; nur das seit der letzten Pause Geschriebene wird als Ganzes geradegerichtet und auf die
+// naechste Rasterlinie gesetzt. Rasterlinie (gl) und Zeilenabstand (gs) werden an den Strichen gespeichert.
+function psTidyLive(strokes) {
+  const all = (strokes || []).filter(s => s && s.points && s.points.length);
+  const pen = all.filter(s => s.tool !== 'eraser' && s.tool !== 'highlighter');
+  if (!pen.length) return null;
+  const fresh = pen.filter(s => !s.td);
+  if (!fresh.length) return null;
+  const ref = pen.find(s => s.baseWidth) || pen[0];
+  const RW = ref.baseWidth || 480, RH = ref.baseHeight || 130;
+  const norm = s => {
+    const f = s.baseWidth ? RW / s.baseWidth : 1;
+    if (f === 1 && (s.baseHeight || RH) === RH) return s;
+    return Object.assign({}, s, { baseWidth: RW, baseHeight: RH, gl: s.gl != null ? s.gl * f : s.gl, gs: s.gs != null ? s.gs * f : s.gs, points: s.points.map(p => Object.assign({}, p, { x: p.x * f, y: p.y * f })) });
+  };
+  const box = s => {
+    let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+    s.points.forEach(p => { if (p.x < a) a = p.x; if (p.y < b) b = p.y; if (p.x > c) c = p.x; if (p.y > d) d = p.y; });
+    return { x0: a, y0: b, x1: c, y1: d, w: c - a, h: d - b };
+  };
+  const med = v => { const a = v.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
+  const penN = pen.map(norm);
+  const hs = penN.map(s => box(s).h).filter(h => h > 3);
+  const mh = Math.max(6, med(hs.length ? hs : [12]));
+  const old = penN.filter(s => s.td), neu = penN.filter(s => !s.td);
+  const bigNew = neu.filter(s => box(s).h >= mh * 0.35);
+  // Nur Kleinkram (Punkt, Querstrich) dazugeschrieben: bleibt wo er ist
+  const mark = s => Object.assign({}, s, { td: 1 });
+  // Striche, die an schon Ausgerichtetes anschliessen (r-Bogen, F-Bogen, t-Strich, Umlaut, Fortsetzung eines Buchstabens),
+  // bleiben wo sie sind – der Rest des neuen Stuecks wird gemeinsam ausgerichtet.
+  const oldBoxes = old.map(box);
+  const touches = s => { const b = box(s); return oldBoxes.some(o => Math.min(o.x1, b.x1) - Math.max(o.x0, b.x0) > -mh * 0.1 && Math.min(o.y1, b.y1) - Math.max(o.y0, b.y0) > 0); };
+  const freeSet = new Set(neu.filter(s => !touches(s)));
+  const bigFree = neu.filter(s => freeSet.has(s) && box(s).h >= mh * 0.35);
+  let placed = neu;
+  let snap = bigFree.length > 0;
+  if (snap && bigFree.length === 1 && box(bigFree[0]).h < mh * 0.6) snap = false;
+  if (snap) {
+    // 1) Freies Stueck geradestellen (nur wenn breit genug, um eine Schraeglage zu messen)
+    const P = [];
+    bigFree.forEach(s => s.points.forEach(p => P.push(p)));
+    let x0 = Infinity, x1 = -Infinity;
+    P.forEach(p => { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; });
+    let ang = 0;
+    if (x1 - x0 > mh * 2.5 && P.length > 4) {
+      const mx = P.reduce((t, p) => t + p.x, 0) / P.length, my = P.reduce((t, p) => t + p.y, 0) / P.length;
+      let sxy = 0, sxx = 0;
+      P.forEach(p => { sxy += (p.x - mx) * (p.y - my); sxx += (p.x - mx) * (p.x - mx); });
+      if (sxx > 0) ang = Math.max(-0.35, Math.min(0.35, Math.atan(sxy / sxx)));
+    }
+    const cy = P.reduce((t, p) => t + p.y, 0) / P.length;
+    const ca = Math.cos(-ang), sa = Math.sin(-ang);
+    const rot = p => ang ? Object.assign({}, p, { x: x0 + (p.x - x0) * ca - (p.y - cy) * sa, y: cy + (p.x - x0) * sa + (p.y - cy) * ca }) : p;
+    placed = neu.map(s => freeSet.has(s) ? Object.assign({}, s, { points: s.points.map(rot) }) : s);
+    // 2) Grundlinie: Median der Buchstaben-Unterkanten (Unterlaengen g/y/p fallen raus)
+    const cand = [];
+    placed.forEach((s, idx) => {
+      if (!freeSet.has(neu[idx])) return;
+      const b = box(s);
+      if (b.h < mh * 0.35) return;
+      cand.push(b.y1);
+      const Q = s.points;
+      for (let k = 2; k < Q.length - 2; k++) if (Q[k].y >= Q[k - 2].y && Q[k].y >= Q[k + 2].y && Q[k].y > b.y0 + b.h * 0.5 && Q[k].y < b.y1 - 0.5) cand.push(Q[k].y);
+    });
+    const bl = med(cand);
+    // 3) Rasterlinie: erstes Stueck legt das Raster fest, danach aktuelle bzw. naechste Rasterlinie
+    const anchor = old.find(s => s.gl != null && s.gs != null);
+    let gl, gs;
+    if (anchor) {
+      gs = anchor.gs;
+      // In der aktuellen Zeile bleiben, solange das neue Stueck nicht klar darunter/darueber liegt
+      // (auch wenn die Zeile beim Schreiben langsam schraeg wegdriftet: Vergleich mit der Original-Hoehe des letzten Stuecks)
+      let last = null, lastOb = null;
+      for (let k = old.length - 1; k >= 0; k--) if (old[k].gl != null) { last = old[k].gl; lastOb = old[k].ob; break; }
+      if (last != null && (Math.abs(bl - last) < gs * 0.7 || lastOb != null && Math.abs(bl - lastOb) < gs * 0.5)) gl = last;
+      else gl = anchor.gl + Math.round((bl - anchor.gl) / gs) * gs;
+    } else {
+      let up = 0, down = 0;
+      placed.forEach((s, idx) => { if (!freeSet.has(neu[idx])) return; const b = box(s); up = Math.max(up, bl - b.y0); down = Math.max(down, b.y1 - bl); });
+      gs = Math.max(mh * 2.1, (up + Math.max(down, mh * 0.4)) * 1.2);
+      gl = bl;
+    }
+    const dy = gl - bl;
+    placed = placed.map((s, idx) => freeSet.has(neu[idx]) ? Object.assign({}, s, { gl, gs, ob: bl, points: s.points.map(p => Object.assign({}, p, { y: p.y + dy })) }) : s);
+  }
+  // 4) Neue Striche leicht glaetten
+  placed = placed.map(s => {
+    if (s.points.length < 5) return mark(s);
+    let Q = s.points;
+    for (let it = 0; it < 2; it++) Q = Q.map((p, k) => k === 0 || k === Q.length - 1 ? p : Object.assign({}, p, { x: (Q[k - 1].x + 2 * p.x + Q[k + 1].x) / 4, y: (Q[k - 1].y + 2 * p.y + Q[k + 1].y) / 4 }));
+    return Object.assign(mark(s), { points: Q });
+  });
+  // Reihenfolge der Striche beibehalten (Rueckgaengig/Radierer arbeiten weiter wie gewohnt)
+  const map = new Map();
+  neu.forEach((s, k) => map.set(s, placed[k]));
+  const normMap = new Map();
+  pen.forEach((s, k) => normMap.set(s, penN[k]));
+  const res = all.map(s => {
+    const n = normMap.get(s);
+    if (!n) return s;
+    return map.get(n) || n;
+  });
+  // Hilfslinien: alle belegten Rasterlinien + naechste freie Zeile
+  const gls = [];
+  let step = null;
+  res.forEach(s => {
+    if (s.gl == null) return;
+    step = step || s.gs;
+    if (!gls.some(v => Math.abs(v - s.gl) < 1)) gls.push(s.gl);
+  });
+  gls.sort((a, b) => a - b);
+  if (gls.length) {
+    const nx = gls[gls.length - 1] + step;
+    res.guides = { bw: RW, bh: RH, lines: gls, next: nx < RH - 4 ? nx : null, x0: Math.max(4, mh * 0.25), x1: RW - Math.max(4, mh * 0.25) };
+  }
   return res;
 }
 // === v55.162 (Beta): HANDSCHRIFT -> TEXT ===============================================
@@ -35052,12 +35172,12 @@ function App() {
         const now = drawnStrokesRef.current && drawnStrokesRef.current[key];
         if (now !== cur) return;
         let out = null;
-        try { out = psTidyHandwriting(now); } catch (e) { out = null; }
+        try { out = psTidyLive(now); } catch (e) { out = null; }
         if (!out) return;
         sitTidyRef.current[key] = { orig: now, out };
         sitNoteReplace(key, out);
       };
-      sitTidyTimers.current[key] = setTimeout(fire, 700);
+      sitTidyTimers.current[key] = setTimeout(fire, 900);
     });
   }, [drawnStrokes]);
   useEffect(() => () => { Object.values(sitTidyTimers.current).forEach(t => clearTimeout(t)); }, []);
