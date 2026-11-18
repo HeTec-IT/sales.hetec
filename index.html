@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.168';
+    window.APP_VERSION = '55.169';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4984,6 +4984,37 @@ html.device-android-tablet .sit-aside-panel {
     }
 }
 
+
+/* v55.169: iPad 11" Hochformat (≈820 px) und schmaler: Fußleiste kompakt, Hauptknopf nie abgeschnitten */
+@media (max-width: 920px) {
+  .footer-bar { padding-left: 6px !important; padding-right: 6px !important; }
+  .footer-bar .ps-ft-lbl { display: none !important; }
+  .footer-bar .gap-3 { gap: 6px !important; }
+  .footer-bar .gap-2 { gap: 4px !important; }
+  .footer-bar .footer-action-icons.footer-action-icons { gap: 3px !important; }
+  .footer-bar .mr-2 { margin-right: 2px !important; }
+  .footer-bar button.w-10.h-10 { width: 34px !important; height: 34px !important; min-width: 34px !important; padding: 0 !important; }
+  .footer-bar button.ps-ft-rnm.ps-ft-rnm, .footer-bar button.ps-ft-back.ps-ft-back, .footer-bar button[data-ps-quick-pdf][data-ps-quick-pdf] { padding: 7px 8px !important; }
+  .footer-bar button.ps-ft-skip.ps-ft-skip { padding: 6px 6px !important; font-size: 11px !important; }
+  .footer-bar button.ps-ft-main.ps-ft-main { padding: 8px 12px !important; font-size: 13px !important; gap: 4px !important; white-space: nowrap !important; flex-shrink: 0 !important; }
+  .footer-bar > div:first-child { max-width: none !important; }
+  .footer-bar .ps-ft-short { display: inline !important; }
+  .footer-bar button.p-2 { padding: 6px !important; }
+  .footer-bar button.w-10.h-10 { width: 32px !important; height: 32px !important; min-width: 32px !important; }
+}
+@media (max-width: 800px) {
+  .footer-bar .gap-1 { gap: 2px !important; }
+  .footer-bar button.p-2 { padding: 5px !important; }
+  .footer-bar button.w-10.h-10 { width: 30px !important; height: 30px !important; min-width: 30px !important; }
+  .footer-bar button.w-10.h-10 svg { width: 24px !important; height: 24px !important; }
+  .footer-bar .toolbar-divider { margin-left: 2px !important; margin-right: 2px !important; }
+  .footer-bar button.ps-ft-main.ps-ft-main { padding: 8px 10px !important; font-size: 12px !important; }
+  .footer-bar button.ps-ft-skip.ps-ft-skip { padding: 6px 4px !important; }
+  .footer-bar { padding-left: 4px !important; padding-right: 4px !important; }
+  .footer-bar .footer-action-icons.footer-action-icons { gap: 2px !important; }
+  .footer-bar .gap-3 { gap: 4px !important; }
+}
+.ps-ft-short { display: none; }
 /* ===== TOOLBAR FIXED (bleibt beim Zoom sichtbar) ===== */
 .footer-bar {
     position: fixed !important;
@@ -50784,9 +50815,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     size: 18
   })), /*#__PURE__*/React.createElement("button", {
     onClick: () => setPortierungOpen(true),
-    className: "px-3 py-2 bg-white text-blue-700 rounded-lg border border-blue-200 shadow-sm hover:bg-blue-50 transition-colors font-bold text-xs flex items-center gap-1 whitespace-nowrap",
+    className: "ps-ft-rnm px-3 py-2 bg-white text-blue-700 rounded-lg border border-blue-200 shadow-sm hover:bg-blue-50 transition-colors font-bold text-xs flex items-center gap-1 whitespace-nowrap",
     title: "Interne Rufnummernmitnahme (Formular)"
-  }, "📞 Rufnummernmitnahme"), /*#__PURE__*/React.createElement("button", {
+  }, "📞", /*#__PURE__*/React.createElement("span", {
+    className: "ps-ft-lbl"
+  }, " Rufnummernmitnahme")), /*#__PURE__*/React.createElement("button", {
     onClick: handleSaveButtonClick,
     disabled: offerSaving,
     className: "p-2 bg-white rounded-lg border border-slate-200 shadow-sm text-emerald-500 hover:bg-emerald-50 transition-colors",
@@ -50815,7 +50848,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         setShowSkipReasonModal(true);
       }
     },
-    className: "px-4 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded-lg transition-colors"
+    className: "ps-ft-skip px-4 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded-lg transition-colors"
   }, "Überspringen"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (isFormValid) {
@@ -50836,7 +50869,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         } catch (e) {}
       }
     },
-    className: `px-6 py-2 rounded-lg font-bold shadow-lg text-sm flex items-center gap-2 transition-all ${isFormValid ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`,
+    className: `ps-ft-main px-6 py-2 rounded-lg font-bold shadow-lg text-sm flex items-center gap-2 transition-all ${isFormValid ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`,
     title: isFormValid ? "Weiter zum Angebot" : "Bitte Pflichtfelder ausfüllen (Kundentyp, Segment, Anbieter)"
   }, "Zum Angebot ", /*#__PURE__*/React.createElement(Icon, {
     d: ICONS.ArrowRight,
@@ -51037,11 +51070,13 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     size: 18
   })), /*#__PURE__*/React.createElement("button", {
     onClick: () => setView('situation'),
-    className: "px-6 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded-lg transition-colors mr-2 flex items-center gap-1"
+    className: "ps-ft-back px-6 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded-lg transition-colors mr-2 flex items-center gap-1"
   }, /*#__PURE__*/React.createElement(Icon, {
     d: ICONS.ArrowLeft,
     size: 14
-  }), " Zurück"), (PS_IS_ADMIN() || CURRENT_SHOP_ID !== 'schwaebisch-hall') && /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "ps-ft-lbl"
+  }, " Zurück")), (PS_IS_ADMIN() || CURRENT_SHOP_ID !== 'schwaebisch-hall') && /*#__PURE__*/React.createElement("button", {
     onClick: handleQuickPdf,
     "data-ps-quick-pdf": "1",
     title: "PDF sofort erstellen",
@@ -51050,11 +51085,19 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   }, /*#__PURE__*/React.createElement(Icon, {
     d: ICONS.FileText,
     size: 18
-  }), "PDF"), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "ps-ft-lbl"
+  }, "PDF")), /*#__PURE__*/React.createElement("button", {
     onClick: handleFinishOfferClick,
     disabled: !isReadyToFinish,
-    className: `px-6 py-2 rounded-lg font-bold shadow-lg text-sm flex items-center gap-2 transition-all ${!isReadyToFinish ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : customerSignature ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700'} text-white`
-  }, customerSignature ? 'Vertrag abschließen' : 'Fertigstellen'))))), /*#__PURE__*/React.createElement("input", {
+    className: `ps-ft-main px-6 py-2 rounded-lg font-bold shadow-lg text-sm flex items-center gap-2 transition-all ${!isReadyToFinish ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : customerSignature ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-600 hover:bg-green-700'} text-white`
+  }, customerSignature ? [/*#__PURE__*/React.createElement("span", {
+    key: 'l',
+    className: "ps-ft-lbl"
+  }, "Vertrag abschließen"), /*#__PURE__*/React.createElement("span", {
+    key: 's',
+    className: "ps-ft-short"
+  }, "Abschließen")] : 'Fertigstellen'))))), /*#__PURE__*/React.createElement("input", {
     type: "file",
     ref: fileInputRef,
     onChange: handleFileSelect,
