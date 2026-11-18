@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.175';
+    window.APP_VERSION = '55.176';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12646,12 +12646,79 @@ function psO2Html(d) {
     '<div style="display:flex;flex-wrap:wrap;gap:16px 28px">' + cols + '</div>' +
     (d.hinweis ? '<div style="font-size:14px;font-weight:600;margin-top:14px">' + psO2Esc(d.hinweis) + '</div>' : '') + '</div></div>';
 }
-// Zuschneiden nach dem Foto (wie beim Scannen): Rahmen an den Ecken/Kanten ziehen, in der Mitte verschieben.
-// Liefert nur den gewaehlten Ausschnitt zur Texterkennung -> weniger Rauschen, mehr Treffer.
-function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake }) {
+// === v55.176 (Beta): FOTO ZUSCHNEIDEN + ENTZERREN ========================================================
+// Viereck (4 frei ziehbare Ecken, Bruchteile 0..1 des Fotos) -> gerades Rechteck. Das letzte Viereck wird gemerkt.
+const PS_O2_QUAD_KEY = 'ps_o2_quad';
+const PS_O2_QUAD_DEF = [[0.04, 0.04], [0.96, 0.04], [0.96, 0.96], [0.04, 0.96]];
+function psO2QuadLoad() {
+  try {
+    const q = JSON.parse(localStorage.getItem(PS_O2_QUAD_KEY) || 'null');
+    if (Array.isArray(q) && q.length === 4 && q.every(p => Array.isArray(p) && p.length === 2 && p.every(v => typeof v === 'number' && v >= 0 && v <= 1)) && psO2Convex(q)) return q;
+  } catch (e) {}
+  return PS_O2_QUAD_DEF.map(p => p.slice());
+}
+function psO2QuadSave(q) { try { localStorage.setItem(PS_O2_QUAD_KEY, JSON.stringify(q)); } catch (e) {} }
+function psO2Convex(q) {
+  let sg = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4];
+    const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cr) < 1e-6) return false;
+    const s = cr > 0 ? 1 : -1;
+    if (sg && s !== sg) return false;
+    sg = s;
+  }
+  return true;
+}
+// Zeichnet das Viereck q aus der Leinwand c als gerades Rechteck. Achsparallel = einfacher Ausschnitt, sonst Perspektiv-Entzerrung.
+function psO2Warp(c, q) {
+  const P = q.map(p => [p[0] * c.width, p[1] * c.height]);
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let W = Math.max(8, Math.round((dist(P[0], P[1]) + dist(P[3], P[2])) / 2)), H = Math.max(8, Math.round((dist(P[0], P[3]) + dist(P[1], P[2])) / 2));
+  const sc = Math.min(1, 2400 / Math.max(W, H));
+  W = Math.max(8, Math.round(W * sc)); H = Math.max(8, Math.round(H * sc));
+  const o = document.createElement('canvas'); o.width = W; o.height = H;
+  const ox = o.getContext('2d');
+  const straight = Math.abs(P[0][0] - P[3][0]) < 1 && Math.abs(P[1][0] - P[2][0]) < 1 && Math.abs(P[0][1] - P[1][1]) < 1 && Math.abs(P[3][1] - P[2][1]) < 1;
+  if (straight) {
+    const sx = Math.min(P[0][0], P[3][0]), sy = Math.min(P[0][1], P[1][1]);
+    ox.drawImage(c, sx, sy, Math.max(P[1][0], P[2][0]) - sx, Math.max(P[3][1], P[2][1]) - sy, 0, 0, W, H);
+    return o;
+  }
+  const xs = P.map(p => p[0]), ys = P.map(p => p[1]);
+  const bx = Math.max(0, Math.floor(Math.min.apply(null, xs)) - 1), by = Math.max(0, Math.floor(Math.min.apply(null, ys)) - 1);
+  const bw = Math.min(c.width, Math.ceil(Math.max.apply(null, xs)) + 1) - bx, bh = Math.min(c.height, Math.ceil(Math.max.apply(null, ys)) + 1) - by;
+  const src = c.getContext('2d').getImageData(bx, by, bw, bh).data;
+  const x0 = P[0][0], y0 = P[0][1], x1 = P[1][0], y1 = P[1][1], x2 = P[2][0], y2 = P[2][1], x3 = P[3][0], y3 = P[3][1];
+  const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+  let g = 0, hh = 0;
+  const den = dx1 * dy2 - dx2 * dy1;
+  if ((Math.abs(dx3) > 1e-9 || Math.abs(dy3) > 1e-9) && Math.abs(den) > 1e-9) { g = (dx3 * dy2 - dx2 * dy3) / den; hh = (dx1 * dy3 - dx3 * dy1) / den; }
+  const A = x1 - x0 + g * x1, B = x3 - x0 + hh * x3, C = x0, D = y1 - y0 + g * y1, E = y3 - y0 + hh * y3, F = y0;
+  const out = ox.createImageData(W, H), od = out.data;
+  for (let j = 0; j < H; j++) {
+    const v = (j + 0.5) / H;
+    for (let i = 0; i < W; i++) {
+      const u = (i + 0.5) / W, w = g * u + hh * v + 1;
+      const X = (A * u + B * v + C) / w - bx - 0.5, Y = (D * u + E * v + F) / w - by - 0.5;
+      const xi = Math.floor(X), yi = Math.floor(Y), fx = X - xi, fy = Y - yi;
+      const xa = Math.min(bw - 1, Math.max(0, xi)), xb = Math.min(bw - 1, Math.max(0, xi + 1)), ya = Math.min(bh - 1, Math.max(0, yi)), yb = Math.min(bh - 1, Math.max(0, yi + 1));
+      const p00 = (ya * bw + xa) * 4, p10 = (ya * bw + xb) * 4, p01 = (yb * bw + xa) * 4, p11 = (yb * bw + xb) * 4, po = (j * W + i) * 4;
+      const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+      od[po] = src[p00] * w00 + src[p10] * w10 + src[p01] * w01 + src[p11] * w11;
+      od[po + 1] = src[p00 + 1] * w00 + src[p10 + 1] * w10 + src[p01 + 1] * w01 + src[p11 + 1] * w11;
+      od[po + 2] = src[p00 + 2] * w00 + src[p10 + 2] * w10 + src[p01 + 2] * w01 + src[p11 + 2] * w11;
+      od[po + 3] = 255;
+    }
+  }
+  ox.putImageData(out, 0, 0);
+  return o;
+}
+// Zuschneiden/Entzerren nach dem Foto (wie beim Scannen): Ecken einzeln ziehen, Kanten verschieben je zwei Ecken, Mitte verschiebt alles.
+function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, onNext }) {
   const h = React.createElement;
   const [src, setSrc] = React.useState('');
-  const [box, setBox] = React.useState({ x0: 0.04, y0: 0.04, x1: 0.96, y1: 0.96 });
+  const [q, setQ] = React.useState(() => psO2QuadLoad());
   const baseRef = React.useRef(null);
   const wrapRef = React.useRef(null);
   const dragRef = React.useRef(null);
@@ -12671,115 +12738,126 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake }) {
     })();
     return () => { dead = true; if (url) { try { URL.revokeObjectURL(url); } catch (e) {} } };
   }, [file]);
-  const MIN = 0.06;
   const down = (mode, e) => {
     e.preventDefault(); e.stopPropagation();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {}
-    dragRef.current = { mode, sx: e.clientX, sy: e.clientY, b: { ...box } };
+    dragRef.current = { mode, sx: e.clientX, sy: e.clientY, q: q.map(p => p.slice()) };
   };
   const move = e => {
     const dr = dragRef.current, w = wrapRef.current;
     if (!dr || !w) return;
     const r = w.getBoundingClientRect();
-    const dx = (e.clientX - dr.sx) / r.width, dy = (e.clientY - dr.sy) / r.height, b = dr.b, m = dr.mode;
+    const dx = (e.clientX - dr.sx) / r.width, dy = (e.clientY - dr.sy) / r.height, m = dr.mode, o = dr.q;
     const cl = v => Math.max(0, Math.min(1, v));
-    let { x0, y0, x1, y1 } = b;
-    if (m === 'move') {
-      const bw = x1 - x0, bh = y1 - y0;
-      x0 = Math.max(0, Math.min(1 - bw, x0 + dx)); y0 = Math.max(0, Math.min(1 - bh, y0 + dy)); x1 = x0 + bw; y1 = y0 + bh;
-    } else {
-      if (m.indexOf('w') >= 0) x0 = Math.min(x1 - MIN, cl(x0 + dx));
-      if (m.indexOf('e') >= 0) x1 = Math.max(x0 + MIN, cl(x1 + dx));
-      if (m.indexOf('n') >= 0) y0 = Math.min(y1 - MIN, cl(y0 + dy));
-      if (m.indexOf('s') >= 0) y1 = Math.max(y0 + MIN, cl(y1 + dy));
-    }
-    setBox({ x0, y0, x1, y1 });
+    const shift = idx => {
+      const xs = idx.map(i => o[i][0]), ys = idx.map(i => o[i][1]);
+      const ddx = Math.max(-Math.min.apply(null, xs), Math.min(1 - Math.max.apply(null, xs), dx)), ddy = Math.max(-Math.min.apply(null, ys), Math.min(1 - Math.max.apply(null, ys), dy));
+      return o.map((p, i) => idx.indexOf(i) >= 0 ? [p[0] + ddx, p[1] + ddy] : p.slice());
+    };
+    let n;
+    if (m === 'move') n = shift([0, 1, 2, 3]);
+    else if (m[0] === 'p') { const i = +m[1]; n = o.map((p, k) => k === i ? [cl(p[0] + dx), cl(p[1] + dy)] : p.slice()); }
+    else { const i = +m[1]; n = shift([i, (i + 1) % 4]); }
+    setQ(n);
   };
   const up = () => { dragRef.current = null; };
-  const apply = async whole => {
+  // Sofort starten (Kamera fuer "weiter" wird im selben Klick geoeffnet, sonst sperrt iOS sie); das Foto entsteht im Hintergrund.
+  const go = (whole, next) => {
     const c = baseRef.current;
     if (!c) return;
-    const b = whole ? { x0: 0, y0: 0, x1: 1, y1: 1 } : box;
-    const sx = Math.round(b.x0 * c.width), sy = Math.round(b.y0 * c.height);
-    const sw = Math.max(8, Math.round((b.x1 - b.x0) * c.width)), sh = Math.max(8, Math.round((b.y1 - b.y0) * c.height));
-    const o = document.createElement('canvas'); o.width = sw; o.height = sh;
-    o.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
-    const blob = await new Promise(r => o.toBlob(r, 'image/jpeg', 0.95));
-    onOk(new File([blob], (file && file.name) || 'ausschnitt.jpg', { type: 'image/jpeg' }));
+    if (next) onNext();
+    let q2 = whole ? [[0, 0], [1, 0], [1, 1], [0, 1]] : q;
+    if (!whole) {
+      if (!psO2Convex(q2)) { const xs = q2.map(p => p[0]), ys = q2.map(p => p[1]), a = Math.min.apply(null, xs), b = Math.max.apply(null, xs), c0 = Math.min.apply(null, ys), d = Math.max.apply(null, ys); q2 = [[a, c0], [b, c0], [b, d], [a, d]]; }
+      psO2QuadSave(q2);
+    }
+    onOk((async () => {
+      const o = psO2Warp(c, q2);
+      const blob = await new Promise(r => o.toBlob(r, 'image/jpeg', 0.95));
+      return new File([blob], (file && file.name) || 'ausschnitt.jpg', { type: 'image/jpeg' });
+    })());
   };
   const pct = v => (v * 100) + '%';
   const HS = 44;
-  const hnd = (mode, style, inner) => h('div', { key: mode, 'data-crop': mode, onPointerDown: e => down(mode, e), onPointerMove: move, onPointerUp: up, onPointerCancel: up,
-    style: { position: 'absolute', width: HS, height: HS, marginLeft: -HS / 2, marginTop: -HS / 2, touchAction: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3, ...style } }, inner);
+  const hnd = (mode, x, y, inner) => h('div', { key: mode, 'data-crop': mode, onPointerDown: e => down(mode, e), onPointerMove: move, onPointerUp: up, onPointerCancel: up,
+    style: { position: 'absolute', left: pct(x), top: pct(y), width: HS, height: HS, marginLeft: -HS / 2, marginTop: -HS / 2, touchAction: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 } }, inner);
   const dot = h('div', { style: { width: 22, height: 22, borderRadius: 11, background: '#fff', border: '3px solid #0ea5e9', boxShadow: '0 1px 4px rgba(0,0,0,.5)' } });
-  const barH = h('div', { style: { width: 30, height: 8, borderRadius: 4, background: '#fff', border: '2px solid #0ea5e9' } });
-  const barV = h('div', { style: { width: 8, height: 30, borderRadius: 4, background: '#fff', border: '2px solid #0ea5e9' } });
-  const mx = (box.x0 + box.x1) / 2, my = (box.y0 + box.y1) / 2;
-  const bs = (pri, dis) => ({ padding: '12px 16px', borderRadius: 10, fontWeight: 900, fontSize: 14, cursor: 'pointer', opacity: dis ? 0.5 : 1, color: pri ? '#fff' : '#e2e8f0', background: pri ? '#2563eb' : 'transparent', border: pri ? '1px solid #2563eb' : '1px solid #64748b', minWidth: pri ? 180 : 0 });
-  return h('div', { style: { position: 'fixed', inset: 0, zIndex: 100003, background: '#0b1220', display: 'flex', flexDirection: 'column', userSelect: 'none', WebkitUserSelect: 'none' } },
-    h('div', { style: { color: '#e2e8f0', fontWeight: 700, fontSize: 14, padding: '12px 16px 4px', textAlign: 'center' } }, 'Nur den gewünschten Bereich einrahmen – Ecken ziehen, Mitte verschiebt'),
-    h('div', { style: { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 } },
-      src ? h('div', { ref: wrapRef, style: { position: 'relative', lineHeight: 0, overflow: 'hidden', touchAction: 'none' } },
-        h('img', { src, draggable: false, alt: '', style: { display: 'block', maxWidth: 'calc(100vw - 24px)', maxHeight: 'calc(100dvh - 150px)', width: 'auto', height: 'auto' } }),
-        h('div', { 'data-crop': 'move', onPointerDown: e => down('move', e), onPointerMove: move, onPointerUp: up, onPointerCancel: up,
-          style: { position: 'absolute', left: pct(box.x0), top: pct(box.y0), width: pct(box.x1 - box.x0), height: pct(box.y1 - box.y0), border: '2px solid #38bdf8', boxShadow: '0 0 0 9999px rgba(2,6,23,.62)', touchAction: 'none', zIndex: 2, cursor: 'move' } }),
-        hnd('nw', { left: pct(box.x0), top: pct(box.y0) }, dot), hnd('ne', { left: pct(box.x1), top: pct(box.y0) }, dot),
-        hnd('sw', { left: pct(box.x0), top: pct(box.y1) }, dot), hnd('se', { left: pct(box.x1), top: pct(box.y1) }, dot),
-        hnd('n', { left: pct(mx), top: pct(box.y0) }, barH), hnd('s', { left: pct(mx), top: pct(box.y1) }, barH),
-        hnd('w', { left: pct(box.x0), top: pct(my) }, barV), hnd('e', { left: pct(box.x1), top: pct(my) }, barV))
+  const sq = h('div', { style: { width: 16, height: 16, borderRadius: 4, background: '#fff', border: '3px solid #0ea5e9', boxShadow: '0 1px 4px rgba(0,0,0,.5)' } });
+  const pts = q.map(p => (p[0] * 100) + ',' + (p[1] * 100)).join(' ');
+  const bs = (pri, dis) => ({ padding: '12px 16px', borderRadius: 10, fontWeight: 900, fontSize: 14, cursor: 'pointer', opacity: dis ? 0.5 : 1, color: pri ? '#fff' : '#e2e8f0', background: pri ? '#2563eb' : 'transparent', border: pri ? '1px solid #2563eb' : '1px solid #64748b' });
+  return h('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100003, background: '#0b1220', display: 'flex', flexDirection: 'column', userSelect: 'none', WebkitUserSelect: 'none' } },
+    h('div', { style: { color: '#e2e8f0', fontWeight: 700, fontSize: 14, padding: '12px 16px 4px', textAlign: 'center' } }, 'Bereich einrahmen – Ecken einzeln ziehen (schräg ist ok, wird geradegerichtet)'),
+    h('div', { style: { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 } },
+      src ? h('div', { ref: wrapRef, style: { position: 'relative', lineHeight: 0, touchAction: 'none' } },
+        h('img', { src, draggable: false, alt: '', style: { display: 'block', maxWidth: 'calc(100vw - 28px)', maxHeight: 'calc(100dvh - 190px)', width: 'auto', height: 'auto' } }),
+        h('svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none', style: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, touchAction: 'none', overflow: 'visible' } },
+          h('path', { d: 'M0,0 H100 V100 H0 Z M' + pts.replace(/ /g, ' L') + ' Z', fillRule: 'evenodd', fill: 'rgba(2,6,23,.62)', style: { pointerEvents: 'none' } }),
+          h('polygon', { 'data-crop': 'move', points: pts, fill: 'rgba(255,255,255,0.01)', stroke: '#38bdf8', strokeWidth: 2, vectorEffect: 'non-scaling-stroke', onPointerDown: e => down('move', e), onPointerMove: move, onPointerUp: up, onPointerCancel: up, style: { pointerEvents: 'all', cursor: 'move', touchAction: 'none' } })),
+        [0, 1, 2, 3].map(i => hnd('e' + i, (q[i][0] + q[(i + 1) % 4][0]) / 2, (q[i][1] + q[(i + 1) % 4][1]) / 2, sq)),
+        [0, 1, 2, 3].map(i => hnd('p' + i, q[i][0], q[i][1], dot)))
         : h('div', { style: { color: '#94a3b8', fontWeight: 700 } }, 'Foto wird geladen …')),
-    h('div', { style: { display: 'flex', gap: 8, padding: '8px 12px 14px', justifyContent: 'center', flexWrap: 'wrap' } },
+    h('div', { style: { display: 'flex', gap: 8, padding: '6px 12px 14px', justifyContent: 'center', flexWrap: 'wrap' } },
       h('button', { onClick: onCancel, style: bs(false, false) }, 'Abbrechen'),
       h('button', { onClick: onRetake, style: bs(false, false) }, '↻ Neu'),
-      h('button', { onClick: () => apply(true), disabled: !src, style: bs(false, !src) }, 'Ganzes Bild'),
-      h('button', { onClick: () => apply(false), disabled: !src, style: bs(true, !src) }, 'Zuschneiden & lesen')));
+      h('button', { onClick: () => go(true, false), disabled: !src, style: bs(false, !src) }, 'Ganzes Bild'),
+      h('button', { onClick: () => go(false, false), disabled: !src, style: bs(true, !src) }, 'Lesen'),
+      h('button', { onClick: () => go(false, true), disabled: !src, style: bs(true, !src) }, 'Lesen + nächstes 📷')));
 }
 function PsO2Import({ onApply, onClose }) {
   const h = React.createElement;
   const camRef = React.useRef(null);
   const libRef = React.useRef(null);
-  const stageRef = React.useRef('tarife');
   const libModeRef = React.useRef(false);
+  const chainRef = React.useRef(Promise.resolve());
+  const pendRef = React.useRef(0);
   const [d, setD] = React.useState({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' });
   const [busy, setBusy] = React.useState('');
   const [note, setNote] = React.useState('');
   const [crop, setCrop] = React.useState(null);
-  // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
-  // 🖼 = Foto aus der Mediathek.
-  const pick = (stage, lib) => { stageRef.current = stage; libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
+  // Ein Eingang fuer alles: die App erkennt selbst, ob Tarif, Handy, Internet oder Kostenblock auf dem Foto ist.
+  // Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien), 🖼 = Foto aus der Mediathek.
+  const pick = lib => { libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
   const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n') });
-  // Foto gewaehlt -> erst zuschneiden, dann lesen
+  // Foto gewaehlt -> erst einrahmen/entzerren, dann lesen
   const onFile = e => {
     const files = Array.from(e.target.files || []);
     const file = files.find(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name || ''));
     if (!file) { if (files.length) setNote('Bitte ein Foto auswählen (kein PDF).'); return; }
-    setCrop({ file, stage: stageRef.current });
+    setCrop({ file });
   };
-  const readPhoto = async (file, stage) => {
-    try {
-      setBusy('Foto wird vorbereitet …');
-      const txt = await psO2Recognize(file, m => setBusy(m));
-      const r = psO2Parse(txt);
-      setD(p => {
-        const n = { ...p };
-        if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it)));
-        if (r.geraete.length) n.geraete = p.geraete.concat(r.geraete.map(it => conv('geraete', it)));
-        if (r.internet.length) n.internet = [conv('internet', r.internet[0])];
-        if (r.einmalig) n.einmalig = r.einmalig;
-        if (r.monatlich) n.monatlich = r.monatlich;
-        return n;
-      });
-      const tip = ' – näher ran, gerade von vorne und noch einmal fotografieren.';
-      if (stage === 'tarife' && !r.tarife.length) setNote('Kein Tarif erkannt' + tip);
-      else if (stage === 'geraete' && !r.geraete.length) setNote('Kein Handy erkannt' + tip);
-      else if (stage === 'internet' && !r.internet.length) setNote('Kein Internet-Tarif erkannt' + tip);
-      else if (stage === 'kosten' && !(r.einmalig || r.monatlich)) setNote('Kostenblock nicht erkannt' + tip);
-      else if (stage === 'kosten' && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
-    } catch (err) {
-      console.error('[O2]', err);
-      setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
-    }
-    setBusy('');
+  // Lesen laeuft nacheinander im Hintergrund, waehrend schon das naechste Foto gemacht werden kann.
+  const readPhoto = jobP => {
+    pendRef.current++; setBusy('Foto wird vorbereitet …');
+    chainRef.current = chainRef.current.then(async () => {
+      try {
+        const file = await jobP;
+        const txt = await psO2Recognize(file, m => setBusy(m));
+        const r = psO2Parse(txt);
+        setD(p => {
+          const n = { ...p };
+          if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it)));
+          if (r.geraete.length) n.geraete = p.geraete.concat(r.geraete.map(it => conv('geraete', it)));
+          if (r.internet.length) n.internet = [conv('internet', r.internet[0])];
+          if (r.einmalig) n.einmalig = r.einmalig;
+          if (r.monatlich) n.monatlich = r.monatlich;
+          return n;
+        });
+        const parts = [];
+        if (r.tarife.length) parts.push(r.tarife.length + (r.tarife.length === 1 ? ' Tarif' : ' Tarife'));
+        if (r.geraete.length) parts.push(r.geraete.length + (r.geraete.length === 1 ? ' Handy' : ' Handys'));
+        if (r.internet.length) parts.push('Internet');
+        if (r.einmalig || r.monatlich) parts.push('Kosten');
+        const items = r.tarife.length || r.geraete.length || r.internet.length;
+        if (!parts.length) setNote('Nichts erkannt – Rahmen enger und gerader setzen oder näher ran und noch einmal fotografieren.');
+        else if (!items && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
+        else setNote('✓ Erkannt: ' + parts.join(', '));
+      } catch (err) {
+        console.error('[O2]', err);
+        setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
+      }
+      pendRef.current = Math.max(0, pendRef.current - 1);
+      if (!pendRef.current) setBusy('');
+    });
   };
   const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
   const setItem = (key, i, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => k === i ? { ...x, [f]: v } : x) }));
@@ -12790,33 +12868,31 @@ function PsO2Import({ onApply, onClose }) {
       h('button', { onClick: () => delItem(key, i), className: 'text-slate-400 font-bold px-2 py-2', 'aria-label': 'Entfernen' }, '✕')),
     it.art ? h('div', { className: 'mt-1' }, inp(it.art, v => setItem(key, i, 'art', v), 'Vertragsart')) : null,
     h('textarea', { value: it.det || '', placeholder: 'Inhalte – eine Zeile pro Punkt', rows: Math.min(6, Math.max(2, String(it.det || '').split('\n').length)), onChange: e => setItem(key, i, 'det', e.target.value), className: 'w-full mt-1 px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: 14, fontWeight: 500 } }));
-  const sBtn = 'px-3 py-2 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50';
-  const gBtn = 'px-3 py-2 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm disabled:opacity-50';
-  const sec = (title, n, stage, label, hideBtn, body) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
-    h('div', { className: 'flex items-center justify-between gap-2' },
-      h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n : '')),
-      hideBtn ? null : h('div', { className: 'flex gap-2' },
-        h('button', { onClick: () => pick(stage, false), disabled: !!busy, className: sBtn }, label),
-        h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
-    body);
+  const sec = (title, n, body) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
+    h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n : '')), body);
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
+  const noteCls = /fehlgeschlagen/.test(note) ? 'text-red-600' : /^✓/.test(note) ? 'text-green-700' : 'text-amber-700';
   return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' }, onClick: e => { if (e.target === e.currentTarget && !busy) onClose(); } },
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'text-lg font-black text-[#0b1e42]' }, '📷 o2-Vorschlag einlesen'),
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file,
-        onOk: f => { const st = crop.stage; setCrop(null); readPhoto(f, st); },
-        onSkip: () => { const c = crop; setCrop(null); readPhoto(c.file, c.stage); },
+        onOk: p => { setCrop(null); readPhoto(p); },
+        onSkip: () => { const f = crop.file; setCrop(null); readPhoto(Promise.resolve(f)); },
         onCancel: () => setCrop(null),
-        onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
+        onRetake: () => { const lib = libModeRef.current; setCrop(null); pick(lib); },
+        onNext: () => pick(false) }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
-      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Gerade von vorne, nah ran – Einzelpreise werden nicht gebraucht.'),
+      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'Je Foto ein Bereich: Tarif, Handy, Internet oder zuletzt der Kostenblock. Die App erkennt selbst, was drauf ist. Einzelpreise werden nicht gebraucht.'),
+      h('div', { className: 'flex gap-2 mt-3' },
+        h('button', { onClick: () => pick(false), className: 'flex-1 px-4 py-4 rounded-xl bg-blue-600 text-white font-black text-base' }, '📷 Foto aufnehmen'),
+        h('button', { onClick: () => pick(true), className: 'px-4 py-4 rounded-xl border border-slate-300 text-slate-600 font-bold text-base', 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼')),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
-      note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : 'text-amber-700') }, note) : null,
-      sec('TARIFE', d.tarife.length, 'tarife', '📷 + Tarif', false, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif'))),
-      sec('HANDYS', d.geraete.length, 'geraete', '📷 + Handy', false, d.geraete.map((g, i) => item('geraete', g, i, 'Gerät'))),
-      sec('INTERNET', d.internet.length, 'internet', '📷 Internet', d.internet.length > 0, d.internet.map((t, i) => item('internet', t, i, 'Internet-Tarif'))),
-      sec('KOSTENBLOCK', 0, 'kosten', '📷 Kosten', false, h('div', null,
+      note ? h('div', { className: 'mt-3 text-sm font-bold ' + noteCls }, note) : null,
+      d.tarife.length ? sec('TARIFE', d.tarife.length, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif'))) : null,
+      d.geraete.length ? sec('HANDYS', d.geraete.length, d.geraete.map((g, i) => item('geraete', g, i, 'Gerät'))) : null,
+      d.internet.length ? sec('INTERNET', d.internet.length, d.internet.map((t, i) => item('internet', t, i, 'Internet-Tarif'))) : null,
+      sec('KOSTENBLOCK', 0, h('div', null,
         h('div', { className: 'flex gap-3 mt-2' },
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIG (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICH (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
