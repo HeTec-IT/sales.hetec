@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.180';
+    window.APP_VERSION = '55.181';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12877,7 +12877,17 @@ function PsO2Import({ onApply, onClose, initial }) {
       else if (stage === 'internet' && !r.internet.length) setNote('Kein Internet-Tarif erkannt' + tip);
       else if (stage === 'kosten' && !(r.einmalig || r.monatlich)) setNote('Kostenblock nicht erkannt' + tip);
       else if (stage === 'kosten' && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
-      else if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich)) setNote('Neu dazu – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
+      else {
+        // Egal welche Taste: alles, was auf dem Foto steht, wird uebernommen – hier steht, was erkannt wurde.
+        const parts = [];
+        if (r.tarife.length) parts.push(r.tarife.length + (r.tarife.length === 1 ? ' Tarif' : ' Tarife'));
+        if (r.geraete.length) parts.push(r.geraete.length + (r.geraete.length === 1 ? ' Handy' : ' Handys'));
+        if (r.internet.length) parts.push('Internet');
+        if (r.einmalig || r.monatlich) parts.push('Kosten');
+        const ok = '✓ Erkannt: ' + parts.join(', ');
+        if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich)) setNote('Neu dazu (' + parts.join(', ') + ') – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
+        else setNote(ok);
+      }
     } catch (err) {
       console.error('[O2]', err);
       setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
@@ -12918,7 +12928,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
       h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet.'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
-      note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : 'text-amber-700') }, note) : null,
+      note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : /^✓/.test(note) ? 'text-green-700' : 'text-amber-700') }, note) : null,
       sec('TARIFE', d.tarife.length, 'tarife', '📷 + Tarif', d.tarife.length >= PS_O2_MAX.tarife, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif')), PS_O2_MAX.tarife),
       sec('HANDYS', d.geraete.length, 'geraete', '📷 + Handy', d.geraete.length >= PS_O2_MAX.geraete, d.geraete.map((g, i) => item('geraete', g, i, 'Gerät')), PS_O2_MAX.geraete),
       sec('INTERNET', d.internet.length, 'internet', d.internet.length ? '📷 + Internet' : '📷 Internet', d.internet.length >= PS_O2_MAX.internet, d.internet.map((t, i) => item('internet', t, i, 'Internet')), PS_O2_MAX.internet),
