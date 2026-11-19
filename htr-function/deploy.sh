@@ -10,7 +10,7 @@ gcloud services enable aiplatform.googleapis.com cloudfunctions.googleapis.com r
   cloudbuild.googleapis.com artifactregistry.googleapis.com
 gcloud functions deploy handwritingToText --gen2 --runtime=nodejs22 --region=europe-west3 \
   --source=. --entry-point=handwritingToText --trigger-http --allow-unauthenticated \
-  --memory=256MiB --timeout=30s --max-instances=5 \
+  --memory=512MiB --timeout=60s --max-instances=5 \
   --set-env-vars "HTR_MODEL=${MODEL},HTR_LOCATION=${LOCATION},HTR_PROJECTS=o2-pencil-selling,pencil-selling-telekom"
 # Die Funktion darf Vertex AI aufrufen (Dienstkonto der Funktion)
 SA=$(gcloud functions describe handwritingToText --gen2 --region=europe-west3 --format='value(serviceConfig.serviceAccountEmail)')

@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.188';
+    window.APP_VERSION = '55.189';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12686,6 +12686,60 @@ function psO2Check(d) {
   const mk = (val, sum, adj) => { if (val == null) return null; const c = adj ? [sum, sum + adj] : [sum]; return { val, calc: c, ok: c.indexOf(val) > -1 }; };
   return { e: mk(E, se, re), m: mk(M, sm, rm) };
 }
+// === v55.189 (Beta): o2-VORSCHLAG VON DER KI LESEN LASSEN =================================================
+// Das Foto geht an denselben Dienst wie die Handschrift (Cloud Function -> Gemini auf Vertex AI, EU) und kommt
+// als fertige Felder zurueck. Das liest unscharfe, schraege und flaue Fotos vom Bildschirm deutlich besser als
+// die Texterkennung auf dem Geraet. Ohne Login, ohne Netz oder ohne eingerichteten Dienst wird still auf die
+// Texterkennung auf dem iPad zurueckgefallen (psO2Recognize) – die App funktioniert also auch offline weiter.
+let __psO2CloudOff = false;
+// Foto fuer den Dienst aufbereiten: verkleinern, als JPEG, in Text umgewandelt (Base64). Farbe bleibt erhalten.
+async function psO2CloudImage(file) {
+  const bmp = await createImageBitmap(file);
+  const sc = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const url = c.toDataURL('image/jpeg', 0.85);
+  return url.slice(url.indexOf(',') + 1);
+}
+// Antwort des Dienstes in dieselbe Form bringen, die auch der eigene Parser liefert (Reihenfolge ueber idx:
+// so landet jedes Handy spaeter bei seinem Tarif).
+function psO2CloudShape(d) {
+  const it = (x, idx) => ({
+    name: String(x.name || '').trim(), idx, art: '',
+    am: [x.einmalig || null, x.monatlich || null],
+    rb: { e: -Math.abs(psO2Cents(x.rabattEinmalig) || 0), m: -Math.abs(psO2Cents(x.rabattMonatlich) || 0), bad: false },
+    details: (x.details || []).map(t => String(t || '').trim()).filter(Boolean)
+  });
+  return {
+    tarife: (d.tarife || []).map((x, i) => it(x, i * 10)),
+    geraete: (d.geraete || []).map(x => it(x, x.tarif > 0 ? (x.tarif - 1) * 10 + 5 : -1)),
+    internet: (d.internet || []).map((x, i) => it(x, 1000 + i)),
+    einmalig: d.einmalig || '', monatlich: d.monatlich || '', hinweis: d.hinweis || ''
+  };
+}
+async function psO2CloudRead(file, onMsg) {
+  const u = window.__betaAuth && window.__betaAuth.currentUser;
+  if (!u) throw new Error('auth');
+  const token = await u.getIdToken();
+  onMsg && onMsg('Vorschlag wird gelesen …');
+  const image = await psO2CloudImage(file);
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), 60000) : null;
+  try {
+    const r = await fetch(psHtrUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ image, mime: 'image/jpeg', kind: 'o2' }),
+      signal: ctl ? ctl.signal : undefined
+    });
+    if (r.status === 404) { __psO2CloudOff = true; throw new Error('noservice'); }
+    if (!r.ok) throw new Error('http' + r.status);
+    const j = await r.json();
+    if (!j || j.ok !== true || !j.data) throw new Error('server');
+    return psO2CloudShape(j.data);
+  } finally { if (timer) clearTimeout(timer); }
+}
 // Foto vorbereiten: verkleinern (Tempo auf dem iPad), Graustufen, Kontrast spreizen (Bildschirmfotos sind oft flau)
 async function psO2Prepare(file, mode) {
   const bmp = await createImageBitmap(file);
@@ -12993,16 +13047,27 @@ function PsO2Import({ onApply, onClose, initial }) {
     try {
       setBusy('Foto wird vorbereitet …');
       const file = await jobP;
-      let txt = await psO2Recognize(file, m => setBusy(m), 0);
-      let r = psO2Parse(txt);
       const missOf = q => stage === 'tarife' ? !q.tarife.length : stage === 'geraete' ? !q.geraete.length : stage === 'internet' ? !q.internet.length : stage === 'kosten' ? !(q.einmalig || q.monatlich) : false;
-      // Nicht gelesen, was die Taste verspricht? Erst zwei weitere Leseversuche (andere Aufbereitung), fehlende Teile werden ergaenzt.
-      for (const mode of [1, 2]) {
-        if (!missOf(r)) break;
-        const t2 = await psO2Recognize(file, m => setBusy(m), mode);
-        const r2 = psO2Parse(t2);
-        txt += '\n--- Versuch ' + (mode + 1) + ' ---\n' + t2;
-        r = { tarife: r.tarife.length ? r.tarife : r2.tarife, geraete: r.geraete.length ? r.geraete : r2.geraete, internet: r.internet.length ? r.internet : r2.internet, einmalig: r.einmalig || r2.einmalig, monatlich: r.monatlich || r2.monatlich, hinweis: r.hinweis || r2.hinweis, mixed: true };
+      const got = q => !!(q && (q.tarife.length || q.geraete.length || q.internet.length || q.einmalig || q.monatlich));
+      let txt = '', r = null;
+      // 1. Weg: der Dienst (liest Fotos vom Bildschirm am besten). Geht er nicht, merkt die App sich das für diese Sitzung.
+      if (!__psO2CloudOff) {
+        try {
+          const cd = await psO2CloudRead(file, m => setBusy(m));
+          if (got(cd)) r = cd;
+        } catch (e) { console.warn('[O2 Dienst]', e && e.message || e); }
+      }
+      // 2. Weg: Texterkennung auf dem Gerät, bei Bedarf mit zwei weiteren Aufbereitungen.
+      if (!r) {
+        txt = await psO2Recognize(file, m => setBusy(m), 0);
+        r = psO2Parse(txt);
+        for (const mode of [1, 2]) {
+          if (!missOf(r)) break;
+          const t2 = await psO2Recognize(file, m => setBusy(m), mode);
+          const r2 = psO2Parse(t2);
+          txt += '\n--- Versuch ' + (mode + 1) + ' ---\n' + t2;
+          r = { tarife: r.tarife.length ? r.tarife : r2.tarife, geraete: r.geraete.length ? r.geraete : r2.geraete, internet: r.internet.length ? r.internet : r2.internet, einmalig: r.einmalig || r2.einmalig, monatlich: r.monatlich || r2.monatlich, hinweis: r.hinweis || r2.hinweis, mixed: true };
+        }
       }
       setSeen(txt);
       // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
@@ -13017,6 +13082,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         if (r.internet.length) n.internet = p.internet.concat(r.internet.map(it => conv('internet', it))).slice(0, PS_O2_MAX.internet);
         if (r.einmalig) n.einmalig = r.einmalig;
         if (r.monatlich) n.monatlich = r.monatlich;
+        if (r.hinweis && !p.hinweis) n.hinweis = r.hinweis;
         return n;
       });
       const tip = ' – näher ran, gerade von vorne und noch einmal fotografieren.';
