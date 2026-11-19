@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.187';
+    window.APP_VERSION = '55.188';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12535,6 +12535,9 @@ function psO2CleanName(line, kind) {
   } else {
     const b = s.search(PS_O2_BRANDS);
     if (b > 0) s = s.slice(b);
+    const cp = s.lastIndexOf(')');
+    if (cp > 8) s = s.slice(0, cp + 1);
+    else s = s.replace(/(\S+\s+\S+\s+\S+.*?)\s+\d{4,}\b.*$/, '$1');
   }
   const t = s.split(' ');
   while (t.length > 1 && (t[0].replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').length < 2 || /^\(/.test(t[0]) && !/\)$/.test(t[0]))) t.shift();
@@ -12568,7 +12571,7 @@ function psO2Junk(t) {
 // Rabatt-/Preiszeilen, Adressen und Muell fliegen raus (Einzelpreise interessieren nicht, nur die Summen).
 function psO2Detail(line) {
   line = String(line || '').replace(/\s*\(?\s*Gesamtpreis.*$/i, '');
-  if (/Rabatt|Anschlusspreis|Gesamtpreis|Ersparnis|Aktivierung|Bestell|m[öo]glich|E-?\s?Mail|Ausdrucken|Auftragsstatus|Jetzt im|Einmal|Monatl|Kosten|UMTS|Adresse|Grundgeb|Seite\s|Vorschlag|aufgerufen|ausstellend|Unverbindlich|Telef|Brauchle|Acrobat|\d+\s*EUR\b/i.test(line)) return '';
+  if (/Rabatt|Anschlusspreis|Gesamtpreis|Ersparnis|Aktivierung|Bestell|m[öo]glich|E-?\s?Mail|Ausdrucken|Auftragsstatus|Jetzt im|Einmal|Monatl|Kosten|UMTS|Adresse|Grundgeb|Anschluss|maliger|Seite\s|Vorschlag|aufgerufen|ausstellend|Unverbindlich|Telef|Brauchle|Acrobat|\d+\s*EUR\b/i.test(line)) return '';
   const am = line.search(/\d{1,3}(?:\.\d{3})*,\d{2}/);
   if (am >= 0) { if (line.slice(0, am).replace(/[^A-Za-zÄÖÜäöüß]/g, '').length < 4) return ''; line = line.slice(0, am); }
   let s = line.replace(/[|\\\[\]{}_~„“"*¦]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -12599,7 +12602,7 @@ function psO2Collect(lines, from) {
 // Namenszeile eines Produkts (je Bereich ein Muster; steht meist direkt unter der Kopfzeile, davor kann OCR-Muell stehen)
 const PS_O2_NAME = {
   tarife: /(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s+(Mobile|Free|Grow|Unlimited|Prepaid|Basic|Smart|Blue|Connect)\b/i,
-  internet: /(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s*Home/i,
+  internet: /(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s*Home(?:\b|(?=[SMLX]\d))/i,
   geraete: PS_O2_BRANDS
 };
 function psO2Parse(text) {
@@ -12640,6 +12643,10 @@ function psO2Parse(text) {
   // Ohne Kopfzeilen (z. B. Uebersicht "Für Sie"): o2-Tarife und Geraete am Namen erkennen
   if (!out.internet.length) lines.forEach((l, i) => { if (PS_O2_NAME.internet.test(l)) add('internet', i - 1, l, i + 1, true); });
   if (!out.tarife.length) lines.forEach((l, i) => { if (PS_O2_NAME.tarife.test(l)) add('tarife', i - 1, l, i + 1, true); });
+  if (!out.geraete.length) lines.forEach((l, i) => {
+    if (!/My\s?Handy/i.test(l)) return;
+    for (let k = i - 1; k >= Math.max(0, i - 2); k--) if (!psO2HeadKind(lines[k]) && !/My\s?Handy/i.test(lines[k]) && lines[k].replace(/[^A-Za-zÄÖÜäöü]/g, '').length >= 6) { add('geraete', k, lines[k], i, true); break; }
+  });
   if (!out.geraete.length) lines.forEach((l, i) => { if (/\b(?:Apple\s+)?(?:iPhone|iPad|Galaxy|Pixel)\s*[A-Za-z0-9]/i.test(l) && /\d/.test(l) && !/Gesamtpreis|Jetzt im/i.test(l)) add('geraete', i - 1, l, i + 1, true); });
   return out;
 }
@@ -12655,6 +12662,8 @@ function psO2Similar(a, b) {
 }
 // GROSSBUCHSTABEN-Geraetenamen lesbar machen: "IPHONE 18 PRO 256GB, BURGUNDER" -> "iPhone 18 Pro 256GB, Burgunder"
 function psO2Pretty(s) {
+  s = String(s || '').replace(/\bIP (\d{1,2})\b/, 'iPhone $1').replace(/\b(iPhone \d{1,2}) PM\b/, '$1 Pro Max').replace(/\bBURG\.?(?=\s|,|$)/, 'Burgunder');
+  if (/iPhone/.test(s)) s = s.replace(/\b(64|128|256|512)\b(?!\s?GB)/, '$1GB');
   s = String(s || '').split(' ').map(w => /^SWZ[,.]?$/.test(w) ? w.replace('SWZ', 'Schwarz') : /^[A-ZÄÖÜ]{2,}[,.]?$/.test(w) && !/^(GB|TB|LTE|USB|SE|FE|XL|II|III)[,.]?$/.test(w) || /^[A-ZÄÖÜ]{3,}\d+[,.]?$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(' ');
   s = s.replace(/\bIphone\b/g, 'iPhone').replace(/\bIpad\b/g, 'iPad').replace(/\bAirpods\b/g, 'AirPods');
   // Marke steht im o2-Vorschlag teils doppelt ("Samsung SAMSUNG GALAXY ...")
@@ -12678,7 +12687,7 @@ function psO2Check(d) {
   return { e: mk(E, se, re), m: mk(M, sm, rm) };
 }
 // Foto vorbereiten: verkleinern (Tempo auf dem iPad), Graustufen, Kontrast spreizen (Bildschirmfotos sind oft flau)
-async function psO2Prepare(file) {
+async function psO2Prepare(file, mode) {
   const bmp = await createImageBitmap(file);
   const sc = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
   const W = Math.round(bmp.width * sc), H = Math.round(bmp.height * sc);
@@ -12688,6 +12697,23 @@ async function psO2Prepare(file) {
   const id = x.getImageData(0, 0, W, H), d = id.data, n = W * H, g = new Uint8ClampedArray(n);
   const hist = new Uint32Array(256);
   for (let i = 0, p = 0; i < n; i++, p += 4) { const v = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) | 0; g[i] = v; hist[v]++; }
+  if (mode) {
+    // Lokale Schwelle (Bradley): Pixel dunkler als der Schnitt seiner Umgebung = Schrift -> schwarz auf weiss
+    const W1 = W + 1, I = new Uint32Array(W1 * (H + 1));
+    for (let y = 0; y < H; y++) { let row = 0; for (let xx = 0; xx < W; xx++) { row += g[y * W + xx]; I[(y + 1) * W1 + xx + 1] = I[y * W1 + xx + 1] + row; } }
+    const r = Math.max(12, Math.round(W / 20));
+    for (let y = 0; y < H; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(H - 1, y + r);
+      for (let xx = 0; xx < W; xx++) {
+        const x0 = Math.max(0, xx - r), x1 = Math.min(W - 1, xx + r);
+        const sum = I[(y1 + 1) * W1 + x1 + 1] - I[y0 * W1 + x1 + 1] - I[(y1 + 1) * W1 + x0] + I[y0 * W1 + x0];
+        const q = g[y * W + xx] < sum / ((x1 - x0 + 1) * (y1 - y0 + 1)) * 0.85 ? 0 : 255, p = (y * W + xx) * 4;
+        d[p] = d[p + 1] = d[p + 2] = q; d[p + 3] = 255;
+      }
+    }
+    x.putImageData(id, 0, 0);
+    return c;
+  }
   let lo = 0, hi = 255, acc = 0;
   for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.01) { lo = v; break; } }
   acc = 0;
@@ -12698,12 +12724,15 @@ async function psO2Prepare(file) {
   return c;
 }
 let __psO2Worker = null;
-async function psO2Recognize(file, onMsg) {
-  onMsg && onMsg('Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
+// mode 0 = normal, 1 = lokale Binarisierung + Block-Modus, 2 = lokale Binarisierung + Spalten-Modus
+async function psO2Recognize(file, onMsg, mode) {
+  mode = mode || 0;
+  onMsg && onMsg(mode ? 'Zweiter Leseversuch …' : 'Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
   await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
   if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
-  onMsg && onMsg('Vorschlag wird gelesen …');
-  const c = await psO2Prepare(file);
+  onMsg && onMsg(mode ? 'Zweiter Leseversuch …' : 'Vorschlag wird gelesen …');
+  const c = await psO2Prepare(file, mode);
+  try { await __psO2Worker.setParameters({ tessedit_pageseg_mode: mode === 1 ? '6' : mode === 2 ? '4' : '3' }); } catch (e) {}
   const r = await __psO2Worker.recognize(c);
   return r && r.data ? r.data.text : '';
 }
@@ -12932,6 +12961,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const camRef = React.useRef(null);
   const libRef = React.useRef(null);
   const stageRef = React.useRef('tarife');
+  const [seen, setSeen] = React.useState('');
   const libModeRef = React.useRef(false);
   // Beim erneuten Oeffnen (nachtraeglich Tarif/Handy dazu) sind die bisherigen Eintraege schon da.
   const [d, setD] = React.useState(() => {
@@ -12963,16 +12993,26 @@ function PsO2Import({ onApply, onClose, initial }) {
     try {
       setBusy('Foto wird vorbereitet …');
       const file = await jobP;
-      const txt = await psO2Recognize(file, m => setBusy(m));
-      const r = psO2Parse(txt);
-      // Nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
-      const miss = stage === 'tarife' ? !r.tarife.length : stage === 'geraete' ? !r.geraete.length : stage === 'internet' ? !r.internet.length : stage === 'kosten' ? !(r.einmalig || r.monatlich) : false;
+      let txt = await psO2Recognize(file, m => setBusy(m), 0);
+      let r = psO2Parse(txt);
+      const missOf = q => stage === 'tarife' ? !q.tarife.length : stage === 'geraete' ? !q.geraete.length : stage === 'internet' ? !q.internet.length : stage === 'kosten' ? !(q.einmalig || q.monatlich) : false;
+      // Nicht gelesen, was die Taste verspricht? Erst zwei weitere Leseversuche (andere Aufbereitung), fehlende Teile werden ergaenzt.
+      for (const mode of [1, 2]) {
+        if (!missOf(r)) break;
+        const t2 = await psO2Recognize(file, m => setBusy(m), mode);
+        const r2 = psO2Parse(t2);
+        txt += '\n--- Versuch ' + (mode + 1) + ' ---\n' + t2;
+        r = { tarife: r.tarife.length ? r.tarife : r2.tarife, geraete: r.geraete.length ? r.geraete : r2.geraete, internet: r.internet.length ? r.internet : r2.internet, einmalig: r.einmalig || r2.einmalig, monatlich: r.monatlich || r2.monatlich, hinweis: r.hinweis || r2.hinweis, mixed: true };
+      }
+      setSeen(txt);
+      // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
+      const miss = missOf(r);
       if (miss && retryFile) { setCrop({ file: retryFile, stage, auto: true }); setBusy(''); return; }
       setD(p => {
         const n = { ...p };
         if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it))).slice(0, PS_O2_MAX.tarife);
         // Kamen Tarife UND Handys von einem einzigen Foto (z. B. ganze Vorschlagsseite), gehoert jedes Handy zu dem Tarif darueber
-        const one = !p.tarife.length && !p.geraete.length && r.tarife.length && r.geraete.length;
+        const one = !r.mixed && !p.tarife.length && !p.geraete.length && r.tarife.length && r.geraete.length;
         if (r.geraete.length) n.geraete = p.geraete.concat(r.geraete.map(it => conv('geraete', one ? { ...it, t: r.tarife.filter(x => x.idx < it.idx).length } : it))).slice(0, PS_O2_MAX.geraete);
         if (r.internet.length) n.internet = p.internet.concat(r.internet.map(it => conv('internet', it))).slice(0, PS_O2_MAX.internet);
         if (r.einmalig) n.einmalig = r.einmalig;
@@ -13047,6 +13087,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : /^✓/.test(note) ? 'text-green-700' : 'text-amber-700') }, note) : null,
+      note && !/^✓/.test(note) && seen ? h('details', { className: 'mt-1 text-xs text-slate-500' }, h('summary', { className: 'cursor-pointer font-bold' }, 'Was die App gelesen hat'), h('pre', { className: 'whitespace-pre-wrap mt-1 p-2 rounded bg-slate-50 border border-slate-200', style: { maxHeight: 160, overflow: 'auto' } }, String(seen).slice(0, 1500))) : null,
       sec('TARIF', d.tarife.length, 'tarife', '📷 + Tarif', d.tarife.length >= PS_O2_MAX.tarife, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif')), PS_O2_MAX.tarife),
       sec('HANDY', d.geraete.length, 'geraete', '📷 + Handy', d.geraete.length >= PS_O2_MAX.geraete, d.geraete.map((g, i) => item('geraete', g, i, 'Handy')), PS_O2_MAX.geraete),
       sec('INTERNET@HOME', d.internet.length, 'internet', d.internet.length ? '📷 + Internet@Home' : '📷 Internet@Home', d.internet.length >= PS_O2_MAX.internet, d.internet.map((t, i) => item('internet', t, i, 'Internet@Home')), PS_O2_MAX.internet),
