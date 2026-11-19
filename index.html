@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.190';
+    window.APP_VERSION = '55.191';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -4174,7 +4174,8 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-tabs] > div{ min-height:0!impo
 @media screen{
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips]{ flex:0 0 auto!important; height:auto!important; min-height:0!important; grid-template-rows:auto!important; grid-auto-rows:auto!important; align-content:start!important; padding-bottom:0!important; overflow:visible!important; }
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] > div:not([data-sit-offtab]){ min-height:0!important; height:auto!important; }
-body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-card-canvas{ flex:none!important; height:68px!important; min-height:68px!important; }
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips]{ grid-template-columns:1.7fr 1fr!important; }
+body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-card-canvas{ flex:none!important; height:92px!important; min-height:92px!important; }
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .sit-question-chips{ display:none!important; }
 body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:none!important; background-image:none!important; }
 }
@@ -4400,6 +4401,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
 .sit-sum-pill.has b{ color:#1d4ed8; }
 .sit-sum-pill em{ font-style:normal; font-size:11px; letter-spacing:0; text-transform:none; color:#475569; }
 @media screen and (orientation: landscape) and (min-width: 1100px){
+  body:not(.pdf-share-mode) .situation-view-wrapper{ --k:clamp(0px,calc(100vh - 800px),300px); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chips-panel{ --k:clamp(0px,calc(100vh - 800px),300px); overflow-y:auto; overscroll-behavior:contain; gap:10px; align-content:stretch; grid-auto-rows:1fr; padding-bottom:0; margin-bottom:56px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block > div:not(.sit-chip-title){ flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-chip-block{ padding:calc(6px + var(--k)*0.03) 10px; gap:calc(4px + var(--k)*0.02); }
@@ -4421,7 +4423,7 @@ body:not(.pdf-share-mode) .sit-card-grid[data-sit-chips] .canvas-lines{ display:
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-pers{ margin-top:calc(4px + var(--k)*0.02); padding-top:1px; padding-bottom:1px; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-pers .sit-pp{ height:calc(28px + var(--k)*0.04); }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-pers.vr{ margin-top:calc(4px + var(--k)*0.02); }
-  body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] .sit-card-canvas{ height:44px!important; min-height:44px!important; }
+  body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] .sit-card-canvas{ height:calc(60px + var(--k,0px)*0.07)!important; min-height:60px!important; }
   body:not(.pdf-share-mode) .situation-view-wrapper .sit-card-grid[data-sit-chips] > div:not([data-sit-offtab]) > button{ padding-top:6px!important; padding-bottom:4px!important; min-height:0!important; }
 }
 /* Druck + PDF: Schnellauswahl-Panel/Umschalter weg, alle 10 Kacheln wie frueher (mit Antwort-Tags) */
