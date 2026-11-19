@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.189';
+    window.APP_VERSION = '55.190';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12740,6 +12740,28 @@ async function psO2CloudRead(file, onMsg) {
     return psO2CloudShape(j.data);
   } finally { if (timer) clearTimeout(timer); }
 }
+// Fotoqualitaet sofort pruefen, bevor die lange Texterkennung laeuft: Schaerfe ueber die Laplace-Varianz
+// (Kantenstaerke; unscharfe Fotos haben kaum Kanten) und die mittlere Helligkeit. Auf 2000 px gerechnet,
+// damit der Wert bei iPad und Samsung-Tab vergleichbar ist.
+const PS_O2_SHARP_MIN = 150, PS_O2_HELL_MIN = 60;
+async function psO2Quality(file) {
+  const bmp = await createImageBitmap(file);
+  const sc = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  const W = Math.max(3, Math.round(bmp.width * sc)), H = Math.max(3, Math.round(bmp.height * sc));
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(bmp, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data, n = W * H, g = new Float32Array(n);
+  let sum = 0;
+  for (let i = 0, p = 0; i < n; i++, p += 4) { const v = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]; g[i] = v; sum += v; }
+  let s1 = 0, s2 = 0, cnt = 0;
+  for (let y = 1; y < H - 1; y++) for (let xx = 1; xx < W - 1; xx++) {
+    const i = y * W + xx, l = g[i - 1] + g[i + 1] + g[i - W] + g[i + W] - 4 * g[i];
+    s1 += l; s2 += l * l; cnt++;
+  }
+  const m = cnt ? s1 / cnt : 0;
+  return { sharp: cnt ? s2 / cnt - m * m : 0, hell: sum / n };
+}
 // Foto vorbereiten: verkleinern (Tempo auf dem iPad), Graustufen, Kontrast spreizen (Bildschirmfotos sind oft flau)
 async function psO2Prepare(file, mode) {
   const bmp = await createImageBitmap(file);
@@ -13016,6 +13038,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const libRef = React.useRef(null);
   const stageRef = React.useRef('tarife');
   const [seen, setSeen] = React.useState('');
+  const [blur, setBlur] = React.useState(null);
   const libModeRef = React.useRef(false);
   // Beim erneuten Oeffnen (nachtraeglich Tarif/Handy dazu) sind die bisherigen Eintraege schon da.
   const [d, setD] = React.useState(() => {
@@ -13040,10 +13063,20 @@ function PsO2Import({ onApply, onClose, initial }) {
     const files = Array.from(e.target.files || []);
     const file = files.find(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name || ''));
     if (!file) { if (files.length) setNote('Bitte ein Foto auswählen (kein PDF).'); return; }
-    if (alwaysCrop) setCrop({ file, stage: stageRef.current });
-    else readPhoto(Promise.resolve(file), stageRef.current, file);
+    if (alwaysCrop) { setCrop({ file, stage: stageRef.current }); return; }
+    checkThenRead(file, stageRef.current);
+  };
+  // Unscharfe oder zu dunkle Fotos sofort melden, statt den Mitarbeiter erst 20 Sekunden warten zu lassen
+  const checkThenRead = async (file, stage) => {
+    setNote(''); setBlur(null); setSeen('');
+    try {
+      const q = await psO2Quality(file);
+      if (q.sharp < PS_O2_SHARP_MIN || q.hell < PS_O2_HELL_MIN) { setBlur({ file, stage, dark: q.hell < PS_O2_HELL_MIN }); return; }
+    } catch (e) { /* laesst sich nicht pruefen -> einfach lesen */ }
+    readPhoto(Promise.resolve(file), stage, file);
   };
   const readPhoto = async (jobP, stage, retryFile) => {
+    setBlur(null);
     try {
       setBusy('Foto wird vorbereitet …');
       const file = await jobP;
@@ -13140,7 +13173,7 @@ function PsO2Import({ onApply, onClose, initial }) {
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'flex items-center justify-between gap-2' },
         h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '📷 o2-Vorschlag ergänzen' : '📷 o2-Vorschlag einlesen'),
-        any ? h('button', { onClick: () => setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }), disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
+        any ? h('button', { onClick: () => { setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file, hint: crop.auto ? 'Nicht gut lesbar – bitte nur den Bereich einrahmen (Ecken ziehen, schräg ist ok)' : '',
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
         onSkip: () => { const c = crop; setCrop(null); readPhoto(Promise.resolve(c.file), c.stage); },
@@ -13152,6 +13185,12 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
+      blur ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3' },
+        h('div', { className: 'text-sm font-black text-amber-900' }, blur.dark ? 'Das Foto ist zu dunkel.' : 'Das Foto ist unscharf.'),
+        h('div', { className: 'text-xs font-bold text-amber-800 mt-1' }, blur.dark ? 'Mehr Licht, oder den Bildschirm heller stellen.' : 'Näher heran, Tablet mit beiden Händen ruhig halten und kurz scharfstellen lassen.'),
+        h('div', { className: 'flex gap-2 mt-2' },
+          h('button', { onClick: () => { const b = blur; setBlur(null); pick(b.stage, libModeRef.current); }, className: sBtn }, '📷 Neu aufnehmen'),
+          h('button', { onClick: () => { const b = blur; setBlur(null); readPhoto(Promise.resolve(b.file), b.stage, b.file); }, className: gBtn }, 'Trotzdem lesen'))) : null,
       note ? h('div', { className: 'mt-3 text-sm font-bold ' + (/fehlgeschlagen/.test(note) ? 'text-red-600' : /^✓/.test(note) ? 'text-green-700' : 'text-amber-700') }, note) : null,
       note && !/^✓/.test(note) && seen ? h('details', { className: 'mt-1 text-xs text-slate-500' }, h('summary', { className: 'cursor-pointer font-bold' }, 'Was die App gelesen hat'), h('pre', { className: 'whitespace-pre-wrap mt-1 p-2 rounded bg-slate-50 border border-slate-200', style: { maxHeight: 160, overflow: 'auto' } }, String(seen).slice(0, 1500))) : null,
       sec('TARIF', d.tarife.length, 'tarife', '📷 + Tarif', d.tarife.length >= PS_O2_MAX.tarife, d.tarife.map((t, i) => item('tarife', t, i, 'Tarif')), PS_O2_MAX.tarife),
