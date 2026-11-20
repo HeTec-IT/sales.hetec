@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.200';
+    window.APP_VERSION = '55.201';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13443,10 +13443,12 @@ function psO2CamOpen(opts) {
   return new Promise(resolve => {
     let stream = null, timer = 0, done = false, shot = false, curHoch = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
     let step = o.step === 'kosten' ? 'kosten' : 'block', blockN = 1, lastSub = null, pend = 0, finishing = false;
-    let ic = null, photoSet = null, stillFail = 0;
+    let ic = null, photoSet = null, stillFail = 0, errored = false, lastShotAt = 0, moved = true, moveTicks = 0;
     const results = [];
     const t0 = Date.now();
-    let auto = true; try { auto = localStorage.getItem('ps_o2_camauto') !== '0'; } catch (e) {}
+    // Einzelfoto: Auto standardmaessig an. Block-Reihe: aus (Foto-Taste), sonst loest jede Handbewegung einen neuen "Block" aus.
+    const AK = ses ? 'ps_o2_camauto_s' : 'ps_o2_camauto';
+    let auto = !ses; try { const av = localStorage.getItem(AK); if (av != null) auto = av === '1'; } catch (e) {}
     const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.setAttribute('style', css); if (txt != null) n.textContent = txt; return n; };
     const btn = (txt, css, fn, label) => { const b = el('button', 'font:700 14px system-ui,sans-serif;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;' + css, txt); b.type = 'button'; if (label) b.setAttribute('aria-label', label); b.onclick = fn; return b; };
     const root = el('div', 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:100020;background:#000;display:flex;flex-direction:column;touch-action:manipulation;-webkit-user-select:none;user-select:none');
@@ -13455,7 +13457,7 @@ function psO2CamOpen(opts) {
     const title = el('div', 'flex:1;text-align:center', '');
     const paintTitle = () => { title.textContent = ses ? (step === 'kosten' ? 'Kostenblock fotografieren' : 'Block ' + blockN + ' fotografieren') : (o.label ? o.label + ' fotografieren' : 'Foto aufnehmen'); };
     paintTitle();
-    const autoB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { auto = !auto; okSince = 0; try { localStorage.setItem('ps_o2_camauto', auto ? '1' : '0'); } catch (e) {} paintAuto(); }, 'Automatisch auslösen');
+    const autoB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { auto = !auto; okSince = 0; try { localStorage.setItem(AK, auto ? '1' : '0'); } catch (e) {} paintAuto(); }, 'Automatisch auslösen');
     const paintAuto = () => { autoB.textContent = auto ? 'Auto ✓' : 'Auto aus'; };
     paintAuto();
     const oriB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { __psO2CamHoch = !curHoch; layout(); }, 'Rahmen hoch oder quer');
@@ -13482,6 +13484,12 @@ function psO2CamOpen(opts) {
     const bottom = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;gap:8px');
     const shutter = el('button', 'width:68px;height:68px;border-radius:50%;border:5px solid #fff;background:#2563eb;cursor:pointer;padding:0');
     shutter.type = 'button'; shutter.setAttribute('aria-label', 'Foto aufnehmen'); shutter.onclick = () => capture(false);
+    // Querformat: zusaetzlich je eine Foto-Taste links und rechts (mit jeder Hand erreichbar), unterhalb des Rahmens
+    const sideBtn = pos => {
+      const b = el('button', 'position:absolute;z-index:3;display:none;' + pos + ':14px;width:76px;height:76px;border-radius:50%;border:5px solid #fff;background:#2563eb;cursor:pointer;padding:0;box-shadow:0 2px 10px rgba(0,0,0,.5)');
+      b.type = 'button'; b.setAttribute('aria-label', 'Foto aufnehmen'); b.onclick = () => capture(false); stage.appendChild(b); return b;
+    };
+    const sideL = sideBtn('left'), sideR = sideBtn('right');
     let stepB = null, doneB = null;
     if (ses) {
       stepB = btn('', 'background:#1e293b;color:#cbd5e1;font-size:13px;min-width:96px', () => { step = step === 'block' ? 'kosten' : 'block'; lastSub = null; okSince = 0; paintTitle(); paintStep(); layout(); }, 'Zwischen Block und Kostenblock wechseln');
@@ -13514,6 +13522,8 @@ function psO2CamOpen(opts) {
       const fl = dx + (dw - fw) / 2, ft = dy + (dh - fh) / 2;
       fr = { x: (fl - dx) / dw, y: (ft - dy) / dh, w: fw / dw, h: fh / dh };
       frame.style.left = fl + 'px'; frame.style.top = ft + 'px'; frame.style.width = fw + 'px'; frame.style.height = fh + 'px';
+      const land = (root.clientWidth || sw) > (root.clientHeight || sh), sbTop = ft + fh + 12 + 76 <= sh ? ft + fh + 12 : sh - 76 - 12;
+      [sideL, sideR].forEach(b => { b.style.display = land && !errored ? 'block' : 'none'; b.style.top = Math.round(Math.max(8, sbTop)) + 'px'; });
     };
     const finish = res => {
       if (done) return; done = true;
@@ -13594,7 +13604,7 @@ function psO2CamOpen(opts) {
     // Ausloesen: Rahmenbereich (plus 3 % Rand) in voller Aufloesung ausschneiden
     const capture = isAuto => {
       if (done || shot || finishing || !video.videoWidth) return;
-      shot = true;
+      shot = true; lastShotAt = Date.now(); moved = false; moveTicks = 0;
       flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
       const st = step, sub = prev;
       if (ic) { hint.textContent = 'Foto wird aufgenommen …'; hint.style.background = '#334155'; }
@@ -13625,8 +13635,14 @@ function psO2CamOpen(opts) {
     // Reihe: erst wieder automatisch ausloesen, wenn sich das Bild deutlich geaendert hat (naechster Block im Rahmen)
     const changed = sub => {
       if (!lastSub || !sub || sub.length !== lastSub.length) return true;
-      let d = 0; for (let i = 0; i < sub.length; i++) d += Math.abs(sub[i] - lastSub[i]);
-      return d / sub.length > 10;
+      // Blockmittel (12 x 6) statt Einzelpixel: Handzittern aendert kaum etwas, ein anderer Block im Rahmen deutlich
+      const GX = 48, GY = 30, bx = 4, by = 5; let d = 0, n = 0;
+      for (let gy = 0; gy < GY; gy += by) for (let gx = 0; gx < GX; gx += bx) {
+        let a = 0, b = 0;
+        for (let y = 0; y < by; y++) for (let x = 0; x < bx; x++) { const i = (gy + y) * GX + gx + x; a += sub[i]; b += lastSub[i]; }
+        d += Math.abs(a - b) / (bx * by); n++;
+      }
+      return d / n > 8;
     };
     const tick = () => {
       if (done) return;
@@ -13642,7 +13658,8 @@ function psO2CamOpen(opts) {
       const st = psO2CamState(m, peak, now - t0);
       if (!finishing) setState(st);
       if (root.getAttribute('data-dbg')) root.setAttribute('data-m', JSON.stringify({ st, s: +m.sharp.toFixed(3), v1: Math.round(m.v1), peak: +peak.toFixed(3), mean: Math.round(m.mean), sat: +m.sat.toFixed(2), mo: +m.motion.toFixed(1), step, blockN, pend }));
-      if (st === 'ok' && !finishing) { if (!okSince) okSince = now; if (auto && now - okSince >= C.hold && (!ses || changed(m.sub))) capture(true); } else okSince = 0;
+      if (ses) { if (m.motion > 12) moveTicks++; else if (moveTicks > 0) moveTicks--; if (moveTicks >= 3) moved = true; }
+      if (st === 'ok' && !finishing) { if (!okSince) okSince = now; if (auto && now - okSince >= C.hold && (!ses || (moved && now - lastShotAt > 2000 && changed(m.sub)))) capture(true); } else okSince = 0;
     };
     const showError = e => {
       const denied = e && /NotAllowed|Security|PermissionDenied/i.test(e.name || '');
@@ -13650,7 +13667,7 @@ function psO2CamOpen(opts) {
       const box = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;color:#fff;text-align:center;font:700 16px system-ui,sans-serif');
       box.appendChild(el('div', '', denied ? 'Kein Zugriff auf die Kamera. In den Geräte-Einstellungen für diese App erlauben' + (ses ? '.' : ', oder die normale Kamera-App nehmen.') : 'Kamera nicht verfügbar.'));
       box.appendChild(btn(ses ? 'Schließen' : 'Kamera-App öffnen', 'background:#2563eb;color:#fff;font-size:16px;padding:14px 22px', () => finish(ses ? null : 'native')));
-      stage.appendChild(box); hint.textContent = ''; hint.style.background = 'transparent'; shutter.style.display = 'none';
+      stage.appendChild(box); hint.textContent = ''; hint.style.background = 'transparent'; shutter.style.display = 'none'; errored = true; sideL.style.display = 'none'; sideR.style.display = 'none';
     };
     document.body.appendChild(root);
     window.addEventListener('resize', layout); document.addEventListener('keydown', onKey, true);
