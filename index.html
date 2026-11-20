@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.194';
+    window.APP_VERSION = '55.195';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12583,16 +12583,24 @@ function psO2Detail(line) {
   let s = line.replace(/[|\\\[\]{}_~„“"*¦]/g, ' ').replace(/\s+/g, ' ').trim();
   s = s.replace(/^[^A-Za-zÄÖÜ0-9]*(?:O|o|0)(?:[2₂z]|\s?[:;])[:;]?\s+(?=\S)/, 'O2 ').replace(/\(\s*[Il|]\s?M\s*\)?/, '(1M)').replace(/^my\s+Data\b/i, 'O2 my Data');
   let t = s.split(' ').filter(Boolean);
+  // v55.195: Linien/Icons neben den Zeilen werden als "rnmnrnununu", "——m—m—ununu&" gelesen: Satzzeichen am Wortanfang abstreifen, solche Token verwerfen
+  t = t.map(w => w.replace(/^[^A-Za-zÄÖÜäöüß0-9(]+(?=[A-Za-zÄÖÜäöüß0-9(])/, '')).filter(w => !(/^[rnmuil]{5,}$/i.test(w.replace(/[^A-Za-zÄÖÜäöüß]/g, '')) && !/^minimum$/i.test(w)));
+  if (/^my$/i.test(t[0] || '') && /^Data/i.test(t[1] || '')) t.unshift('O2');
+  else if (/^(?:O[lzs5]|[O0Q©])$/i.test(t[0] || '') && /^my$/i.test(t[1] || '')) t[0] = 'O2';
+  if (/^O2[:;]$/i.test(t[0] || '')) t[0] = 'O2';
   while (t.length && psO2Junk(t[0])) t.shift();
   while (t.length && (psO2Junk(t[t.length - 1]) || /^[-/+&]$/.test(t[t.length - 1]))) t.pop();
   for (let i = 0; i < t.length; i++) if (psO2Junk(t[i]) && (i === t.length - 1 || psO2Junk(t[i + 1]))) { t = t.slice(0, i); break; }
   s = t.join(' ').replace(/[\s,;:.\-]+$/, '').trim();
   const lt = s.replace(/[^A-Za-zÄÖÜäöüß]/g, '').length, tk = s.split(' ').length;
   if (s.length > 60 || lt < 6 || tk < 2 && lt < 8 || lt > 3 && s === s.toUpperCase() && lt < 9) return '';
+  // v55.195: reiner Grossbuchstaben-Muell ohne Ziffer ("GET STTTFSFER FREUT LEAST") und Woerter mit 5+ Konsonanten am Stueck sind nie echte Details
+  if (!/[a-zäöüß]/.test(s) && !/\d/.test(s)) return '';
+  if (s.split(' ').some(w => /[bcdfghjklmnpqrstvwxz]{5,}/i.test(w.replace(/[^A-Za-z]/g, '')))) return '';
   // Lesemuell (z. B. Werbebanner neben der Karte): viele kurze Woerter, keine Ziffer
   const tt = s.split(' ');
   if (tt.length >= 4 && !/\d/.test(s) && tt.filter(w => w.replace(/[^A-Za-zÄÖÜäöüß]/g, '').length <= 3).length >= tt.length * 0.6) return '';
-  return psO2FixWords(s);
+  return psO2FixWords(s).replace(/^inklusiv\b/, 'Inklusiv');
 }
 // Inhalte unter einer Namenszeile einsammeln (bis zum naechsten Bereich bzw. den Summenzeilen)
 function psO2Collect(lines, from) {
