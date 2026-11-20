@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.197';
+    window.APP_VERSION = '55.198';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12478,6 +12478,7 @@ function psO2Dist(a, b) {
 // Typische Lesefehler korrigieren ("Veice" -> "Voice", "Daterwolumen" -> "Datenvolumen", "Inklusk" -> "Inklusiv")
 function psO2FixWords(s) {
   s = String(s || '').replace(/\bInklus[kl1I]\b/g, 'Inklusiv').replace(/\bDat[a-z]{0,3}[vw]olumen\b/g, 'Datenvolumen');
+  s = s.replace(/\b(Mobile|Free|Grow|Unlimited)\s+5\b(?!\s*G)/g, '$1 S').replace(/\b[UuIil1]nk[li]us\w{0,4}\s?Dat\w{2,}/g, 'Inklusiv Datenvolumen').replace(/(Datenvolumen\s+\d{1,4})\s?[6G][8B]\b/g, '$1 GB');
   return s.replace(/[A-Za-zÄÖÜäöüß]{5,}/g, w => {
     const lw = w.toLowerCase();
     if (PS_O2_VOCAB.some(v => v.toLowerCase() === lw)) return w;
@@ -12587,7 +12588,7 @@ function psO2Detail(line) {
   t = t.map(w => w.replace(/^[^A-Za-zÄÖÜäöüß0-9(]+(?=[A-Za-zÄÖÜäöüß0-9(])/, '')).filter(w => !(/^[rnmuil]{5,}$/i.test(w.replace(/[^A-Za-zÄÖÜäöüß]/g, '')) && !/^minimum$/i.test(w)));
   if (/^my$/i.test(t[0] || '') && /^Data/i.test(t[1] || '')) t.unshift('O2');
   else if (/^(?:O[lzs5]|[O0Q©])$/i.test(t[0] || '') && /^my$/i.test(t[1] || '')) t[0] = 'O2';
-  if (/^O2[:;]$/i.test(t[0] || '')) t[0] = 'O2';
+  if (/^O2[:;?!.,]$/i.test(t[0] || '')) t[0] = 'O2';
   while (t.length && psO2Junk(t[0])) t.shift();
   while (t.length && (psO2Junk(t[t.length - 1]) || /^[-/+&]$/.test(t[t.length - 1]))) t.pop();
   for (let i = 0; i < t.length; i++) if (psO2Junk(t[i]) && (i === t.length - 1 || psO2Junk(t[i + 1]))) { t = t.slice(0, i); break; }
@@ -12608,7 +12609,8 @@ function psO2Collect(lines, from) {
   for (let k = from; k < Math.min(lines.length, from + 16); k++) {
     const l = lines[k];
     if (psO2HeadKind(l) || /(Einmalige|alige|Monatliche|natliche)\s*Kosten/i.test(l) || /Seite\s*(\d+\s*)?von|Telef[oó]nica|Brauchle/i.test(l)) break;
-    if (PS_O2_BRANDS.test(l) && /\d{2,5}\s?G[B8]B?\b/i.test(l) && !/Datenvolumen/i.test(l)) break;
+    if (PS_O2_BRANDS.test(l) && /(?:\d{2,5}\s?G|\b\d{1,2}\s?T)[B8]B?\b/i.test(l) && !/Datenvolumen/i.test(l)) break;
+    if (k > from && PS_O2_NAME.tarife.test(l)) break; // naechster Tarif beginnt (Kopfzeile "TARIF" nicht gelesen)
     const d = psO2Detail(l);
     if (d && !det.some(x => psO2Similar(x, d))) det.push(d);
   }
@@ -12651,7 +12653,10 @@ function psO2Parse(text) {
       let raw = lines[j], from = j + 1;
       // Geraetename ueber zwei Zeilen ("Apple IPHONE 17 PRO MAX" / "256GB, COSMIC ORANGE")
       if (kind === 'geraete' && lines[j + 1] && !psO2Amounts(raw).length && /\d+\s*GB|TB/i.test(lines[j + 1]) && !/\d+\s*GB|TB/i.test(raw)) { raw += ' ' + lines[j + 1]; from = j + 2; }
-      add(kind, i, raw, from, false, l);
+      // v55.198: PDF-Vorschlag: der Preis steht allein in einer Zeile zwischen Kopfzeile und Namen ("TARIF" / "39,99 € 19,99 €" / "O2 Mobile S")
+      let hdr = l;
+      for (let k = i + 1; k < j; k++) if (psO2Amounts(lines[k]).length && lines[k].replace(/[^A-Za-zÄÖÜäöü]/g, '').length <= 4) hdr = l + ' ' + lines[k];
+      add(kind, i, raw, from, false, hdr);
     }
     if (!out.einmalig && (/(Einmalige|alige)\s*Kosten/i.test(l) || /^\W*einmalig\W+\d/i.test(l))) { const a = psO2Amounts(l); if (a.length) { out.einmalig = a[a.length - 1]; } else kostZ.e = i; }
     if (!out.monatlich && (/(Monatliche|natliche)\s*Kosten/i.test(l) || /^\W*monatlich\W+\d/i.test(l))) {
@@ -12839,7 +12844,7 @@ async function psO2Prepare(file, mode) {
   const bb = mode === 2 || mode === 3 || mode === 4 ? psO2BrightBox(bmp) : null;
   const bx = bb ? bb[0] : 0, by = bb ? bb[1] : 0, bW = bb ? bb[2] : bmp.width, bH = bb ? bb[3] : bmp.height;
   // Modus 3/4: auf ~2000 bzw. ~2400 px bringen (zu klein = Schrift zu fein, zu gross = Moiré/Rauschen), hoechstens 2,5-fach vergroessern
-  const sc = mode === 3 || mode === 4 ? Math.min(2.5, (mode === 3 ? 2000 : 2400) / Math.max(bW, bH)) : Math.min(bb ? 2 : 1, 2400 / Math.max(bW, bH));
+  const sc = mode === 3 || mode === 4 ? Math.min(2.5, (mode === 3 ? 2000 : 2400) / Math.max(bW, bH * 0.75)) : Math.min(bb ? 2 : 1, 2400 / Math.max(bW, bH));
   const W = Math.round(bW * sc), H = Math.round(bH * sc);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d', { willReadFrequently: true });
@@ -13089,6 +13094,16 @@ function psO2WordsToText(words) {
     zTop = (lE || lM).y - 3.2 * medH;
     zBot = lM ? lM.y + 1.5 * medH : lE.y + 5 * medH;
     if (lE && lM && lM.y < lE.y) { zTop = lM.y - 3.2 * medH; zBot = lE.y + 1.5 * medH; }
+  }
+  // v55.198: PDF-Seite "Einmalige/Monatliche Kosten": beide Summen stehen untereinander in EINER Spalte, je neben ihrer Beschriftung -> nach Zeile zuordnen
+  if (lE && lM) {
+    const za = [];
+    kept.forEach(k => { if (k.y < zTop || k.y > zBot) return; k.ws.forEach((w, i) => { if (!isAmt(w)) return; const c = colOf(edgeOf(k.ws, i)); if (c) za.push({ y: k.y, c, v: norm(w.t.match(AMT)[0]) }); }); });
+    if (za.length >= 2 && za.every(a => a.c === 'm')) {
+      const near = L => za.slice().sort((a, b) => Math.abs(a.y - L.y) - Math.abs(b.y - L.y))[0];
+      const ae = near(lE), am = near(lM);
+      if (ae !== am && Math.abs(ae.y - lE.y) < 1.2 * medH && Math.abs(am.y - lM.y) < 1.2 * medH) { E = ae.v; M = am.v; }
+    }
   }
   const out = [];
   let attE = false, attM = false;
@@ -13358,7 +13373,8 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
 // sobald das Bild scharf, hell genug und ruhig ist. Das Foto ist schon auf den Rahmen zugeschnitten.
 // Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
 // w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
-const PS_O2_CAM = { ar: 1.7, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
+let __psO2CamHoch = null; // null = automatisch nach Bildformat
+const PS_O2_CAM = { ar: 1.7, arP: 0.72, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
 const PS_O2_CAM_MSG = {
   start: ['Kamera startet …', '#334155', '#ffffff'],
   dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
@@ -13373,7 +13389,7 @@ function psO2CamSupported() { return !!(navigator.mediaDevices && navigator.medi
 // die feinen Kanten), dazu Helligkeit, Anteil ueberbelichteter Pixel und Bewegung gegen das vorige Bild.
 function psO2CamMeasure(video, fr, cv, cx, prev) {
   const vw = video.videoWidth, vh = video.videoHeight;
-  const sx = fr.x * vw, sy = fr.y * vh, sw = fr.w * vw, sh = fr.h * vh, W = Math.max(64, Math.min(PS_O2_CAM.w, Math.round(sw))), H = Math.max(8, Math.round(W * sh / sw));
+  const sx = fr.x * vw, sy = fr.y * vh, sw = fr.w * vw, sh = fr.h * vh, W = Math.max(64, Math.min(PS_O2_CAM.w, Math.round(sw), Math.round(Math.sqrt(2.6e6 * sw / sh)))), H = Math.max(8, Math.round(W * sh / sw));
   if (cv.width !== W) cv.width = W;
   if (cv.height !== H) cv.height = H;
   try { cx.imageSmoothingQuality = 'high'; } catch (e) {}
@@ -13413,7 +13429,7 @@ function psO2CamState(m, peak, age) {
 function psO2CamOpen(opts) {
   const o = opts || {}, C = PS_O2_CAM;
   return new Promise(resolve => {
-    let stream = null, timer = 0, done = false, shot = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
+    let stream = null, timer = 0, done = false, shot = false, curHoch = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
     const t0 = Date.now();
     let auto = true; try { auto = localStorage.getItem('ps_o2_camauto') !== '0'; } catch (e) {}
     const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.setAttribute('style', css); if (txt != null) n.textContent = txt; return n; };
@@ -13425,8 +13441,9 @@ function psO2CamOpen(opts) {
     const autoB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { auto = !auto; okSince = 0; try { localStorage.setItem('ps_o2_camauto', auto ? '1' : '0'); } catch (e) {} paintAuto(); }, 'Automatisch auslösen');
     const paintAuto = () => { autoB.textContent = auto ? 'Auto ✓' : 'Auto aus'; };
     paintAuto();
+    const oriB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { __psO2CamHoch = !curHoch; layout(); }, 'Rahmen hoch oder quer');
     bar.appendChild(btn('✕', 'background:#1e293b;color:#fff;padding:8px 12px', () => finish(null), 'Abbrechen'));
-    bar.appendChild(title); bar.appendChild(autoB);
+    bar.appendChild(title); bar.appendChild(oriB); bar.appendChild(autoB);
     const hintRow = el('div', 'display:flex;justify-content:center;padding:0 12px 8px');
     const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;transition:background .2s', '');
     hintRow.appendChild(hint);
@@ -13454,8 +13471,11 @@ function psO2CamOpen(opts) {
       const sw = stage.clientWidth, sh = stage.clientHeight;
       if (!sw || !sh) return;
       const w = vw || sw, h = vh || sh, k = Math.min(sw / w, sh / h), dw = w * k, dh = h * k, dx = (sw - dw) / 2, dy = (sh - dh) / 2;
-      let fw = dw * 0.94, fh = fw / C.ar;
-      if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * C.ar; }
+      curHoch = __psO2CamHoch != null ? __psO2CamHoch : h > w;
+      oriB.textContent = curHoch ? '▯ Hochformat' : '▭ Querformat';
+      let fw, fh;
+      if (curHoch) { fh = dh * 0.92; fw = fh * C.arP; if (fw > dw * 0.94) { fw = dw * 0.94; fh = fw / C.arP; } }
+      else { fw = dw * 0.94; fh = fw / C.ar; if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * C.ar; } }
       const fl = dx + (dw - fw) / 2, ft = dy + (dh - fh) / 2;
       fr = { x: (fl - dx) / dw, y: (ft - dy) / dh, w: fw / dw, h: fh / dh };
       frame.style.left = fl + 'px'; frame.style.top = ft + 'px'; frame.style.width = fw + 'px'; frame.style.height = fh + 'px';
@@ -13514,6 +13534,7 @@ function psO2CamOpen(opts) {
     document.body.appendChild(root);
     window.addEventListener('resize', layout); document.addEventListener('keydown', onKey, true);
     video.addEventListener('loadedmetadata', () => { vw = video.videoWidth; vh = video.videoHeight; layout(); });
+    video.addEventListener('resize', () => { if (video.videoWidth) { vw = video.videoWidth; vh = video.videoHeight; layout(); } });
     layout(); setState('start');
     if (o.debug) root.setAttribute('data-dbg', '1');
     (async () => {
@@ -13620,13 +13641,30 @@ function PsO2Import({ onApply, onClose, initial }) {
       // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
       const miss = missOf(r);
       if (miss && retryFile) { setCrop({ file: retryFile, stage, auto: true }); setBusy(''); return; }
+      // Zwei Fotos derselben (PDF-)Seite ueberschneiden sich oft: die ersten neuen Eintraege sind dann die letzten schon vorhandenen -> nicht doppelt
+      const cur = dRef.current, nmOf = (kind, it) => kind === 'geraete' ? psO2Pretty(it.name) : it.name;
+      const ovl = kind => {
+        const old = cur[kind], neu = r[kind];
+        for (let k = Math.min(old.length, neu.length); k >= 1; k--) if (neu.slice(0, k).every((it, i) => psO2Similar(old[old.length - k + i].name, nmOf(kind, it)))) return k;
+        return 0;
+      };
+      const ov = { tarife: ovl('tarife'), geraete: ovl('geraete'), internet: ovl('internet') };
+      const merge = (kind, p) => {
+        const old = p[kind].slice(), k = ov[kind], neu = r[kind];
+        // Bei der Ueberschneidung die vollstaendigere Fassung behalten (am Seitenrand sind Inhalte oft abgeschnitten)
+        for (let i = 0; i < k; i++) {
+          const o = old[old.length - k + i], nw = neu[i], nd = (nw.details || []).length;
+          if (nd > String(o.det || '').split('\n').filter(Boolean).length) old[old.length - k + i] = { ...o, det: nw.details.join('\n'), ...(nw.am ? { am: nw.am } : {}), ...(nw.rb ? { rb: nw.rb } : {}) };
+        }
+        return old.concat(neu.slice(k)).slice(0, PS_O2_MAX[kind]);
+      };
       setD(p => {
         const n = { ...p };
-        if (r.tarife.length) n.tarife = p.tarife.concat(r.tarife.map(it => conv('tarife', it))).slice(0, PS_O2_MAX.tarife);
+        if (r.tarife.length) n.tarife = merge('tarife', p).map(it => it.det !== undefined ? it : conv('tarife', it));
         // Kamen Tarife UND Handys von einem einzigen Foto (z. B. ganze Vorschlagsseite), gehoert jedes Handy zu dem Tarif darueber
         const one = !r.mixed && !p.tarife.length && !p.geraete.length && r.tarife.length && r.geraete.length;
-        if (r.geraete.length) n.geraete = p.geraete.concat(r.geraete.map(it => conv('geraete', one ? { ...it, t: r.tarife.filter(x => x.idx < it.idx).length } : it))).slice(0, PS_O2_MAX.geraete);
-        if (r.internet.length) n.internet = p.internet.concat(r.internet.map(it => conv('internet', it))).slice(0, PS_O2_MAX.internet);
+        if (r.geraete.length) n.geraete = merge('geraete', p).map(it => it.det !== undefined ? it : conv('geraete', one ? { ...it, t: r.tarife.filter(x => x.idx < it.idx).length } : it));
+        if (r.internet.length) n.internet = merge('internet', p).map(it => it.det !== undefined ? it : conv('internet', it));
         if (r.einmalig) n.einmalig = r.einmalig;
         if (r.monatlich) n.monatlich = r.monatlich;
         if (r.hinweis && !p.hinweis) n.hinweis = r.hinweis;
@@ -13640,13 +13678,18 @@ function PsO2Import({ onApply, onClose, initial }) {
       else if (stage === 'kosten' && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
       else {
         // Egal welche Taste: alles, was auf dem Foto steht, wird uebernommen – hier steht, was erkannt wurde.
-        const parts = [];
-        if (r.tarife.length) parts.push(r.tarife.length + (r.tarife.length === 1 ? ' Tarif' : ' Tarife'));
-        if (r.geraete.length) parts.push(r.geraete.length + (r.geraete.length === 1 ? ' Handy' : ' Handys'));
-        if (r.internet.length) parts.push('Internet@Home');
+        const parts = [], nT = r.tarife.length - ov.tarife, nG = r.geraete.length - ov.geraete, nN = r.internet.length - ov.internet;
+        if (nT) parts.push(nT + (nT === 1 ? ' Tarif' : ' Tarife'));
+        if (nG) parts.push(nG + (nG === 1 ? ' Handy' : ' Handys'));
+        if (nN) parts.push('Internet@Home');
         if (r.einmalig || r.monatlich) parts.push('Kosten');
-        const ok = '✓ Erkannt: ' + parts.join(', ');
-        if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich)) setNote('Neu dazu (' + parts.join(', ') + ') – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
+        const same = ov.tarife + ov.geraete + ov.internet;
+        // PDF-Vorschlag: "Seite 1 von 2" und noch keine Summen -> der Kostenblock steht auf der naechsten Seite
+        const pg = /Seite\s*(\d)\s*v[o0]n\s*(\d)/i.exec(txt);
+        const more = pg && +pg[1] < +pg[2] && !(r.einmalig || r.monatlich) && !(cur.einmalig || cur.monatlich) ? ' · Seite ' + pg[1] + ' von ' + pg[2] + ': die Kosten stehen auf Seite ' + (+pg[1] + 1) + ' – bitte noch fotografieren (📷 Kosten)' : '';
+        const lap = same ? ' · Überschneidung mit dem vorigen Foto, nichts doppelt (gleicher Eintrag nochmal: „+1“)' : '';
+        const ok = parts.length ? '✓ Erkannt: ' + parts.join(', ') + lap + more : (same ? '✓ Nichts Neues – das Foto überschneidet sich mit dem vorigen' + more : 'Nichts erkannt' + tip);
+        if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich) && parts.length) setNote('Neu dazu (' + parts.join(', ') + ') – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
         else setNote(ok);
       }
     } catch (err) {
