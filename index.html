@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.199';
+    window.APP_VERSION = '55.200';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13383,7 +13383,7 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
 // Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
 // w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
 let __psO2CamHoch = null; // null = automatisch nach Bildformat
-const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
+const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, w: 1600, rMin: 0.2, rel: 0.7, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
 const PS_O2_CAM_MSG = {
   start: ['Kamera startet …', '#334155', '#ffffff'],
   dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
@@ -13443,6 +13443,7 @@ function psO2CamOpen(opts) {
   return new Promise(resolve => {
     let stream = null, timer = 0, done = false, shot = false, curHoch = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
     let step = o.step === 'kosten' ? 'kosten' : 'block', blockN = 1, lastSub = null, pend = 0, finishing = false;
+    let ic = null, photoSet = null, stillFail = 0;
     const results = [];
     const t0 = Date.now();
     let auto = true; try { auto = localStorage.getItem('ps_o2_camauto') !== '0'; } catch (e) {}
@@ -13530,19 +13531,76 @@ function psO2CamOpen(opts) {
       setState('start'); hint.textContent = 'Wird gelesen …'; hint.style.background = '#334155';
     };
     const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(null); } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); capture(false); } };
-    // Ausloesen: Rahmenbereich (plus 3 % Rand) aus dem Videobild in voller Aufloesung ausschneiden
+    // Standbild der Kamera (ImageCapture, z. B. Chrome/Samsung auf Android): eigener Autofokus und volle Sensor-Aufloesung,
+    // deutlich schaerfer und groesser als ein Videobild. Es hat nicht immer den gleichen Bildausschnitt wie die Vorschau
+    // (4:3-Foto zu 16:9-Vorschau); die Lage wird deshalb per Korrelation mit dem Vorschaubild bestimmt. Passt nichts -> Videobild.
+    const MG = 0.03;
+    const grayOf = (src, sx, sy, sw, sh, W, H) => {
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high';
+      x.drawImage(src, sx, sy, sw, sh, 0, 0, W, H);
+      const d = x.getImageData(0, 0, W, H).data, g = new Float32Array(W * H);
+      for (let i = 0, p = 0; i < g.length; i++, p += 4) g[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
+      return g;
+    };
+    const ncc = (a, b) => {
+      const n = a.length; let ma = 0, mb = 0;
+      for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+      ma /= n; mb /= n;
+      let sab = 0, saa = 0, sbb = 0;
+      for (let i = 0; i < n; i++) { const p = a[i] - ma, q = b[i] - mb; sab += p * q; saa += p * p; sbb += q * q; }
+      return saa > 1e-6 && sbb > 1e-6 ? sab / Math.sqrt(saa * sbb) : 0;
+    };
+    const timeout = (p, ms) => new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('timeout')), ms); p.then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); }); });
+    const cropOf = (src, sw0, sh0, R) => {
+      // R = Bereich im Quellbild, der dem ganzen Vorschaubild entspricht
+      const x0 = R[0] + Math.max(0, fr.x - fr.w * MG) * R[2], y0 = R[1] + Math.max(0, fr.y - fr.h * MG) * R[3];
+      const x1 = R[0] + Math.min(1, fr.x + fr.w * (1 + MG)) * R[2], y1 = R[1] + Math.min(1, fr.y + fr.h * (1 + MG)) * R[3];
+      const k = Math.min(1, 4096 / Math.max(x1 - x0, y1 - y0));
+      const c = document.createElement('canvas'); c.width = Math.max(8, Math.round((x1 - x0) * k)); c.height = Math.max(8, Math.round((y1 - y0) * k));
+      const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+      x.drawImage(src, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+      return c;
+    };
+    const fromVideo = () => cropOf(video, video.videoWidth, video.videoHeight, [0, 0, video.videoWidth, video.videoHeight]);
+    const grabStill = async () => {
+      if (!ic) return null;
+      const w = video.videoWidth, h = video.videoHeight, arV = w / h, GW = 128, GH = Math.max(8, Math.round(GW / arV));
+      try {
+        const ref = grayOf(video, 0, 0, w, h, GW, GH);
+        let blob;
+        try { blob = await timeout(ic.takePhoto(photoSet || undefined), 5000); }
+        catch (e) { if (photoSet && !/timeout/.test(e && e.message)) { photoSet = null; blob = await timeout(ic.takePhoto(), 5000); } else throw e; }
+        const bmp = await createImageBitmap(blob), pw = bmp.width, ph = bmp.height, arP = pw / ph;
+        const cand = [['voll', [0, 0, pw, ph]]];
+        if (Math.abs(arP - arV) > 0.02) {
+          if (arP < arV) { const sh = pw / arV; cand.push(['band', [0, (ph - sh) / 2, pw, sh]]); }
+          else { const sw = ph * arV; cand.push(['band', [(pw - sw) / 2, 0, sw, ph]]); }
+        }
+        let best = null;
+        cand.forEach(cd => { const q = ncc(ref, grayOf(bmp, cd[1][0], cd[1][1], cd[1][2], cd[1][3], GW, GH)); if (!best || q > best.q) best = { n: cd[0], r: cd[1], q }; });
+        let c = null;
+        if (best && best.q >= 0.6) c = cropOf(bmp, pw, ph, best.r);
+        try { window.__psO2CamInfo = { how: c ? 'standbild' : 'video', hyp: best && best.n, ncc: best ? +best.q.toFixed(3) : 0, still: pw + 'x' + ph, video: w + 'x' + h }; } catch (e) {}
+        try { bmp.close(); } catch (e) {}
+        if (c) stillFail = 0; else stillFail++;
+        return c;
+      } catch (e) {
+        stillFail++;
+        try { window.__psO2CamInfo = { how: 'video', fehler: String(e && e.message || e), video: w + 'x' + h }; } catch (e2) {}
+        return null;
+      } finally { if (stillFail >= 3) ic = null; }
+    };
+    // Ausloesen: Rahmenbereich (plus 3 % Rand) in voller Aufloesung ausschneiden
     const capture = isAuto => {
       if (done || shot || finishing || !video.videoWidth) return;
       shot = true;
-      const w = video.videoWidth, h = video.videoHeight, mg = 0.03;
-      const x0 = Math.max(0, (fr.x - fr.w * mg) * w), y0 = Math.max(0, (fr.y - fr.h * mg) * h);
-      const x1 = Math.min(w, (fr.x + fr.w * (1 + mg)) * w), y1 = Math.min(h, (fr.y + fr.h * (1 + mg)) * h);
-      const c = document.createElement('canvas'); c.width = Math.round(x1 - x0); c.height = Math.round(y1 - y0);
-      c.getContext('2d').drawImage(video, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
       flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
       const st = step, sub = prev;
-      c.toBlob(b => {
-        if (!b) { shot = false; return; }
+      if (ic) { hint.textContent = 'Foto wird aufgenommen …'; hint.style.background = '#334155'; }
+      (ic ? grabStill() : Promise.resolve(null)).then(c => c || fromVideo()).then(c => new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)), () => null).then(b => {
+        cur = '';
+        if (!b || done) { shot = false; return; }
         try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
         const file = new File([b], 'o2-kamera.jpg', { type: 'image/jpeg', lastModified: Date.now() });
         if (!ses) { finish({ file, auto: !!isAuto }); return; }
@@ -13561,7 +13619,7 @@ function psO2CamOpen(opts) {
           else if (finishing && !pend) finish('fertig');
         });
         setTimeout(() => { shot = false; }, 500);
-      }, 'image/jpeg', 0.92);
+      });
     };
     const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
     // Reihe: erst wieder automatisch ausloesen, wenn sich das Bild deutlich geaendert hat (naechster Block im Rahmen)
@@ -13612,6 +13670,22 @@ function psO2CamOpen(opts) {
           const tr = stream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
           if (cap.focusMode && cap.focusMode.indexOf('continuous') >= 0) await tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
         } catch (e) {}
+        try {
+          if (window.ImageCapture && !o.noStill) {
+            ic = new ImageCapture(stream.getVideoTracks()[0]);
+            try {
+              const pc = await ic.getPhotoCapabilities(), iw = pc && pc.imageWidth, ih = pc && pc.imageHeight, ps = {};
+              if (iw && ih && iw.max && ih.max && video.videoWidth) {
+                const ar = video.videoWidth / video.videoHeight;
+                let W = Math.min(iw.max, 4000), H = Math.round(W / ar);
+                if (H > ih.max) { H = ih.max; W = Math.round(H * ar); }
+                ps.imageWidth = Math.max(iw.min || 1, W); ps.imageHeight = Math.max(ih.min || 1, H);
+              }
+              if (pc && pc.fillLightMode && pc.fillLightMode.indexOf && pc.fillLightMode.indexOf('off') >= 0) ps.fillLightMode = 'off';
+              photoSet = Object.keys(ps).length ? ps : null;
+            } catch (e) {}
+          }
+        } catch (e) { ic = null; }
         if (video.videoWidth) { vw = video.videoWidth; vh = video.videoHeight; layout(); }
         tick();
       } catch (e) { if (!done) showError(e); }
