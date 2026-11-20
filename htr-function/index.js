@@ -80,7 +80,7 @@ const O2_PROMPT = [
   'rabattEinmalig und rabattMonatlich = Summe der Rabatt- und Vorteilszeilen dieses Produkts je Spalte, als positive Zahl (z. B. "15,00"); ohne Rabatt leer lassen.',
   'tarif (nur bei geraete) = die Nummer des Tarifs, unter dem das Geraet im Bild steht, 1 fuer den ersten Tarif. Ist kein Tarif im Bild, 0.',
   'einmalig und monatlich ganz unten = die Zeilen "Einmalige Kosten" und "Monatliche Kosten".',
-  'hinweis = nur wenn dort "*Ab dem N. Monat: X" steht, dann genau "Monatlich ab dem N. Monat: X €", sonst leer.',
+  'hinweis = immer leer lassen. Die Zeile "*Ab dem N. Monat: X" (Preiserhoehung, auch "ab dem 12. Monat") ignorieren: dieser Betrag ist weder einmalig noch monatlich.',
   'Einen Abschnitt "Aktuell" (bisherige Vertraege des Kunden) komplett ignorieren.',
   'Nichts erfinden und nichts ergaenzen. Was nicht sicher lesbar ist, weglassen. Ist kein Vorschlag zu erkennen, alle Listen leer lassen und readable=false setzen.'
 ].join(' ');
@@ -146,7 +146,7 @@ function cleanO2(j) {
   }).filter(x => x.name.length >= 3);
   return {
     tarife: list(j.tarife), geraete: list(j.geraete, true), internet: list(j.internet),
-    einmalig: amt(j.einmalig), monatlich: amt(j.monatlich), hinweis: str(j.hinweis, 80),
+    einmalig: amt(j.einmalig), monatlich: amt(j.monatlich), hinweis: '',
     readable: j.readable !== false
   };
 }
