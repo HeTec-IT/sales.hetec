@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.195';
+    window.APP_VERSION = '55.196';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13335,6 +13335,187 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
       h('button', { onClick: () => go(true), disabled: !src, style: bs(false, !src) }, 'Ganzes Bild'),
       h('button', { onClick: () => go(false), disabled: !src, style: bs(true, !src) }, 'Zuschneiden & lesen')));
 }
+// === v55.196 (Beta): EIGENE KAMERA FUER DEN O2-IMPORT ====================================================
+// Live-Bild mit Rahmen und Anzeige "scharf / unscharf": Bildschirm in den Rahmen halten, die App loest von selbst aus,
+// sobald das Bild scharf, hell genug und ruhig ist. Das Foto ist schon auf den Rahmen zugeschnitten.
+// Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
+// w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
+const PS_O2_CAM = { ar: 1.7, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 700, warm: 1200 };
+const PS_O2_CAM_MSG = {
+  start: ['Kamera startet …', '#334155', '#ffffff'],
+  dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
+  bright: ['Zu hell oder Spiegelung – Winkel leicht ändern', '#b45309', '#f59e0b'],
+  blur: ['Unscharf – etwas Abstand, kurz ruhig halten', '#b91c1c', '#ef4444'],
+  shaky: ['Ruhig halten …', '#b45309', '#f59e0b'],
+  ok: ['Scharf ✓ – ruhig halten', '#15803d', '#22c55e']
+};
+function psO2CamSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+// Messwerte des Rahmenbereichs (auf feste Breite verkleinert, damit iPad und Samsung-Tab vergleichbar sind):
+// Schaerfe = Verhaeltnis der Laplace-Varianz bei voller zu halber Aufloesung (unabhaengig vom Inhalt: unscharfe Bilder verlieren
+// die feinen Kanten), dazu Helligkeit, Anteil ueberbelichteter Pixel und Bewegung gegen das vorige Bild.
+function psO2CamMeasure(video, fr, cv, cx, prev) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const sx = fr.x * vw, sy = fr.y * vh, sw = fr.w * vw, sh = fr.h * vh, W = Math.max(64, Math.min(PS_O2_CAM.w, Math.round(sw))), H = Math.max(8, Math.round(W * sh / sw));
+  if (cv.width !== W) cv.width = W;
+  if (cv.height !== H) cv.height = H;
+  try { cx.imageSmoothingQuality = 'high'; } catch (e) {}
+  cx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+  const d = cx.getImageData(0, 0, W, H).data, n = W * H, g = new Float32Array(n);
+  let sum = 0, sat = 0;
+  for (let i = 0, p = 0; i < n; i++, p += 4) { const v = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]; g[i] = v; sum += v; if (v >= 250) sat++; }
+  const lapVar = (a, w, hh) => {
+    let s1 = 0, s2 = 0, cnt = 0;
+    for (let y = 1; y < hh - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x, l = a[i - 1] + a[i + 1] + a[i - w] + a[i + w] - 4 * a[i];
+      s1 += l; s2 += l * l; cnt++;
+    }
+    if (!cnt) return 0;
+    const mm = s1 / cnt; return s2 / cnt - mm * mm;
+  };
+  const v1 = lapVar(g, W, H), W2 = W >> 1, H2 = H >> 1, g2 = new Float32Array(W2 * H2);
+  for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) { const i = 2 * y * W + 2 * x; g2[y * W2 + x] = (g[i] + g[i + 1] + g[i + W] + g[i + W + 1]) / 4; }
+  const v2 = lapVar(g2, W2, H2);
+  const GX = 48, GY = 30, sub = new Uint8Array(GX * GY);
+  for (let gy = 0; gy < GY; gy++) for (let gx = 0; gx < GX; gx++) sub[gy * GX + gx] = g[Math.min(H - 1, Math.floor((gy + 0.5) * H / GY)) * W + Math.min(W - 1, Math.floor((gx + 0.5) * W / GX))];
+  let mo = 0;
+  if (prev && prev.length === sub.length) { for (let i = 0; i < sub.length; i++) mo += Math.abs(sub[i] - prev[i]); mo /= sub.length; }
+  return { sharp: v2 > 1e-6 ? v1 / v2 : 0, v1, mean: sum / n, sat: sat / n, sub, motion: mo };
+}
+// Entscheidung aus den Messwerten: start | dark | bright | blur | shaky | ok  (peak = beste Schaerfe der letzten Sekunden)
+function psO2CamState(m, peak, age) {
+  const C = PS_O2_CAM;
+  if (age < C.warm) return 'start';
+  if (m.mean < C.dark) return 'dark';
+  if (m.sat > C.bright) return 'bright';
+  if (m.v1 < C.vMin || m.sharp < C.rMin || m.sharp < C.rel * peak) return 'blur';
+  if (m.motion > C.motion) return 'shaky';
+  return 'ok';
+}
+// Oeffnet die Kamera als Vollbild. Ergebnis: { file, auto } | 'native' (normale Kamera-App nehmen) | null (abgebrochen)
+function psO2CamOpen(opts) {
+  const o = opts || {}, C = PS_O2_CAM;
+  return new Promise(resolve => {
+    let stream = null, timer = 0, done = false, shot = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
+    const t0 = Date.now();
+    let auto = true; try { auto = localStorage.getItem('ps_o2_camauto') !== '0'; } catch (e) {}
+    const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.setAttribute('style', css); if (txt != null) n.textContent = txt; return n; };
+    const btn = (txt, css, fn, label) => { const b = el('button', 'font:700 14px system-ui,sans-serif;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;' + css, txt); b.type = 'button'; if (label) b.setAttribute('aria-label', label); b.onclick = fn; return b; };
+    const root = el('div', 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:100020;background:#000;display:flex;flex-direction:column;touch-action:manipulation;-webkit-user-select:none;user-select:none');
+    root.setAttribute('data-ps-cam', '1');
+    const bar = el('div', 'display:flex;align-items:center;gap:8px;padding:10px 12px;color:#fff;font:800 16px system-ui,sans-serif');
+    const title = el('div', 'flex:1;text-align:center', (o.label ? o.label + ' fotografieren' : 'Foto aufnehmen'));
+    const autoB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { auto = !auto; okSince = 0; try { localStorage.setItem('ps_o2_camauto', auto ? '1' : '0'); } catch (e) {} paintAuto(); }, 'Automatisch auslösen');
+    const paintAuto = () => { autoB.textContent = auto ? 'Auto ✓' : 'Auto aus'; };
+    paintAuto();
+    bar.appendChild(btn('✕', 'background:#1e293b;color:#fff;padding:8px 12px', () => finish(null), 'Abbrechen'));
+    bar.appendChild(title); bar.appendChild(autoB);
+    const hintRow = el('div', 'display:flex;justify-content:center;padding:0 12px 8px');
+    const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;transition:background .2s', '');
+    hintRow.appendChild(hint);
+    const stage = el('div', 'position:relative;flex:1;overflow:hidden;min-height:0');
+    const video = el('video', 'position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;background:#000');
+    video.muted = true; video.autoplay = true; video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
+    const frame = el('div', 'position:absolute;box-sizing:border-box;border:4px solid #fff;border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.5);pointer-events:none;transition:border-color .2s');
+    stage.appendChild(video); stage.appendChild(frame);
+    const flash = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s');
+    stage.appendChild(flash);
+    const bottom = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;gap:8px');
+    const natB = btn('Kamera-App', 'background:#1e293b;color:#cbd5e1;font-size:13px', () => finish('native'), 'Normale Kamera-App öffnen');
+    const shutter = el('button', 'width:68px;height:68px;border-radius:50%;border:5px solid #fff;background:#2563eb;cursor:pointer;padding:0');
+    shutter.type = 'button'; shutter.setAttribute('aria-label', 'Foto aufnehmen'); shutter.onclick = () => capture(false);
+    bottom.appendChild(natB); bottom.appendChild(shutter); bottom.appendChild(el('div', 'width:96px'));
+    root.appendChild(bar); root.appendChild(hintRow); root.appendChild(stage); root.appendChild(bottom);
+
+    const setState = k => {
+      if (k === cur) return; cur = k;
+      const m = PS_O2_CAM_MSG[k];
+      hint.textContent = m[0]; hint.style.background = m[1]; frame.style.borderColor = m[2];
+    };
+    // Rahmen mittig im sichtbaren Videobild (object-fit: contain); fr = Rahmen in Anteilen des Videobilds
+    const layout = () => {
+      const sw = stage.clientWidth, sh = stage.clientHeight;
+      if (!sw || !sh) return;
+      const w = vw || sw, h = vh || sh, k = Math.min(sw / w, sh / h), dw = w * k, dh = h * k, dx = (sw - dw) / 2, dy = (sh - dh) / 2;
+      let fw = dw * 0.94, fh = fw / C.ar;
+      if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * C.ar; }
+      const fl = dx + (dw - fw) / 2, ft = dy + (dh - fh) / 2;
+      fr = { x: (fl - dx) / dw, y: (ft - dy) / dh, w: fw / dw, h: fh / dh };
+      frame.style.left = fl + 'px'; frame.style.top = ft + 'px'; frame.style.width = fw + 'px'; frame.style.height = fh + 'px';
+    };
+    const finish = res => {
+      if (done) return; done = true;
+      clearTimeout(timer);
+      window.removeEventListener('resize', layout); document.removeEventListener('keydown', onKey, true);
+      try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+      try { video.srcObject = null; } catch (e) {}
+      if (root.parentNode) root.parentNode.removeChild(root);
+      resolve(res);
+    };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(null); } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); capture(false); } };
+    // Ausloesen: Rahmenbereich (plus 3 % Rand) aus dem Videobild in voller Aufloesung ausschneiden
+    const capture = isAuto => {
+      if (done || shot || !video.videoWidth) return;
+      shot = true;
+      const w = video.videoWidth, h = video.videoHeight, mg = 0.03;
+      const x0 = Math.max(0, (fr.x - fr.w * mg) * w), y0 = Math.max(0, (fr.y - fr.h * mg) * h);
+      const x1 = Math.min(w, (fr.x + fr.w * (1 + mg)) * w), y1 = Math.min(h, (fr.y + fr.h * (1 + mg)) * h);
+      const c = document.createElement('canvas'); c.width = Math.round(x1 - x0); c.height = Math.round(y1 - y0);
+      c.getContext('2d').drawImage(video, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+      flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
+      c.toBlob(b => {
+        if (!b) { shot = false; return; }
+        try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
+        finish({ file: new File([b], 'o2-kamera.jpg', { type: 'image/jpeg', lastModified: Date.now() }), auto: !!isAuto });
+      }, 'image/jpeg', 0.92);
+    };
+    const tick = () => {
+      if (done) return;
+      timer = setTimeout(tick, 200);
+      if (!stream || video.readyState < 2 || !video.videoWidth || shot) return;
+      let m;
+      try { m = psO2CamMeasure(video, fr, cv, cx, prev); } catch (e) { return; }
+      prev = m.sub;
+      const now = Date.now();
+      hist.push({ t: now, s: m.sharp });
+      while (hist.length && now - hist[0].t > 3000) hist.shift();
+      const peak = hist.reduce((a, b) => Math.max(a, b.s), 0);
+      const st = psO2CamState(m, peak, now - t0);
+      setState(st);
+      if (root.getAttribute('data-dbg')) root.setAttribute('data-m', JSON.stringify({ st, s: +m.sharp.toFixed(3), v1: Math.round(m.v1), peak: +peak.toFixed(3), mean: Math.round(m.mean), sat: +m.sat.toFixed(2), mo: +m.motion.toFixed(1) }));
+      if (st === 'ok') { if (!okSince) okSince = now; if (auto && now - okSince >= C.hold) capture(true); } else okSince = 0;
+    };
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+    const showError = e => {
+      const denied = e && /NotAllowed|Security|PermissionDenied/i.test(e.name || '');
+      stage.innerHTML = '';
+      const box = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;color:#fff;text-align:center;font:700 16px system-ui,sans-serif');
+      box.appendChild(el('div', '', denied ? 'Kein Zugriff auf die Kamera. In den Geräte-Einstellungen für diese App erlauben, oder die normale Kamera-App nehmen.' : 'Kamera nicht verfügbar.'));
+      box.appendChild(btn('Kamera-App öffnen', 'background:#2563eb;color:#fff;font-size:16px;padding:14px 22px', () => finish('native')));
+      stage.appendChild(box); hint.textContent = ''; hint.style.background = 'transparent'; shutter.style.display = 'none';
+    };
+    document.body.appendChild(root);
+    window.addEventListener('resize', layout); document.addEventListener('keydown', onKey, true);
+    video.addEventListener('loadedmetadata', () => { vw = video.videoWidth; vh = video.videoHeight; layout(); });
+    layout(); setState('start');
+    if (o.debug) root.setAttribute('data-dbg', '1');
+    (async () => {
+      try {
+        const md = navigator.mediaDevices;
+        try { stream = await md.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } } }); }
+        catch (e) { if (e && /NotAllowed|Security|PermissionDenied/i.test(e.name || '')) throw e; stream = await md.getUserMedia({ audio: false, video: true }); }
+        if (done) { stream.getTracks().forEach(t => t.stop()); return; }
+        video.srcObject = stream;
+        try { await video.play(); } catch (e) {}
+        try {
+          const tr = stream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
+          if (cap.focusMode && cap.focusMode.indexOf('continuous') >= 0) await tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+        } catch (e) {}
+        if (video.videoWidth) { vw = video.videoWidth; vh = video.videoHeight; layout(); }
+        tick();
+      } catch (e) { if (!done) showError(e); }
+    })();
+  });
+}
 // Obergrenzen je Foto-Etappe (mehr passt nicht sinnvoll auf die Angebotskarte)
 const PS_O2_MAX = { tarife: 6, geraete: 6, internet: 2 };
 function PsO2Import({ onApply, onClose, initial }) {
@@ -13361,7 +13542,23 @@ function PsO2Import({ onApply, onClose, initial }) {
   const toggleAlwaysCrop = v => { setAlwaysCrop(v); try { localStorage.setItem('ps_o2_cropalways', v ? '1' : '0'); } catch (e) {} };
   // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
   // 🖼 = Foto aus der Mediathek.
-  const pick = (stage, lib) => { stageRef.current = stage; libModeRef.current = !!lib; setNote(''); try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
+  // v55.196: eigene Kamera mit Rahmen und Schaerfe-Anzeige (Haken im Dialog; Rueckfall: normale Kamera-App)
+  const [ownCam, setOwnCam] = React.useState(() => { try { return localStorage.getItem('ps_o2_owncam') !== '0'; } catch (e) { return true; } });
+  const toggleOwnCam = v => { setOwnCam(v); try { localStorage.setItem('ps_o2_owncam', v ? '1' : '0'); } catch (e) {} };
+  const CAM_LABEL = { tarife: 'Tarif', geraete: 'Handy', internet: 'Internet@Home', kosten: 'Kostenblock' };
+  const pick = (stage, lib) => {
+    stageRef.current = stage; libModeRef.current = !!lib; setNote('');
+    const nat = () => { try { const r = lib ? libRef.current : camRef.current; r.value = ''; r.click(); } catch (e) {} };
+    if (lib || !ownCam || !psO2CamSupported()) { nat(); return; }
+    psO2CamOpen({ label: CAM_LABEL[stage] || '' }).then(res => {
+      if (res === 'native') nat();
+      else if (res && res.file) {
+        if (alwaysCrop) setCrop({ file: res.file, stage });
+        else if (res.auto) readPhoto(Promise.resolve(res.file), stage, res.file); // schon live auf Schaerfe geprueft
+        else checkThenRead(res.file, stage);
+      }
+    });
+  };
   const conv = (kind, it) => ({ name: kind === 'geraete' ? psO2Pretty(it.name) : it.name, art: it.art || '', det: (it.details || []).join('\n'), ...(typeof it.t === 'number' ? { t: it.t } : {}), ...(it.am ? { am: it.am } : {}), ...(it.rb ? { rb: it.rb } : {}) });
   // Foto gewaehlt -> sofort lesen (Tarif/Handy/Internet/Kosten erkennt die App selbst an den Ueberschriften)
   const onFile = e => {
@@ -13482,6 +13679,8 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
       h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
+      h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
+        h('input', { type: 'checkbox', checked: ownCam, onChange: e => toggleOwnCam(e.target.checked) }), 'Eigene Kamera mit Rahmen (empfohlen)'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       blur ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3' },
         h('div', { className: 'text-sm font-black text-amber-900' }, blur.dark ? 'Das Foto ist zu dunkel.' : 'Das Foto ist unscharf.'),
