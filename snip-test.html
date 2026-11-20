@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snip-Test – o2-Angebot vom Bildschirm lesen</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; background: #f1f5f9; color: #0f172a; font: 15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #475569; margin: 0 0 14px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  button { font: 700 15px system-ui, sans-serif; border: 0; border-radius: 10px; padding: 12px 16px; cursor: pointer; background: #2563eb; color: #fff; }
+  button.sec { background: #e2e8f0; color: #0f172a; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .stage { position: relative; margin-top: 12px; background: #0f172a; border-radius: 10px; overflow: hidden; display: none; }
+  video { display: block; width: 100%; max-height: 60vh; object-fit: contain; background: #0f172a; }
+  .sel { position: absolute; border: 2px solid #22c55e; background: rgba(34,197,94,.15); pointer-events: none; display: none; }
+  .verdict { font-weight: 800; padding: 10px 12px; border-radius: 10px; margin-top: 10px; }
+  .ok { background: #dcfce7; color: #166534; }
+  .bad { background: #fee2e2; color: #991b1b; }
+  .warn { background: #fef3c7; color: #92400e; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 10px; overflow: auto; max-height: 40vh; white-space: pre-wrap; font-size: 13px; }
+  .k { color: #475569; font-size: 13px; }
+  canvas.shot { max-width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; margin-top: 10px; }
+  ol { margin: 6px 0 0 18px; padding: 0; }
+  li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Snip-Test: o2-Angebot direkt vom Bildschirm lesen</h1>
+  <p class="sub">Prüft, ob der Browser den Activate+ Bildschirm sehen darf und wie gut der Text daraus gelesen wird. Nichts wird gespeichert oder verschickt.</p>
+
+  <div class="card">
+    <div class="row">
+      <button id="start">Bildschirm wählen und prüfen</button>
+      <button id="stop" class="sec" disabled>Beenden</button>
+    </div>
+    <div id="hint" class="k" style="margin-top:8px"></div>
+    <div id="verdict"></div>
+    <div class="stage" id="stage">
+      <video id="v" playsinline autoplay muted></video>
+      <div class="sel" id="sel"></div>
+    </div>
+    <div id="step2" style="display:none;margin-top:12px">
+      <div class="k">Mit der Maus ein Rechteck über den Tarif-Bereich ziehen, dann auf „Ausschnitt lesen“.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="read" disabled>Ausschnitt lesen</button>
+        <button id="full" class="sec">Ganzen Bildschirm lesen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="out" style="display:none">
+    <div id="meta" class="k"></div>
+    <canvas id="shot" class="shot"></canvas>
+    <pre id="text"></pre>
+  </div>
+
+  <div class="card">
+    <b>Was der Test sagt</b>
+    <ol>
+      <li>Bild sichtbar → die sichere Umgebung lässt sich lesen, die Funktion ist baubar.</li>
+      <li>Bild schwarz oder grau → die Umgebung blockiert Bildschirmaufnahmen (z. B. Citrix App Protection). Dann bleibt nur die Kamera.</li>
+      <li>Kein Knopf nutzbar → dieses Gerät kann es nicht (Tablet/Handy). Am PC oder Laptop probieren.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const v = $('#v'), sel = $('#sel'), stage = $('#stage');
+let stream = null, box = null, drag = null, worker = null;
+
+const say = (txt, cls) => { const d = $('#verdict'); d.textContent = txt; d.className = 'verdict ' + (cls || 'warn'); };
+
+if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+  $('#start').disabled = true;
+  say('Dieses Gerät kann keinen Bildschirm teilen (Tablets und Handys können das nicht). Bitte am PC oder Laptop öffnen.', 'bad');
+} else {
+  $('#hint').textContent = 'Beim Klick fragt der Browser, was geteilt werden soll. Dort das Activate+ Fenster oder den ganzen Bildschirm wählen.';
+}
+
+$('#start').onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 }, audio: false });
+  } catch (e) {
+    say('Abgebrochen oder nicht erlaubt: ' + (e.name || e), 'bad');
+    return;
+  }
+  v.srcObject = stream;
+  stage.style.display = 'block'; $('#step2').style.display = 'block';
+  $('#stop').disabled = false; $('#start').disabled = true;
+  stream.getVideoTracks()[0].addEventListener('ended', stop);
+  await v.play().catch(() => {});
+  setTimeout(check, 900);
+};
+
+function stop() {
+  try { stream && stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  stream = null; $('#stop').disabled = true; $('#start').disabled = false;
+}
+$('#stop').onclick = stop;
+
+// Prüft, ob das geteilte Bild echten Inhalt hat oder vom Schutz geschwärzt wurde
+function check() {
+  if (!v.videoWidth) { say('Kein Bild erhalten.', 'bad'); return; }
+  const W = 320, H = Math.round(W * v.videoHeight / v.videoWidth);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  c.getContext('2d').drawImage(v, 0, 0, W, H);
+  const d = c.getContext('2d').getImageData(0, 0, W, H).data;
+  let sum = 0, n = W * H, g = new Float64Array(n);
+  for (let i = 0, p = 0; i < n; i++, p += 4) { const y = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]; g[i] = y; sum += y; }
+  const mean = sum / n;
+  let varr = 0; for (let i = 0; i < n; i++) varr += (g[i] - mean) * (g[i] - mean);
+  const sd = Math.sqrt(varr / n);
+  const info = v.videoWidth + ' × ' + v.videoHeight + ' Pixel, Helligkeit ' + Math.round(mean) + ', Kontrast ' + Math.round(sd);
+  if (sd < 6) say('Bild ist leer oder geschwärzt – die Umgebung blockiert Bildschirmaufnahmen. (' + info + ')', 'bad');
+  else if (mean < 18) say('Bild fast schwarz – vermutlich blockiert. (' + info + ')', 'bad');
+  else say('Bild kommt an, Inhalt ist sichtbar. (' + info + ')', 'ok');
+}
+
+// Rechteck ziehen
+stage.addEventListener('pointerdown', e => {
+  if (!v.videoWidth) return;
+  const r = v.getBoundingClientRect();
+  drag = { x: e.clientX - r.left, y: e.clientY - r.top };
+  sel.style.display = 'block'; sel.style.left = drag.x + 'px'; sel.style.top = drag.y + 'px'; sel.style.width = '0px'; sel.style.height = '0px';
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const r = v.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  const l = Math.min(x, drag.x), t = Math.min(y, drag.y), w = Math.abs(x - drag.x), h = Math.abs(y - drag.y);
+  sel.style.left = l + 'px'; sel.style.top = t + 'px'; sel.style.width = w + 'px'; sel.style.height = h + 'px';
+  box = { l, t, w, h, rw: r.width, rh: r.height };
+});
+stage.addEventListener('pointerup', () => { drag = null; $('#read').disabled = !(box && box.w > 20 && box.h > 10); });
+
+// Ausschnitt in voller Auflösung des geteilten Bildschirms
+function grab(whole) {
+  const W = v.videoWidth, H = v.videoHeight;
+  // Videobild liegt per object-fit: contain im Element -> echten Bildbereich berechnen
+  const r = v.getBoundingClientRect(), k = Math.min(r.width / W, r.height / H), dw = W * k, dh = H * k, dx = (r.width - dw) / 2, dy = (r.height - dh) / 2;
+  let sx = 0, sy = 0, sw = W, sh = H;
+  if (!whole && box) {
+    sx = Math.max(0, (box.l - dx) / k); sy = Math.max(0, (box.t - dy) / k);
+    sw = Math.min(W - sx, box.w / k); sh = Math.min(H - sy, box.h / k);
+  }
+  const c = document.createElement('canvas'); c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext('2d').drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+
+async function readIt(whole) {
+  const c = grab(whole);
+  const show = $('#shot'); show.width = c.width; show.height = c.height; show.getContext('2d').drawImage(c, 0, 0);
+  $('#out').style.display = 'block';
+  $('#meta').textContent = 'Ausschnitt ' + c.width + ' × ' + c.height + ' Pixel – Text wird gelesen …';
+  $('#text').textContent = '';
+  const t0 = performance.now();
+  try {
+    if (!window.Tesseract) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; s.onload = ok; s.onerror = () => no(new Error('Texterkennung konnte nicht geladen werden – Internetverbindung prüfen')); document.head.appendChild(s); });
+    if (!worker) worker = await window.Tesseract.createWorker('deu', 1);
+    await worker.setParameters({ tessedit_pageseg_mode: '6', tessedit_do_invert: '0' });
+    const r = await worker.recognize(c, {}, { text: true });
+    $('#meta').textContent = 'Ausschnitt ' + c.width + ' × ' + c.height + ' Pixel – gelesen in ' + Math.round(performance.now() - t0) + ' ms';
+    $('#text').textContent = (r.data.text || '').trim() || '(kein Text erkannt)';
+  } catch (e) {
+    $('#meta').textContent = 'Lesen nicht möglich: ' + (e && e.message || e);
+  }
+}
+$('#read').onclick = () => readIt(false);
+$('#full').onclick = () => readIt(true);
+</script>
+</body>
+</html>
