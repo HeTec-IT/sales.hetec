@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.196';
+    window.APP_VERSION = '55.197';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12883,7 +12883,20 @@ async function psO2Prepare(file, mode) {
   x.putImageData(id, 0, 0);
   return c;
 }
-let __psO2Worker = null;
+let __psO2Worker = null, __psO2WarmP = null;
+// v55.197: Texterkennung (Skript + Sprachdaten) schon beim Oeffnen des Dialogs laden, damit das erste Foto nicht darauf wartet
+function psO2Warm() {
+  if (__psO2Worker) return Promise.resolve();
+  if (!__psO2WarmP) {
+    __psO2WarmP = (async () => {
+      try {
+        await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+        if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
+      } catch (e) { __psO2WarmP = null; }
+    })();
+  }
+  return __psO2WarmP;
+}
 // mode 0 = normal, 1 = lokale Binarisierung + Zeilenmodus, 2 = heller Bereich + Spaltenmodus,
 // mode 3 (seit v55.193 der erste Durchgang) = heller Bereich ausschneiden, auf ~2000 px bringen, Zeilenmodus; mode 4 = wie 3, ~2400 px und nachgeschaerft.
 // Liefert Text UND Wortpositionen (words) fuer das Lesen nach Position.
@@ -12891,8 +12904,13 @@ async function psO2RecognizeFull(file, onMsg, mode, attempt) {
   mode = mode || 0;
   const nth = ['Erster', 'Zweiter', 'Dritter', 'Vierter', 'Fünfter'][attempt || 0] + ' Leseversuch …';
   onMsg && onMsg(attempt ? nth : 'Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
-  await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-  if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
+  if (!__psO2Worker) {
+    await psO2Warm();
+    if (!__psO2Worker) {
+      await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+      __psO2Worker = await window.Tesseract.createWorker('deu', 1);
+    }
+  }
   onMsg && onMsg(attempt ? nth : 'Vorschlag wird gelesen …');
   const c = await psO2Prepare(file, mode);
   try { await __psO2Worker.setParameters({ tessedit_pageseg_mode: mode === 1 || mode === 3 || mode === 4 ? '6' : '3' }); } catch (e) {}
@@ -13340,7 +13358,7 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
 // sobald das Bild scharf, hell genug und ruhig ist. Das Foto ist schon auf den Rahmen zugeschnitten.
 // Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
 // w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
-const PS_O2_CAM = { ar: 1.7, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 700, warm: 1200 };
+const PS_O2_CAM = { ar: 1.7, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
 const PS_O2_CAM_MSG = {
   start: ['Kamera startet …', '#334155', '#ffffff'],
   dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
@@ -13470,7 +13488,7 @@ function psO2CamOpen(opts) {
     };
     const tick = () => {
       if (done) return;
-      timer = setTimeout(tick, 200);
+      timer = setTimeout(tick, 120);
       if (!stream || video.readyState < 2 || !video.videoWidth || shot) return;
       let m;
       try { m = psO2CamMeasure(video, fr, cv, cx, prev); } catch (e) { return; }
@@ -13523,6 +13541,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const camRef = React.useRef(null);
   const libRef = React.useRef(null);
   const stageRef = React.useRef('tarife');
+  React.useEffect(() => { const t = setTimeout(() => { psO2Warm(); }, 300); return () => clearTimeout(t); }, []);
   const [seen, setSeen] = React.useState('');
   const [blur, setBlur] = React.useState(null);
   const libModeRef = React.useRef(false);
@@ -13586,11 +13605,11 @@ function PsO2Import({ onApply, onClose, initial }) {
       const got = q => !!(q && (q.tarife.length || q.geraete.length || q.internet.length || q.einmalig || q.monatlich));
       let txt = '', r = null;
       // 1. Weg: der Dienst (liest Fotos vom Bildschirm am besten). Geht er nicht, merkt die App sich das für diese Sitzung.
-      if (!__psO2CloudOff) {
+      if (!__psO2CloudOff && psHtrConfigured()) {
         try {
           const cd = await psO2CloudRead(file, m => setBusy(m));
           if (got(cd)) r = cd;
-        } catch (e) { console.warn('[O2 Dienst]', e && e.message || e); }
+        } catch (e) { console.warn('[O2 Dienst]', e && e.message || e); if (e && e.name === 'TypeError') __psO2CloudOff = true; }
       }
       // 2. Weg: Texterkennung auf dem Gerät (v55.193: Bildschirm zuerst ausschneiden, Auswertung nach Position), bei Bedarf mit weiteren Aufbereitungen.
       if (!r) {
