@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.198';
+    window.APP_VERSION = '55.199';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13057,8 +13057,17 @@ function psO2WordsToText(words) {
     const groups = [];
     edges.forEach(x => { const g = groups[groups.length - 1]; if (g && x - g.max <= 2.5 * medH) { g.v.push(x); g.max = x; } else groups.push({ v: [x], max: x }); });
     // "monatlich" = rechteste Gruppe mit mind. 2 Betraegen (die Spalte "einmalig" kann mehr Eintraege haben, steht aber links davon)
+    // v55.199: Zeilen mit zwei Betraegen nebeneinander (Kopfzeile "39,99 € 19,99 €", Handy "1,00 € 20,50 €") zeigen beide Spalten direkt.
+    // Zeigt ein Foto nur EINEN Block, steht in "monatlich" oft nur ein Betrag - die Gruppenregel hielte dann "einmalig" fuer "monatlich".
+    const pl = [], pr = [];
+    lines.forEach(ws => {
+      if (/Gesamtpreis|Ersparnis/i.test(txt(ws))) return;
+      const ed = []; ws.forEach((w, i) => { if (isAmt(w)) ed.push(edgeOf(ws, i)); });
+      if (ed.length >= 2) { const a = ed[ed.length - 2], b = ed[ed.length - 1]; if (b - a >= 4 * medH && b - a <= 14 * medH) { pl.push(a); pr.push(b); } }
+    });
     const mg = groups.filter(g => g.v.length >= 2).sort((a, b) => b.max - a.max)[0];
-    if (mg) {
+    if (pr.length && (!mg || mean(pr) - mg.max > 3 * medH)) { Mx1 = mean(pr); Ex1 = mean(pl); }
+    else if (mg) {
       Mx1 = mean(mg.v);
       const eg = groups.filter(g => g !== mg && Mx1 - mean(g.v) >= 4 * medH && Mx1 - mean(g.v) <= 14 * medH).sort((a, b) => b.v.length - a.v.length || b.max - a.max)[0];
       if (eg) Ex1 = mean(eg.v);
@@ -13374,7 +13383,7 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
 // Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
 // w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
 let __psO2CamHoch = null; // null = automatisch nach Bildformat
-const PS_O2_CAM = { ar: 1.7, arP: 0.72, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
+const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, w: 1600, rMin: 0.2, rel: 0.85, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
 const PS_O2_CAM_MSG = {
   start: ['Kamera startet …', '#334155', '#ffffff'],
   dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
@@ -13425,11 +13434,16 @@ function psO2CamState(m, peak, age) {
   if (m.motion > C.motion) return 'shaky';
   return 'ok';
 }
-// Oeffnet die Kamera als Vollbild. Ergebnis: { file, auto } | 'native' (normale Kamera-App nehmen) | null (abgebrochen)
+// Oeffnet die Kamera als Vollbild.
+// Einzelfoto: Ergebnis { file, auto } | 'native' (normale Kamera-App nehmen) | null (abgebrochen).
+// Block-Fotos (opts.session): die Kamera bleibt offen, jedes Foto geht an opts.onShot(file, schritt) -> Promise<kurzer Text, leer = nichts erkannt>.
+// Schritte: "block" (Block 1, 2, ... je ein Tarif-/Handy-/Internet-Block, flacher Rahmen) und "kosten" (Kostenblock, beendet die Reihe). Ergebnis: 'fertig' | null.
 function psO2CamOpen(opts) {
-  const o = opts || {}, C = PS_O2_CAM;
+  const o = opts || {}, C = PS_O2_CAM, ses = !!o.session;
   return new Promise(resolve => {
     let stream = null, timer = 0, done = false, shot = false, curHoch = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
+    let step = o.step === 'kosten' ? 'kosten' : 'block', blockN = 1, lastSub = null, pend = 0, finishing = false;
+    const results = [];
     const t0 = Date.now();
     let auto = true; try { auto = localStorage.getItem('ps_o2_camauto') !== '0'; } catch (e) {}
     const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.setAttribute('style', css); if (txt != null) n.textContent = txt; return n; };
@@ -13437,13 +13451,15 @@ function psO2CamOpen(opts) {
     const root = el('div', 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:100020;background:#000;display:flex;flex-direction:column;touch-action:manipulation;-webkit-user-select:none;user-select:none');
     root.setAttribute('data-ps-cam', '1');
     const bar = el('div', 'display:flex;align-items:center;gap:8px;padding:10px 12px;color:#fff;font:800 16px system-ui,sans-serif');
-    const title = el('div', 'flex:1;text-align:center', (o.label ? o.label + ' fotografieren' : 'Foto aufnehmen'));
+    const title = el('div', 'flex:1;text-align:center', '');
+    const paintTitle = () => { title.textContent = ses ? (step === 'kosten' ? 'Kostenblock fotografieren' : 'Block ' + blockN + ' fotografieren') : (o.label ? o.label + ' fotografieren' : 'Foto aufnehmen'); };
+    paintTitle();
     const autoB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { auto = !auto; okSince = 0; try { localStorage.setItem('ps_o2_camauto', auto ? '1' : '0'); } catch (e) {} paintAuto(); }, 'Automatisch auslösen');
     const paintAuto = () => { autoB.textContent = auto ? 'Auto ✓' : 'Auto aus'; };
     paintAuto();
     const oriB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { __psO2CamHoch = !curHoch; layout(); }, 'Rahmen hoch oder quer');
     bar.appendChild(btn('✕', 'background:#1e293b;color:#fff;padding:8px 12px', () => finish(null), 'Abbrechen'));
-    bar.appendChild(title); bar.appendChild(oriB); bar.appendChild(autoB);
+    bar.appendChild(title); if (!ses) bar.appendChild(oriB); bar.appendChild(autoB);
     const hintRow = el('div', 'display:flex;justify-content:center;padding:0 12px 8px');
     const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;transition:background .2s', '');
     hintRow.appendChild(hint);
@@ -13454,12 +13470,29 @@ function psO2CamOpen(opts) {
     stage.appendChild(video); stage.appendChild(frame);
     const flash = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s');
     stage.appendChild(flash);
+    const chips = el('div', 'display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:6px 12px 0;min-height:8px');
+    const paintChips = () => {
+      chips.textContent = '';
+      results.slice(-4).forEach(r => {
+        const bg = r.st === 'ok' ? '#15803d' : r.st === 'leer' ? '#b91c1c' : '#334155';
+        chips.appendChild(el('div', 'color:#fff;font:700 13px system-ui,sans-serif;padding:5px 10px;border-radius:999px;background:' + bg, r.st === 'ok' ? '✓ ' + r.l + ': ' + r.t : r.st === 'leer' ? '✗ ' + r.l + ': nichts erkannt – nochmal' : '… ' + r.l + ' wird gelesen'));
+      });
+    };
     const bottom = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;gap:8px');
-    const natB = btn('Kamera-App', 'background:#1e293b;color:#cbd5e1;font-size:13px', () => finish('native'), 'Normale Kamera-App öffnen');
     const shutter = el('button', 'width:68px;height:68px;border-radius:50%;border:5px solid #fff;background:#2563eb;cursor:pointer;padding:0');
     shutter.type = 'button'; shutter.setAttribute('aria-label', 'Foto aufnehmen'); shutter.onclick = () => capture(false);
-    bottom.appendChild(natB); bottom.appendChild(shutter); bottom.appendChild(el('div', 'width:96px'));
-    root.appendChild(bar); root.appendChild(hintRow); root.appendChild(stage); root.appendChild(bottom);
+    let stepB = null, doneB = null;
+    if (ses) {
+      stepB = btn('', 'background:#1e293b;color:#cbd5e1;font-size:13px;min-width:96px', () => { step = step === 'block' ? 'kosten' : 'block'; lastSub = null; okSince = 0; paintTitle(); paintStep(); layout(); }, 'Zwischen Block und Kostenblock wechseln');
+      doneB = btn('Fertig', 'background:#2563eb;color:#fff;min-width:96px', () => finishSession(), 'Fertig');
+      bottom.appendChild(stepB); bottom.appendChild(shutter); bottom.appendChild(doneB);
+    } else {
+      bottom.appendChild(btn('Kamera-App', 'background:#1e293b;color:#cbd5e1;font-size:13px', () => finish('native'), 'Normale Kamera-App öffnen'));
+      bottom.appendChild(shutter); bottom.appendChild(el('div', 'width:96px'));
+    }
+    const paintStep = () => { if (stepB) stepB.textContent = step === 'block' ? 'Kostenblock →' : '← Block'; };
+    paintStep();
+    root.appendChild(bar); root.appendChild(hintRow); root.appendChild(stage); if (ses) root.appendChild(chips); root.appendChild(bottom);
 
     const setState = k => {
       if (k === cur) return; cur = k;
@@ -13474,7 +13507,8 @@ function psO2CamOpen(opts) {
       curHoch = __psO2CamHoch != null ? __psO2CamHoch : h > w;
       oriB.textContent = curHoch ? '▯ Hochformat' : '▭ Querformat';
       let fw, fh;
-      if (curHoch) { fh = dh * 0.92; fw = fh * C.arP; if (fw > dw * 0.94) { fw = dw * 0.94; fh = fw / C.arP; } }
+      if (ses) { const ar = step === 'kosten' ? C.arK : C.arB; fw = dw * 0.94; fh = fw / ar; if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * ar; } }
+      else if (curHoch) { fh = dh * 0.92; fw = fh * C.arP; if (fw > dw * 0.94) { fw = dw * 0.94; fh = fw / C.arP; } }
       else { fw = dw * 0.94; fh = fw / C.ar; if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * C.ar; } }
       const fl = dx + (dw - fw) / 2, ft = dy + (dh - fh) / 2;
       fr = { x: (fl - dx) / dw, y: (ft - dy) / dh, w: fw / dw, h: fh / dh };
@@ -13489,10 +13523,16 @@ function psO2CamOpen(opts) {
       if (root.parentNode) root.parentNode.removeChild(root);
       resolve(res);
     };
+    // Reihe beenden: erst wenn alle Fotos gelesen sind
+    const finishSession = () => {
+      finishing = true;
+      if (!pend) { finish('fertig'); return; }
+      setState('start'); hint.textContent = 'Wird gelesen …'; hint.style.background = '#334155';
+    };
     const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(null); } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); capture(false); } };
     // Ausloesen: Rahmenbereich (plus 3 % Rand) aus dem Videobild in voller Aufloesung ausschneiden
     const capture = isAuto => {
-      if (done || shot || !video.videoWidth) return;
+      if (done || shot || finishing || !video.videoWidth) return;
       shot = true;
       const w = video.videoWidth, h = video.videoHeight, mg = 0.03;
       const x0 = Math.max(0, (fr.x - fr.w * mg) * w), y0 = Math.max(0, (fr.y - fr.h * mg) * h);
@@ -13500,11 +13540,35 @@ function psO2CamOpen(opts) {
       const c = document.createElement('canvas'); c.width = Math.round(x1 - x0); c.height = Math.round(y1 - y0);
       c.getContext('2d').drawImage(video, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
       flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
+      const st = step, sub = prev;
       c.toBlob(b => {
         if (!b) { shot = false; return; }
         try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
-        finish({ file: new File([b], 'o2-kamera.jpg', { type: 'image/jpeg', lastModified: Date.now() }), auto: !!isAuto });
+        const file = new File([b], 'o2-kamera.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+        if (!ses) { finish({ file, auto: !!isAuto }); return; }
+        // Reihe: das Foto geht zum Lesen in den Dialog, die Kamera bleibt fuer den naechsten Block offen
+        const item = { l: st === 'kosten' ? 'Kostenblock' : 'Block ' + blockN, n: blockN, t: '', st: 'lade' };
+        results.push(item); pend++;
+        if (st === 'block') { blockN++; paintTitle(); }
+        lastSub = sub; paintChips();
+        let p; try { p = Promise.resolve(o.onShot(file, st)); } catch (e) { p = Promise.resolve(''); }
+        p.then(t => { item.t = String(t || ''); item.st = item.t ? 'ok' : 'leer'; }, () => { item.st = 'leer'; }).then(() => {
+          pend--;
+          if (item.st === 'leer' && st === 'block' && blockN - 1 === item.n) { blockN--; paintTitle(); }
+          paintChips();
+          if (done) return;
+          if (st === 'kosten' && item.st === 'ok') finishSession();
+          else if (finishing && !pend) finish('fertig');
+        });
+        setTimeout(() => { shot = false; }, 500);
       }, 'image/jpeg', 0.92);
+    };
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+    // Reihe: erst wieder automatisch ausloesen, wenn sich das Bild deutlich geaendert hat (naechster Block im Rahmen)
+    const changed = sub => {
+      if (!lastSub || !sub || sub.length !== lastSub.length) return true;
+      let d = 0; for (let i = 0; i < sub.length; i++) d += Math.abs(sub[i] - lastSub[i]);
+      return d / sub.length > 10;
     };
     const tick = () => {
       if (done) return;
@@ -13518,17 +13582,16 @@ function psO2CamOpen(opts) {
       while (hist.length && now - hist[0].t > 3000) hist.shift();
       const peak = hist.reduce((a, b) => Math.max(a, b.s), 0);
       const st = psO2CamState(m, peak, now - t0);
-      setState(st);
-      if (root.getAttribute('data-dbg')) root.setAttribute('data-m', JSON.stringify({ st, s: +m.sharp.toFixed(3), v1: Math.round(m.v1), peak: +peak.toFixed(3), mean: Math.round(m.mean), sat: +m.sat.toFixed(2), mo: +m.motion.toFixed(1) }));
-      if (st === 'ok') { if (!okSince) okSince = now; if (auto && now - okSince >= C.hold) capture(true); } else okSince = 0;
+      if (!finishing) setState(st);
+      if (root.getAttribute('data-dbg')) root.setAttribute('data-m', JSON.stringify({ st, s: +m.sharp.toFixed(3), v1: Math.round(m.v1), peak: +peak.toFixed(3), mean: Math.round(m.mean), sat: +m.sat.toFixed(2), mo: +m.motion.toFixed(1), step, blockN, pend }));
+      if (st === 'ok' && !finishing) { if (!okSince) okSince = now; if (auto && now - okSince >= C.hold && (!ses || changed(m.sub))) capture(true); } else okSince = 0;
     };
-    const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
     const showError = e => {
       const denied = e && /NotAllowed|Security|PermissionDenied/i.test(e.name || '');
       stage.innerHTML = '';
       const box = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;color:#fff;text-align:center;font:700 16px system-ui,sans-serif');
-      box.appendChild(el('div', '', denied ? 'Kein Zugriff auf die Kamera. In den Geräte-Einstellungen für diese App erlauben, oder die normale Kamera-App nehmen.' : 'Kamera nicht verfügbar.'));
-      box.appendChild(btn('Kamera-App öffnen', 'background:#2563eb;color:#fff;font-size:16px;padding:14px 22px', () => finish('native')));
+      box.appendChild(el('div', '', denied ? 'Kein Zugriff auf die Kamera. In den Geräte-Einstellungen für diese App erlauben' + (ses ? '.' : ', oder die normale Kamera-App nehmen.') : 'Kamera nicht verfügbar.'));
+      box.appendChild(btn(ses ? 'Schließen' : 'Kamera-App öffnen', 'background:#2563eb;color:#fff;font-size:16px;padding:14px 22px', () => finish(ses ? null : 'native')));
       stage.appendChild(box); hint.textContent = ''; hint.style.background = 'transparent'; shutter.style.display = 'none';
     };
     document.body.appendChild(root);
@@ -13585,6 +13648,20 @@ function PsO2Import({ onApply, onClose, initial }) {
   // v55.196: eigene Kamera mit Rahmen und Schaerfe-Anzeige (Haken im Dialog; Rueckfall: normale Kamera-App)
   const [ownCam, setOwnCam] = React.useState(() => { try { return localStorage.getItem('ps_o2_owncam') !== '0'; } catch (e) { return true; } });
   const toggleOwnCam = v => { setOwnCam(v); try { localStorage.setItem('ps_o2_owncam', v ? '1' : '0'); } catch (e) {} };
+  // v55.199: Modus "Block-Fotos": die Kamera bleibt offen, je Block ein Foto (Block 1, Block 2 ...), zuletzt der Kostenblock.
+  // Gelesen wird nacheinander im Hintergrund; "Ganzes Foto" = bisheriges Verhalten (eine Taste je Bereich).
+  const [mode, setModeS] = React.useState(() => { try { return localStorage.getItem('ps_o2_mode') === 'ganz' ? 'ganz' : 'block'; } catch (e) { return 'block'; } });
+  const setMode = m => { setModeS(m); try { localStorage.setItem('ps_o2_mode', m); } catch (e) {} };
+  const camOk = psO2CamSupported(), blockMode = mode === 'block' && camOk;
+  const jobRef = React.useRef(Promise.resolve());
+  const openBlocks = step => {
+    setNote('');
+    psO2CamOpen({ session: true, step, onShot: (file, st) => {
+      const job = jobRef.current.then(() => readPhoto(Promise.resolve(file), st === 'kosten' ? 'kosten' : 'block', null));
+      jobRef.current = job.catch(() => {});
+      return job;
+    } });
+  };
   const CAM_LABEL = { tarife: 'Tarif', geraete: 'Handy', internet: 'Internet@Home', kosten: 'Kostenblock' };
   const pick = (stage, lib) => {
     stageRef.current = stage; libModeRef.current = !!lib; setNote('');
@@ -13618,6 +13695,7 @@ function PsO2Import({ onApply, onClose, initial }) {
     readPhoto(Promise.resolve(file), stage, file);
   };
   const readPhoto = async (jobP, stage, retryFile) => {
+    let sum = ''; // kurzer Text "was wurde erkannt" (fuer die Block-Reihe in der Kamera)
     setBlur(null);
     try {
       setBusy('Foto wird vorbereitet …');
@@ -13638,6 +13716,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         r = loc.r; txt = loc.txt;
       }
       setSeen(txt);
+      sum = [].concat(r.tarife.map(x => x.name), r.geraete.map(x => psO2Pretty(x.name)), r.internet.map(x => x.name)).join(', ') || (r.einmalig || r.monatlich ? 'Kosten ' + (r.einmalig || '–') + ' / ' + (r.monatlich || '–') + ' €' : '');
       // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
       const miss = missOf(r);
       if (miss && retryFile) { setCrop({ file: retryFile, stage, auto: true }); setBusy(''); return; }
@@ -13648,7 +13727,8 @@ function PsO2Import({ onApply, onClose, initial }) {
         for (let k = Math.min(old.length, neu.length); k >= 1; k--) if (neu.slice(0, k).every((it, i) => psO2Similar(old[old.length - k + i].name, nmOf(kind, it)))) return k;
         return 0;
       };
-      const ov = { tarife: ovl('tarife'), geraete: ovl('geraete'), internet: ovl('internet') };
+      // Block-Fotos zeigen je einen eigenen Block: da gibt es keine Ueberschneidung (zwei gleiche Tarife sind zwei Tarife)
+      const ov = stage === 'block' ? { tarife: 0, geraete: 0, internet: 0 } : { tarife: ovl('tarife'), geraete: ovl('geraete'), internet: ovl('internet') };
       const merge = (kind, p) => {
         const old = p[kind].slice(), k = ov[kind], neu = r[kind];
         // Bei der Ueberschneidung die vollstaendigere Fassung behalten (am Seitenrand sind Inhalte oft abgeschnitten)
@@ -13697,6 +13777,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
     }
     setBusy('');
+    return sum;
   };
   const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
   const setItem = (key, i, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => k === i ? { ...x, [f]: v } : x) }));
@@ -13721,9 +13802,9 @@ function PsO2Import({ onApply, onClose, initial }) {
   const sec = (title, n, stage, label, hideBtn, body, max) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
     h('div', { className: 'flex items-center justify-between gap-2' },
       h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n + (max ? '/' + max : '') : '')),
-      hideBtn ? null : h('div', { className: 'flex gap-2' },
-        h('button', { onClick: () => pick(stage, false), disabled: !!busy, className: sBtn }, label),
-        h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
+      hideBtn || blockMode && stage !== 'kosten' ? null : h('div', { className: 'flex gap-2' },
+        h('button', { onClick: () => blockMode ? openBlocks('kosten') : pick(stage, false), disabled: !!busy, className: sBtn }, label),
+        blockMode ? null : h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
     body);
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
   return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' }, onClick: e => { if (e.target === e.currentTarget && !busy) onClose(); } },
@@ -13738,10 +13819,15 @@ function PsO2Import({ onApply, onClose, initial }) {
         onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
-      h('div', { className: 'text-sm text-slate-600 mt-1' }, 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
-      h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
+      camOk ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto'], ['block', 'Block-Fotos']].map(([m, lbl]) =>
+        h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (mode === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
+      h('div', { className: 'text-sm text-slate-600 mt-2' }, blockMode
+        ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
+        : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
+      blockMode ? h('button', { onClick: () => openBlocks('block'), disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '📷 Weitere Blöcke fotografieren' : '📷 Block-Fotos starten') : null,
+      blockMode ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
-      h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
+      blockMode ? null : h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: ownCam, onChange: e => toggleOwnCam(e.target.checked) }), 'Eigene Kamera mit Rahmen (empfohlen)'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       blur ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3' },
