@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.201';
+    window.APP_VERSION = '55.202';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12888,16 +12888,18 @@ async function psO2Prepare(file, mode) {
   x.putImageData(id, 0, 0);
   return c;
 }
-let __psO2Worker = null, __psO2WarmP = null;
+let __psO2Worker = null, __psO2Worker2 = null, __psO2WarmP = null;
 // v55.197: Texterkennung (Skript + Sprachdaten) schon beim Oeffnen des Dialogs laden, damit das erste Foto nicht darauf wartet
+// v55.202: zwei Arbeiter, damit zwei Leseversuche gleichzeitig laufen (halbe Wartezeit). Klappt der zweite nicht
+// (wenig Speicher, altes Geraet), wird wie bisher nacheinander gelesen.
 function psO2Warm() {
-  if (__psO2Worker) return Promise.resolve();
   if (!__psO2WarmP) {
     __psO2WarmP = (async () => {
       try {
         await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
         if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
-      } catch (e) { __psO2WarmP = null; }
+      } catch (e) { __psO2WarmP = null; return; }
+      try { if (!__psO2Worker2 && (navigator.hardwareConcurrency || 2) >= 2) __psO2Worker2 = await window.Tesseract.createWorker('deu', 1); } catch (e) { __psO2Worker2 = null; }
     })();
   }
   return __psO2WarmP;
@@ -12905,7 +12907,7 @@ function psO2Warm() {
 // mode 0 = normal, 1 = lokale Binarisierung + Zeilenmodus, 2 = heller Bereich + Spaltenmodus,
 // mode 3 (seit v55.193 der erste Durchgang) = heller Bereich ausschneiden, auf ~2000 px bringen, Zeilenmodus; mode 4 = wie 3, ~2400 px und nachgeschaerft.
 // Liefert Text UND Wortpositionen (words) fuer das Lesen nach Position.
-async function psO2RecognizeFull(file, onMsg, mode, attempt) {
+async function psO2RecognizeFull(file, onMsg, mode, attempt, worker) {
   mode = mode || 0;
   const nth = ['Erster', 'Zweiter', 'Dritter', 'Vierter', 'Fünfter'][attempt || 0] + ' Leseversuch …';
   onMsg && onMsg(attempt ? nth : 'Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
@@ -12917,9 +12919,11 @@ async function psO2RecognizeFull(file, onMsg, mode, attempt) {
     }
   }
   onMsg && onMsg(attempt ? nth : 'Vorschlag wird gelesen …');
+  const w = worker || __psO2Worker;
   const c = await psO2Prepare(file, mode);
-  try { await __psO2Worker.setParameters({ tessedit_pageseg_mode: mode === 1 || mode === 3 || mode === 4 ? '6' : '3' }); } catch (e) {}
-  const r = await __psO2Worker.recognize(c, {}, { text: true, blocks: true, hocr: false, tsv: false });
+  // tessedit_do_invert = 0: kein zweiter Durchlauf mit umgekehrten Farben (spart rund ein Drittel der Zeit, gleiches Ergebnis)
+  try { await w.setParameters({ tessedit_pageseg_mode: mode === 1 || mode === 3 || mode === 4 ? '6' : '3', tessedit_do_invert: '0' }); } catch (e) {}
+  const r = await w.recognize(c, {}, { text: true, blocks: true, hocr: false, tsv: false });
   const data = r && r.data ? r.data : {};
   return { text: data.text || '', words: psO2WordsOf(data) };
 }
@@ -13211,15 +13215,28 @@ function psO2Combine(res) {
 async function psO2ReadLocal(file, onMsg, isDone) {
   const modes = [3, 4, 0, 1, 2], res = [];
   let txt = '', r = null;
-  for (let k = 0; k < modes.length; k++) {
-    const o = await psO2RecognizeFull(file, onMsg, modes[k], k);
+  const pass = async (mode, w) => {
+    const o = await psO2RecognizeFull(file, onMsg, mode, res.length, w);
     const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
     const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
-    res.push(usePos ? Object.assign(pos, { byPos: true }) : cls);
-    txt += (k ? '\n--- Versuch ' + (k + 1) + ' ---\n' : '') + (usePos ? pt : o.text);
-    r = k === 0 ? res[0] : psO2Combine(res);
-    const hard = (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0;
-    if (!hard && (k >= 1 || !psO2Soft(r))) break;
+    return { r: usePos ? Object.assign(pos, { byPos: true }) : cls, t: usePos ? pt : o.text };
+  };
+  const take = out => {
+    out.forEach(o => { txt += (res.length ? '\n--- Versuch ' + (res.length + 1) + ' ---\n' : '') + o.t; res.push(o.r); });
+    r = res.length === 1 ? res[0] : psO2Combine(res);
+  };
+  const hard = () => (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0;
+  for (let k = 0; k < modes.length; ) {
+    if (__psO2Worker2 && k + 1 < modes.length) {
+      // zwei Durchgaenge gleichzeitig auf zwei Arbeitern
+      take(await Promise.all([pass(modes[k], __psO2Worker), pass(modes[k + 1], __psO2Worker2)]));
+      k += 2;
+      if (!hard()) break;
+    } else {
+      take([await pass(modes[k], __psO2Worker)]);
+      k += 1;
+      if (!hard() && (k >= 2 || !psO2Soft(r))) break;
+    }
   }
   return { r, txt };
 }
