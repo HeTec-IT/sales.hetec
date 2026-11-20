@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.192';
+    window.APP_VERSION = '55.193';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12479,7 +12479,7 @@ function psO2FixWords(s) {
   return s.replace(/[A-Za-zÄÖÜäöüß]{5,}/g, w => {
     const lw = w.toLowerCase();
     if (PS_O2_VOCAB.some(v => v.toLowerCase() === lw)) return w;
-    const tol = w.length >= 9 ? 2 : 1;
+    const tol = w.length >= 8 ? 2 : 1;
     let best = null, bd = 9;
     PS_O2_VOCAB.forEach(v => { const dd = psO2Dist(lw, v.toLowerCase()); if (dd <= tol && dd < bd) { bd = dd; best = v; } });
     return best ? (/[A-ZÄÖÜ]/.test(w[0]) ? best[0].toUpperCase() : best[0].toLowerCase()) + best.slice(1) : w;
@@ -12509,7 +12509,7 @@ function psO2Adjust(lines, from) {
   for (let k = from; k < Math.min(lines.length, from + 16); k++) {
     const l = lines[k];
     if (psO2HeadKind(l) || /(Einmalige|alige|Monatliche|natliche)\s*Kosten/i.test(l) || /Seite\s*(\d+\s*)?von|Telef[oó]nica|Brauchle/i.test(l)) break;
-    if (!/Rabatt|Vorteil|Gutschrift|Bonus|Nachlass/i.test(l)) continue;
+    if (!/Rabatt|Vortei|Gutschrift|Bonus|Nachlass|Kombi/i.test(l)) continue;
     const a = psO2Amounts(l);
     if (!a.length) { if (/\d/.test(l.replace(/\b\d+\s*EUR\b/gi, ''))) o.bad = true; continue; }
     let col;
@@ -12530,9 +12530,11 @@ function psO2CleanName(line, kind) {
     // o2-Produkte beginnen mit O2/o2 (OCR liest auch 02, Oz, O₂)
     const m = s.match(/(?:^|[\s‚'’`´])(?:O|o|0)(?:[2₂z]|\s?[:;])[:;]?\s+\S/);
     if (m) s = 'O2 ' + s.slice(m.index + m[0].length - 1).trim();
+    if (kind === 'tarife' && !/^O2\s/.test(s)) { const k = s.match(/\b(?:Mobile|Free|Grow|Unlimited)\s+(?:S|M|L|XL)\b.*$/i); if (k) s = 'O2 ' + k[0]; }
     if (kind === 'internet') s = s.replace(/\b(Home)\s?([SMLX]{1,2})\s?(\d{2,4})\b/i, (x, a, b, c) => a + ' ' + b.toUpperCase() + ' ' + c);
     const y = s.match(/\(\s*20\d\d\s*\)/);
     if (y) s = s.slice(0, y.index + y[0].length);
+    else s = s.replace(/\(\s*(20\d\d)\s*$/, '($1)');
     s = s.replace(/\bInstallationsadresse\b.*$/i, '').trim();
   } else {
     const b = s.search(PS_O2_BRANDS);
@@ -12573,11 +12575,11 @@ function psO2Junk(t) {
 // Rabatt-/Preiszeilen, Adressen und Muell fliegen raus (Einzelpreise interessieren nicht, nur die Summen).
 function psO2Detail(line) {
   line = String(line || '').replace(/\s*\(?\s*Gesamtpreis.*$/i, '');
-  if (/Rabatt|Anschlusspreis|Gesamtpreis|Ersparnis|Aktivierung|Bestell|m[öo]glich|E-?\s?Mail|Ausdrucken|Auftragsstatus|Jetzt im|Einmal|Monatl|Kosten|UMTS|Adresse|Grundgeb|Anschluss|maliger|Seite\s|Vorschlag|aufgerufen|ausstellend|Unverbindlich|Telef|Brauchle|Acrobat|\d+\s*EUR\b/i.test(line)) return '';
+  if (/Kombi|Vortei|befreiu|Gutschrift|Plus-?\s?Bundle|TS-?\s?Opt|Rabatt|Anschlusspreis|Gesamtpreis|Ersparnis|Aktivierung|Bestell|m[öo]glich|E-?\s?Mail|Ausdrucken|Auftragsstatus|Jetzt im|Einmal|Monatl|Kosten|UMTS|Adresse|Grundgeb|Anschluss|maliger|Seite\s|Vorschlag|aufgerufen|ausstellend|Unverbindlich|Telef|Brauchle|Acrobat|\d+\s*EUR\b/i.test(line)) return '';
   const am = line.search(/\d{1,3}(?:\.\d{3})*,\d{2}/);
   if (am >= 0) { if (line.slice(0, am).replace(/[^A-Za-zÄÖÜäöüß]/g, '').length < 4) return ''; line = line.slice(0, am); }
   let s = line.replace(/[|\\\[\]{}_~„“"*¦]/g, ' ').replace(/\s+/g, ' ').trim();
-  s = s.replace(/^[^A-Za-zÄÖÜ0-9]*(?:O|o|0)(?:[2₂z]|\s?[:;])[:;]?\s+(?=\S)/, 'O2 ').replace(/\(\s*[Il|]\s?M\s*\)/, '(1M)');
+  s = s.replace(/^[^A-Za-zÄÖÜ0-9]*(?:O|o|0)(?:[2₂z]|\s?[:;])[:;]?\s+(?=\S)/, 'O2 ').replace(/\(\s*[Il|]\s?M\s*\)?/, '(1M)').replace(/^my\s+Data\b/i, 'O2 my Data');
   let t = s.split(' ').filter(Boolean);
   while (t.length && psO2Junk(t[0])) t.shift();
   while (t.length && (psO2Junk(t[t.length - 1]) || /^[-/+&]$/.test(t[t.length - 1]))) t.pop();
@@ -12596,6 +12598,7 @@ function psO2Collect(lines, from) {
   for (let k = from; k < Math.min(lines.length, from + 16); k++) {
     const l = lines[k];
     if (psO2HeadKind(l) || /(Einmalige|alige|Monatliche|natliche)\s*Kosten/i.test(l) || /Seite\s*(\d+\s*)?von|Telef[oó]nica|Brauchle/i.test(l)) break;
+    if (PS_O2_BRANDS.test(l) && /\d{2,5}\s?G[B8]B?\b/i.test(l) && !/Datenvolumen/i.test(l)) break;
     const d = psO2Detail(l);
     if (d && !det.some(x => psO2Similar(x, d))) det.push(d);
   }
@@ -12603,25 +12606,31 @@ function psO2Collect(lines, from) {
 }
 // Namenszeile eines Produkts (je Bereich ein Muster; steht meist direkt unter der Kopfzeile, davor kann OCR-Muell stehen)
 const PS_O2_NAME = {
-  tarife: /(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s+(Mobile|Free|Grow|Unlimited|Prepaid|Basic|Smart|Blue|Connect)\b/i,
+  // v55.193: auch ohne gelesenes "O2" (die Texterkennung macht aus dem O₂-Zeichen oft "©:" oder "Ol"): Mobile/Free/Grow/Unlimited + Groesse
+  tarife: /(?:(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s+(?:Mobile|Free|Grow|Unlimited|Prepaid|Basic|Smart|Blue|Connect)\b|\b(?:Mobile|Free|Grow|Unlimited)\s+(?:S|M|L|XL)\b)/i,
   internet: /(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s*Home(?:\b|(?=[SMLX]\d))/i,
   geraete: PS_O2_BRANDS
 };
 function psO2Parse(text) {
   const all = String(text || '').split(/\r?\n/).map(l => l.trim().replace(/(\d)[.,](\d{2})(?![\d.,])/g, '$1,$2')).filter(Boolean);
-  const lim = all.findIndex(l => /^\W*Aktuell\W*$/i.test(l)); // Bereich "Aktuell" (bisheriger Vertrag) nicht auswerten
+  // Bereich "Aktuell" (bisheriger Vertrag) nicht auswerten – aber nur, wenn davor schon Produkte oder Kosten standen.
+  // Steht "Aktuell" als Beschriftung in der Seitenleiste VOR der Positionsliste (Bedarfsanalyse), wuerde sonst alles verworfen.
+  const limRaw = all.findIndex(l => /^\W*Aktuell\W*$/i.test(l));
+  const anchor0 = all.findIndex(l => psO2HeadKind(l) || /(Einmalige|Monatliche)\s*Kosten/i.test(l) || PS_O2_NAME.tarife.test(l));
+  const lim = limRaw > -1 && (anchor0 < 0 || limRaw > anchor0) ? limRaw : -1;
   const lines = lim > -1 ? all.slice(0, lim) : all;
   const out = { internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' };
   const kostZ = { e: null, m: null }; // Zeilennummern der Kostenzeilen ohne Betrag
   const next = (i, re) => { for (let k = i + 1; k < Math.min(lines.length, i + 4); k++) if (re.test(lines[k])) return lines[k]; return ''; };
   const head = l => { const a = l.search(/\d{1,3}(?:\.\d{3})*,\d{2}/); return a > 0 ? l.slice(0, a) : l; }; // Preisspalten rechts abschneiden
-  const add = (kind, i, raw, from, dedupe) => {
+  const add = (kind, i, raw, from, dedupe, hdr) => {
     const name = psO2CleanName(head(raw), kind);
     if (!name || name.length < 4) return;
     if (dedupe && out[kind].some(x => psO2Similar(x.name, name))) return;
     const am = next(i, PS_O2_ARTEN).match(PS_O2_ARTEN);
     let cols = psO2Cols(raw);
     if (!cols && kind === 'geraete') for (let k = from; k < Math.min(lines.length, from + 3) && !cols; k++) if (/MyHandy|Monate/i.test(lines[k])) cols = psO2Cols(lines[k].replace(/Gesamtpreis.*?€/i, ''));
+    if (!cols && hdr) cols = psO2Cols(hdr); // v55.193: bei o2 steht der Preis oft in der Kopfzeile (TARIF 29,99 €)
     out[kind].push({ name, idx: i, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', am: cols, rb: psO2Adjust(lines, from), details: psO2Collect(lines, from) });
   };
   lines.forEach((l, i) => {
@@ -12632,7 +12641,7 @@ function psO2Parse(text) {
       let raw = lines[j], from = j + 1;
       // Geraetename ueber zwei Zeilen ("Apple IPHONE 17 PRO MAX" / "256GB, COSMIC ORANGE")
       if (kind === 'geraete' && lines[j + 1] && !psO2Amounts(raw).length && /\d+\s*GB|TB/i.test(lines[j + 1]) && !/\d+\s*GB|TB/i.test(raw)) { raw += ' ' + lines[j + 1]; from = j + 2; }
-      add(kind, i, raw, from, false);
+      add(kind, i, raw, from, false, l);
     }
     if (!out.einmalig && (/(Einmalige|alige)\s*Kosten/i.test(l) || /^\W*einmalig\W+\d/i.test(l))) { const a = psO2Amounts(l); if (a.length) { out.einmalig = a[a.length - 1]; } else kostZ.e = i; }
     if (!out.monatlich && (/(Monatliche|natliche)\s*Kosten/i.test(l) || /^\W*monatlich\W+\d/i.test(l))) {
@@ -12661,12 +12670,13 @@ function psO2Parse(text) {
   });
   // Ohne Kopfzeilen (z. B. Uebersicht "Für Sie"): o2-Tarife und Geraete am Namen erkennen
   if (!out.internet.length) lines.forEach((l, i) => { if (PS_O2_NAME.internet.test(l)) add('internet', i - 1, l, i + 1, true); });
-  if (!out.tarife.length) lines.forEach((l, i) => { if (PS_O2_NAME.tarife.test(l)) add('tarife', i - 1, l, i + 1, true); });
+  if (!out.tarife.length) lines.forEach((l, i) => { if (PS_O2_NAME.tarife.test(l) && !/Activate|Bestandskunde|Beratung|VO:/i.test(l)) add('tarife', i - 1, l, i + 1, true); });
   if (!out.geraete.length) lines.forEach((l, i) => {
     if (!/My\s?Handy/i.test(l)) return;
     for (let k = i - 1; k >= Math.max(0, i - 2); k--) if (!psO2HeadKind(lines[k]) && !/My\s?Handy/i.test(lines[k]) && lines[k].replace(/[^A-Za-zÄÖÜäöü]/g, '').length >= 6) { add('geraete', k, lines[k], i, true); break; }
   });
   if (!out.geraete.length) lines.forEach((l, i) => { if (/\b(?:Apple\s+)?(?:iPhone|iPad|Galaxy|Pixel)\s*[A-Za-z0-9]/i.test(l) && /\d/.test(l) && !/Gesamtpreis|Jetzt im/i.test(l)) add('geraete', i - 1, l, i + 1, true); });
+  if (!out.geraete.length) lines.forEach((l, i) => { if (PS_O2_BRANDS.test(l) && /\d{2,5}\s?G[B8]B?\b/i.test(l) && !/Gesamtpreis|Jetzt im|Datenvolumen/i.test(l)) add('geraete', i - 1, l, i + 1, true); });
   return out;
 }
 const psO2Key = s => String(s || '').toLowerCase().replace(/[^a-z0-9äöü]/g, '');
@@ -12681,12 +12691,14 @@ function psO2Similar(a, b) {
 }
 // GROSSBUCHSTABEN-Geraetenamen lesbar machen: "IPHONE 18 PRO 256GB, BURGUNDER" -> "iPhone 18 Pro 256GB, Burgunder"
 function psO2Pretty(s) {
+  s = String(s || '').replace(/\bPIXE\b/i, 'PIXEL').replace(/\b(\d{2,4})\s?G[8B]B?\b/, '$1GB');
   s = String(s || '').replace(/\bIP (\d{1,2})\b/, 'iPhone $1').replace(/\b(iPhone \d{1,2}) PM\b/, '$1 Pro Max').replace(/\bBURG\.?(?=\s|,|$)/, 'Burgunder');
   if (/iPhone/.test(s)) s = s.replace(/\b(64|128|256|512)\b(?!\s?GB)/, '$1GB');
   s = String(s || '').split(' ').map(w => /^SWZ[,.]?$/.test(w) ? w.replace('SWZ', 'Schwarz') : /^[A-ZÄÖÜ]{2,}[,.]?$/.test(w) && !/^(GB|TB|LTE|USB|SE|FE|XL|II|III)[,.]?$/.test(w) || /^[A-ZÄÖÜ]{3,}\d+[,.]?$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(' ');
   s = s.replace(/\bIphone\b/g, 'iPhone').replace(/\bIpad\b/g, 'iPad').replace(/\bAirpods\b/g, 'AirPods');
   // Marke steht im o2-Vorschlag teils doppelt ("Samsung SAMSUNG GALAXY ...")
   s = s.split(' ').filter((w, i, a) => !(i > 0 && w.toLowerCase() === a[i - 1].toLowerCase())).join(' ');
+  { const t = s.split(' '); if (t.length > 3 && PS_O2_BRANDS.test(t[0])) for (const n of [1, 2]) { const j = t.slice(1, 1 + n).join('').toLowerCase(); if (j.length >= 3 && psO2Dist(j, t[0].toLowerCase()) <= 1 + Math.floor(t[0].length / 4)) { t.splice(1, n); s = t.join(' '); break; } } }
   // haeufiger Lesefehler am Bildschirm: "iPhone 77" statt "iPhone 17"
   if (/Samsung|Galaxy/i.test(s)) s = s.replace(/\b5(2\d)\b/, 'S$1');
   s = s.replace(/\b(\d{1,2})(64|128|256|512)\s?GB\b/, '$1 $2GB');
@@ -12815,9 +12827,10 @@ function psO2BrightBox(bmp) {
 async function psO2Prepare(file, mode) {
   const bmp = await createImageBitmap(file);
   // Versuch 3: Rand (Raum, Bildschirmrahmen, Taskleiste) weglassen und den Inhalt groesser rechnen
-  const bb = mode === 2 ? psO2BrightBox(bmp) : null;
+  const bb = mode === 2 || mode === 3 || mode === 4 ? psO2BrightBox(bmp) : null;
   const bx = bb ? bb[0] : 0, by = bb ? bb[1] : 0, bW = bb ? bb[2] : bmp.width, bH = bb ? bb[3] : bmp.height;
-  const sc = Math.min(bb ? 2 : 1, 2400 / Math.max(bW, bH));
+  // Modus 3/4: auf ~2000 bzw. ~2400 px bringen (zu klein = Schrift zu fein, zu gross = Moiré/Rauschen), hoechstens 2,5-fach vergroessern
+  const sc = mode === 3 || mode === 4 ? Math.min(2.5, (mode === 3 ? 2000 : 2400) / Math.max(bW, bH)) : Math.min(bb ? 2 : 1, 2400 / Math.max(bW, bH));
   const W = Math.round(bW * sc), H = Math.round(bH * sc);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d', { willReadFrequently: true });
@@ -12849,22 +12862,36 @@ async function psO2Prepare(file, mode) {
   for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.01) { hi = v; break; } }
   const k = 255 / Math.max(1, hi - lo);
   for (let i = 0, p = 0; i < n; i++, p += 4) { const q = (g[i] - lo) * k; d[p] = d[p + 1] = d[p + 2] = q; d[p + 3] = 255; }
+  if (mode === 4) {
+    // Leicht nachschaerfen (unscharf maskieren, 3x3): feine Schrift auf Bildschirmfotos wird lesbarer
+    const f = new Float32Array(n);
+    for (let i = 0; i < n; i++) f[i] = (g[i] - lo) * k;
+    for (let y = 1; y < H - 1; y++) for (let xx = 1; xx < W - 1; xx++) {
+      const i = y * W + xx, bl = (f[i - W - 1] + f[i - W] + f[i - W + 1] + f[i - 1] + f[i] + f[i + 1] + f[i + W - 1] + f[i + W] + f[i + W + 1]) / 9, q = f[i] + (f[i] - bl), pp = i * 4;
+      d[pp] = d[pp + 1] = d[pp + 2] = q;
+    }
+  }
   x.putImageData(id, 0, 0);
   return c;
 }
 let __psO2Worker = null;
-// mode 0 = normal, 1 = lokale Binarisierung + Block-Modus, 2 = lokale Binarisierung + Spalten-Modus
-async function psO2Recognize(file, onMsg, mode) {
+// mode 0 = normal, 1 = lokale Binarisierung + Zeilenmodus, 2 = heller Bereich + Spaltenmodus,
+// mode 3 (seit v55.193 der erste Durchgang) = heller Bereich ausschneiden, auf ~2000 px bringen, Zeilenmodus; mode 4 = wie 3, ~2400 px und nachgeschaerft.
+// Liefert Text UND Wortpositionen (words) fuer das Lesen nach Position.
+async function psO2RecognizeFull(file, onMsg, mode, attempt) {
   mode = mode || 0;
-  onMsg && onMsg(mode ? (mode === 1 ? 'Zweiter' : 'Dritter') + ' Leseversuch …' : 'Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
+  const nth = ['Erster', 'Zweiter', 'Dritter', 'Vierter', 'Fünfter'][attempt || 0] + ' Leseversuch …';
+  onMsg && onMsg(attempt ? nth : 'Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
   await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
   if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
-  onMsg && onMsg(mode ? (mode === 1 ? 'Zweiter' : 'Dritter') + ' Leseversuch …' : 'Vorschlag wird gelesen …');
+  onMsg && onMsg(attempt ? nth : 'Vorschlag wird gelesen …');
   const c = await psO2Prepare(file, mode);
-  try { await __psO2Worker.setParameters({ tessedit_pageseg_mode: mode === 1 ? '6' : '3' }); } catch (e) {}
-  const r = await __psO2Worker.recognize(c);
-  return r && r.data ? r.data.text : '';
+  try { await __psO2Worker.setParameters({ tessedit_pageseg_mode: mode === 1 || mode === 3 || mode === 4 ? '6' : '3' }); } catch (e) {}
+  const r = await __psO2Worker.recognize(c, {}, { text: true, blocks: true, hocr: false, tsv: false });
+  const data = r && r.data ? r.data : {};
+  return { text: data.text || '', words: psO2WordsOf(data) };
 }
+async function psO2Recognize(file, onMsg, mode) { return (await psO2RecognizeFull(file, onMsg, mode, mode ? 1 : 0)).text; }
 const psO2Esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 // Digitale Angebotskarte (HTML, scharf im PDF) aus den gepruefen Werten
 // Verteilung auf die drei Angebotskarten: Karte 1 = Tarif 1 + Handy 1, Karte 2 = Tarif 2 + Handy 2 und alle weiteren, Karte 3 = Internet.
@@ -12928,6 +12955,221 @@ function psO2Html(d, ctx) {
   }
   return '<div style="width:100%;box-sizing:border-box"><div style="font-family:Inter,\'Segoe UI\',system-ui,sans-serif;padding:16px 22px 14px;background:#fff;box-sizing:border-box">' + body +
     (d.hinweis ? '<div style="font-size:14px;font-weight:600;margin-top:14px">' + psO2Esc(d.hinweis) + '</div>' : '') + '</div></div>';
+}
+// === v55.193 (Beta): LESEN NACH POSITION ===================================================================
+// Die Texterkennung liefert zu jedem Wort die Lage im Bild. Damit wird (1) nur die Positionsliste gelesen – ohne
+// Suchfeld, Tabs, Seitenleiste ("Bedarfsanalyse", "Aktuell") und Buttons – und (2) jeder Preis ueber seine SPALTE
+// (einmalig | monatlich) zugeordnet statt ueber die Zeile (der Preis steht oft in der Kopfzeile TARIF/HANDY oder
+// rutscht beim Foto in die Nachbarzeile). Der Parser (psO2Parse) bleibt derselbe, er bekommt nur saubereren Text.
+// Sind die Spaltenkoepfe nicht erkennbar, passiert nichts: dann gilt der unveraenderte Text.
+function psO2WordsOf(data) {
+  const out = [];
+  let ln = 0;
+  try {
+    ((data && data.blocks) || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(l => {
+      ln++;
+      (l.words || []).forEach(w => {
+        const bb = w && w.bbox, t = w && String(w.text || '').trim();
+        if (t && bb) out.push({ t, x0: bb.x0, y0: bb.y0, x1: bb.x1, y1: bb.y1, ln });
+      });
+    })));
+  } catch (e) {}
+  if (!out.length && data && typeof data.tsv === 'string') {
+    data.tsv.split(/\r?\n/).forEach(row => {
+      const c = row.split('\t');
+      if (c.length < 12 || c[0] !== '5') return;
+      const t = c.slice(11).join(' ').trim(), x = +c[6], y = +c[7];
+      if (t) out.push({ t, x0: x, y0: y, x1: x + (+c[8]), y1: y + (+c[9]), ln: (+c[2]) * 100000 + (+c[3]) * 1000 + (+c[4]) });
+    });
+  }
+  return out;
+}
+function psO2WordsToText(words) {
+  if (!words || words.length < 8) return '';
+  const byLn = new Map();
+  words.forEach(w => { if (!byLn.has(w.ln)) byLn.set(w.ln, []); byLn.get(w.ln).push(w); });
+  const yc = ws => ws.reduce((s, w) => s + (w.y0 + w.y1) / 2, 0) / ws.length;
+  const lines = Array.from(byLn.values()).map(ws => ws.slice().sort((a, b) => a.x0 - b.x0)).sort((a, b) => yc(a) - yc(b));
+  const hs = words.filter(w => w.t.replace(/[^A-Za-zÄÖÜäöüß0-9]/g, '').length >= 3).map(w => w.y1 - w.y0).sort((a, b) => a - b);
+  const medH = hs.length ? hs[Math.floor(hs.length / 2)] : 14;
+  const txt = ws => ws.map(w => w.t).join(' ');
+  // Betrag mit Komma (oder verlesenem Punkt: "39.99")
+  const AMT = /\d{1,3}(?:\.\d{3})*,\d{2}|\d{1,3}\.\d{2}(?!\d)/;
+  const norm = x => /^\d{1,3}\.\d{2}$/.test(x) ? x.replace('.', ',') : x;
+  const mean = v => v.reduce((s, x) => s + x, 0) / v.length;
+  const isE = t => /^\W*\w{0,3}mal[iıl1|]g\W*$/i.test(t), isM = t => /^\W*\w{0,2}onatl[iıl1|]ch\W*$/i.test(t);
+  const reE = /(Einmalige|alige)\s*Kosten/i, reM = /(Monatliche|natliche)\s*Kosten/i;
+  const firstHead = lines.findIndex(ws => psO2HeadKind(txt(ws)));
+  const costIdx = lines.findIndex(ws => reE.test(txt(ws)) || reM.test(txt(ws)));
+  // Rechter Rand jedes Preises (Betrag samt "€"/"*" dahinter) – Preise stehen rechtsbuendig in ihrer Spalte
+  const edgeOf = (ws, i) => { const nx = ws[i + 1]; return nx && /^[€*£]+$/.test(nx.t) ? nx.x1 : ws[i].x1; };
+  const isAmt = w => AMT.test(w.t) && !/[A-Za-zÄÖÜäöü]{2,}/.test(w.t);
+  // 1. Spaltenkoepfe "einmalig | monatlich" (stehen vor dem ersten Bereich) – oft zu klein/grau gelesen, dann Schritt 2
+  const lim = firstHead > -1 ? firstHead : (costIdx > -1 ? costIdx : lines.length);
+  let hdrIdx = -1, hE = null, hM = null;
+  for (let i = 0; i < lim; i++) {
+    const e = lines[i].find(w => isE(w.t)), m = lines[i].find(w => isM(w.t));
+    if (m && (e || lines[i].length <= 4 || lines[i].some(w => /^Art[il1]kel$/i.test(w.t)))) { hdrIdx = i; hE = e || null; hM = m; }
+  }
+  let Ex1 = hE ? hE.x1 : null, Mx1 = hM ? hM.x1 : null;
+  // 2. Sonst aus den Preisen selbst: "monatlich" ist die Spalte mit den meisten rechtsbuendigen Betraegen (bei Gleichstand die rechte);
+  // "einmalig" die Gruppe 4-14 Zeilenhoehen links davon (Gesamtpreis-/Ersparnis-Zeilen zaehlen nicht)
+  let firstAmt = -1;
+  if (Mx1 == null) {
+    const edges = [];
+    lines.forEach((ws, idx) => {
+      if (/Gesamtpreis|Ersparnis/i.test(txt(ws))) return;
+      ws.forEach((w, i) => { if (isAmt(w)) { edges.push(edgeOf(ws, i)); if (firstAmt < 0) firstAmt = idx; } });
+    });
+    edges.sort((a, b) => a - b);
+    const groups = [];
+    edges.forEach(x => { const g = groups[groups.length - 1]; if (g && x - g.max <= 2.5 * medH) { g.v.push(x); g.max = x; } else groups.push({ v: [x], max: x }); });
+    const mg = groups.filter(g => g.v.length >= 2).sort((a, b) => b.v.length - a.v.length || b.max - a.max)[0];
+    if (mg) {
+      Mx1 = mean(mg.v);
+      const eg = groups.filter(g => g !== mg && Mx1 - mean(g.v) >= 4 * medH && Mx1 - mean(g.v) <= 14 * medH).sort((a, b) => b.v.length - a.v.length || b.max - a.max)[0];
+      if (eg) Ex1 = mean(eg.v);
+    }
+  }
+  if (Mx1 == null) return '';
+  // Oben: Kopfzeile bzw. Programmkopf (Tabs, Suchfeld) weg; rechts neben "monatlich": Seitenleiste (Bedarfsanalyse, Werbung, "Ersparnis"-Schild);
+  // unten: die Buttons (Bestellen / Als E-Mail senden / Ausdrucken) unter dem Kostenblock
+  let topIdx = hdrIdx;
+  if (topIdx < 0) {
+    const chrome = /Activate|Bestandskunde|Neue\s+Beratung|Beratung\s+öffnen|Verwaltete|Favoriten|VO:/i;
+    for (let i = 0; i < lines.length && (firstAmt < 0 || i < firstAmt); i++) if (chrome.test(txt(lines[i]))) topIdx = i;
+  }
+  const cutX = Mx1 + 1.5 * medH;
+  const botIdx = costIdx > -1 ? lines.findIndex((ws, i) => i > costIdx && /Auftragsstatus|Bestellen\b|E-?\s?Mail\s?senden|Ausdruck/i.test(txt(ws))) : -1;
+  const colOf = x => {
+    if (Ex1 != null) { const dm = Math.abs(x - Mx1), de = Math.abs(x - Ex1); return Math.min(dm, de) > 3.5 * medH ? '' : dm <= de ? 'm' : 'e'; }
+    const d = Mx1 - x;
+    return d >= -1.5 * medH && d <= 3 * medH ? 'm' : d >= 4 * medH && d <= 14 * medH ? 'e' : '';
+  };
+  const kept = [];
+  lines.forEach((ws, idx) => {
+    if (idx <= topIdx || (botIdx > -1 && idx >= botIdx)) return;
+    const w2 = ws.filter(w => w.x0 <= cutX);
+    if (w2.length) kept.push({ idx, ws: w2, y: yc(w2), t: txt(w2) });
+  });
+  // Kostenblock: die Summen stehen rechtsbuendig in ihrer Spalte, aber oft eine Zeile versetzt zu ihrer Beschriftung.
+  // Betraege im Bereich um die beiden Beschriftungen (ueber Spalte zugeordnet) werden den Beschriftungen zugeschrieben.
+  const lE = kept.find(k => reE.test(k.t)), lM = kept.find(k => reM.test(k.t));
+  const lab = lE || lM;
+  let zTop = -Infinity, zBot = -Infinity, E = null, M = null;
+  if (lab) {
+    zTop = (lE || lM).y - 3.2 * medH;
+    zBot = lM ? lM.y + 1.5 * medH : lE.y + 5 * medH;
+    if (lE && lM && lM.y < lE.y) { zTop = lM.y - 3.2 * medH; zBot = lE.y + 1.5 * medH; }
+  }
+  const out = [];
+  let attE = false, attM = false;
+  kept.forEach(k => {
+    const inZone = lab && k.y >= zTop && k.y <= zBot;
+    const toks = [], col = { e: null, m: null };
+    for (let i = 0; i < k.ws.length; i++) {
+      const w = k.ws[i];
+      if (isAmt(w)) {
+        const c = colOf(edgeOf(k.ws, i)), eu = k.ws[i + 1] && /^[€*£]+$/.test(k.ws[i + 1].t);
+        if (c && inZone) {
+          // Kostenblock: erster Betrag je Spalte (von oben) = Summe; weitere Betraege in der Spalte (z. B. Ersparnis) verwerfen
+          if (c === 'e' && E == null) E = norm(w.t.match(AMT)[0]);
+          if (c === 'm' && M == null) M = norm(w.t.match(AMT)[0]);
+          if (eu) i++;
+          continue;
+        }
+        if (c && !inZone && col[c] == null) { col[c] = norm(w.t.match(AMT)[0]); if (eu) i++; continue; }
+      }
+      toks.push(w.t);
+    }
+    if (!inZone && (col.e != null || col.m != null)) toks.push((col.e != null ? col.e + ' €' : '–') + ' ' + (col.m != null ? col.m + ' €' : '–'));
+    let t = toks.join(' ');
+    if (inZone) {
+      // Uebrig gebliebene Betraege im Kostenblock = Hinweiszeile "Ab dem 37. Monat: 14,99 €" (klein gedruckt), nie die Summe
+      if (reM.test(t) && AMT.test(t) && !/Ab\s*dem\s*\d/i.test(t)) {
+        const n = t.match(/(\d{1,2})\s*\.?\s*Mon/i), am = t.match(new RegExp(AMT.source, 'g'));
+        t = 'Monatliche Kosten' + (n && am ? ' Ab dem ' + n[1] + '. Monat: ' + norm(am[am.length - 1]) + ' €' : '');
+      }
+      if (reE.test(t) && E != null && !attE) { t += ' ' + E + ' €'; attE = true; }
+      else if (reM.test(t) && M != null && !attM) { t += ' ' + M + ' €'; attM = true; }
+    }
+    if (t.trim()) out.push(t);
+  });
+  if (E != null && !attE) out.push('Einmalige Kosten ' + E + ' €');
+  if (M != null && !attM) out.push('Monatliche Kosten ' + M + ' €');
+  return out.join('\n');
+}
+// Wie gut ist ein Leseergebnis? Mehr erkannte Felder und stimmige Summen = besser.
+function psO2Score(r) {
+  if (!r) return -1;
+  let s = Math.min(r.tarife.length, 6) + Math.min(r.geraete.length, 6) + Math.min(r.internet.length, 2) + (r.einmalig ? 1 : 0) + (r.monatlich ? 1 : 0);
+  const c = psO2Check(r);
+  if (c) [c.e, c.m].forEach(x => { if (x) s += x.ok ? 2 : -1; });
+  return s;
+}
+// Was auf dem Foto zu sehen ist, aber (noch) nicht gelesen wurde -> noch ein Durchgang lohnt sich.
+function psO2Gaps(r, txt) {
+  const g = [];
+  if (!r.geraete.length && /My\s?Handy|Gesamtpreis|\bHANDY\b|iPhone|Galaxy|PIXE|Xiaomi|Samsung/i.test(txt)) g.push('geraete');
+  if (!r.tarife.length && /\bTARIF\b|(?:Mobile|Free|Grow|Unlimited)\s+(?:S|M|L|XL)\b/i.test(txt)) g.push('tarife');
+  if (!(r.einmalig && r.monatlich) && /(Einmalige|Monatliche)\s*Kosten/i.test(txt)) g.push('kosten');
+  const c = psO2Check(r);
+  if (c && [c.e, c.m].some(x => x && !x.ok)) g.push('summen');
+  return g;
+}
+// Wie "echt" ist ein gelesener Produktname? Anteil der Woerter, die zu Geraeten/Tarifen/Farben passen (Lesemuell wie "Goc Igle" faellt auf).
+const PS_O2_KNOWN = /^(?:O2|Google|Pixel|Pro|Max|Plus|Ultra|Mini|Air|Fold|Flip|FE|SE|XL|Apple|iPhone|iPad|Samsung|Galaxy|Xiaomi|Redmi|Poco|Motorola|Moto|Edge|Razr|Nokia|Oppo|Find|Honor|Magic|Huawei|Fairphone|OnePlus|Sony|Xperia|Nothing|Phone|Watch|AirPods|Mobile|Free|Grow|Unlimited|Home|Smart|Basic|Prepaid|Frost|Schwarz|Weiß|Weiss|Blau|Grün|Gruen|Rot|Rosa|Grau|Silber|Gold|Violett|Lila|Beige|Creme|Titan|Graphit|Mint|Lavendel|Burgunder|Cosmic|Orange|Black|White|Blue|Green|Silver|Obsidian|Porcelain|Hazel|Bay|Iris|Peony|Lemongrass|Jade|Navy|Midnight|Starlight|Natural|Desert|Ocean|Teal|Ultramarine|Space|Deep|Sky|Moonstone|Charcoal|LTE|5G|GB|TB|DSL|Kabel|Glasfaser|Router|Box|Cube)$/i;
+function psO2NameQ(name) {
+  const t = String(name || '').split(/\s+/).map(w => w.replace(/^[(\[]+|[)\],.;:]+$/g, '')).filter(Boolean);
+  if (!t.length) return 0;
+  return t.filter(w => /\d/.test(w) || /^[A-Z]{2}$/.test(w) || PS_O2_KNOWN.test(w)).length / t.length;
+}
+function psO2ItemQ(kind, it) { return psO2NameQ(kind === 'geraete' ? psO2Pretty(it.name) : it.name); }
+// Qualitaet einer Liste (Tarife/Handys/Internet) aus einem Durchgang: echte Namen, viele Inhaltszeilen, Preise vorhanden
+function psO2ListQ(kind, list) {
+  return list.reduce((s, it) => s + psO2ItemQ(kind, it) * 3 + Math.min((it.details || []).length, 6) * 0.5 + (it.am ? 0.5 : 0), 0);
+}
+// Weiche Luecken: alles gelesen, aber ein Name sieht nach Lesemuell aus oder ein Tarif hat auffallend wenig Inhalte -> ein zweiter Durchgang lohnt sich
+function psO2Soft(r) {
+  return ['tarife', 'geraete', 'internet'].some(k => (r[k] || []).some(it => psO2ItemQ(k, it) < 0.8)) || (r.tarife || []).some(t => (t.details || []).length < 3 || !/\b(?:S|M|L|XL)\b/.test(t.name));
+}
+// Ergebnisse mehrerer Durchgaenge zusammenfuehren: je Bereich die Liste mit der besten Qualitaet, bei Summen gewinnt der Wert, der
+// am haeufigsten gelesen wurde (bei Gleichstand der fruehere).
+function psO2Combine(res) {
+  const pick = kind => {
+    const L = res.map(x => x[kind]).filter(a => a && a.length);
+    if (!L.length) return [];
+    return L.slice().sort((a, b) => psO2ListQ(kind, b) - psO2ListQ(kind, a))[0];
+  };
+  const vote = f => {
+    const cnt = {};
+    res.forEach(x => { if (x[f]) cnt[x[f]] = (cnt[x[f]] || 0) + (x.byPos ? 2 : 1); });
+    let best = '', n = 0;
+    res.forEach(x => { if (x[f] && cnt[x[f]] > n) { best = x[f]; n = cnt[x[f]]; } });
+    return best;
+  };
+  return { tarife: pick('tarife'), geraete: pick('geraete'), internet: pick('internet'), einmalig: vote('einmalig'), monatlich: vote('monatlich'), hinweis: vote('hinweis'), mixed: res.length > 1 };
+}
+// Lokales Lesen: bis zu fuenf Durchgaenge. Die ersten beiden (Modus 3 und 4) schneiden den hellen Bildschirm aus dem Foto,
+// bringen ihn auf passende Groesse und lesen im Zeilenmodus – das liest Fotos vom Bildschirm am besten; Modus 4 schaerft
+// zusaetzlich nach (die Texterkennung reagiert auf Kleinigkeiten, zwei leicht verschiedene Bilder ergaenzen sich).
+// Jeder Durchgang wird einmal wie bisher (Zeilen) und einmal nach Position ausgewertet; es gilt das bessere Ergebnis.
+// Harte Luecken (etwas Sichtbares fehlt, Summen stimmen nicht, isDone) -> weiterlesen bis zum fuenften Durchgang;
+// weiche Luecken (Lesemuell im Namen, wenig Inhalte) -> hoechstens ein zweiter Durchgang.
+async function psO2ReadLocal(file, onMsg, isDone) {
+  const modes = [3, 4, 0, 1, 2], res = [];
+  let txt = '', r = null;
+  for (let k = 0; k < modes.length; k++) {
+    const o = await psO2RecognizeFull(file, onMsg, modes[k], k);
+    const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
+    const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
+    res.push(usePos ? Object.assign(pos, { byPos: true }) : cls);
+    txt += (k ? '\n--- Versuch ' + (k + 1) + ' ---\n' : '') + (usePos ? pt : o.text);
+    r = k === 0 ? res[0] : psO2Combine(res);
+    const hard = (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0;
+    if (!hard && (k >= 1 || !psO2Soft(r))) break;
+  }
+  return { r, txt };
 }
 // === v55.176 (Beta): FOTO ZUSCHNEIDEN + ENTZERREN ========================================================
 // Viereck (4 frei ziehbare Ecken, Bruchteile 0..1 des Fotos) -> gerades Rechteck. Das letzte Viereck wird gemerkt.
@@ -13143,19 +13385,10 @@ function PsO2Import({ onApply, onClose, initial }) {
           if (got(cd)) r = cd;
         } catch (e) { console.warn('[O2 Dienst]', e && e.message || e); }
       }
-      // 2. Weg: Texterkennung auf dem Gerät, bei Bedarf mit zwei weiteren Aufbereitungen.
+      // 2. Weg: Texterkennung auf dem Gerät (v55.193: Bildschirm zuerst ausschneiden, Auswertung nach Position), bei Bedarf mit weiteren Aufbereitungen.
       if (!r) {
-        txt = await psO2Recognize(file, m => setBusy(m), 0);
-        r = psO2Parse(txt);
-        // "Kosten" steht im Text, aber kein Betrag erkannt -> ebenfalls noch einmal versuchen
-        const kostenOffen = () => !r.einmalig && !r.monatlich && /(Einmalige|Monatliche)\s*Kosten/i.test(txt);
-        for (const mode of [1, 2]) {
-          if (!missOf(r) && !kostenOffen()) break;
-          const t2 = await psO2Recognize(file, m => setBusy(m), mode);
-          const r2 = psO2Parse(t2);
-          txt += '\n--- Versuch ' + (mode + 1) + ' ---\n' + t2;
-          r = { tarife: r.tarife.length ? r.tarife : r2.tarife, geraete: r.geraete.length ? r.geraete : r2.geraete, internet: r.internet.length ? r.internet : r2.internet, einmalig: r.einmalig || r2.einmalig, monatlich: r.monatlich || r2.monatlich, hinweis: r.hinweis || r2.hinweis, mixed: true };
-        }
+        const loc = await psO2ReadLocal(file, m => setBusy(m), q => !missOf(q));
+        r = loc.r; txt = loc.txt;
       }
       setSeen(txt);
       // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
