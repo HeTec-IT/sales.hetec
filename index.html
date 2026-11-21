@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.202';
+    window.APP_VERSION = '55.203';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13726,6 +13726,159 @@ function psO2CamOpen(opts) {
     })();
   });
 }
+// === v55.203 (Beta): BILDSCHIRM-SNIP (PC) ================================================================
+// Am PC den Activate+ Bildschirm (Fenster der Windows App) freigeben, Rahmen ueber einen Block ziehen -> Ausschnitt in voller
+// Aufloesung geht sofort zum Lesen (pixelscharf, keine Foto-Unschaerfe). Tablets/Handys koennen keine Bildschirmfreigabe.
+// opts.onShot(file, art) -> Promise<kurzer Text, leer = nichts erkannt>; art = 'block' (Rahmen) | 'snip' (ganzer Bildschirm).
+// Ergebnis: 'fertig' | 'geschwaerzt' (Schutz zeigt nur Schwarz) | null (abgebrochen).
+function psO2SnipSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia); }
+function psO2SnipOpen(opts) {
+  const o = opts || {};
+  return new Promise(resolve => {
+    let stream = null;
+    try {
+      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion)
+      stream = null;
+      navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 }, audio: false }).then(go, () => resolve(null));
+    } catch (e) { resolve(null); return; }
+    function go(st) {
+      stream = st;
+      let done = false, finishing = false, pend = 0, drag = null, blockN = 1, tries = 0;
+      const results = [];
+      const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.setAttribute('style', css); if (txt != null) n.textContent = txt; return n; };
+      const btn = (txt, css, fn, label) => { const b = el('button', 'font:700 14px system-ui,sans-serif;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;' + css, txt); b.type = 'button'; if (label) b.setAttribute('aria-label', label); b.onclick = fn; return b; };
+      const root = el('div', 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:100020;background:#0b1220;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none');
+      root.setAttribute('data-ps-snip', '1');
+      const bar = el('div', 'display:flex;align-items:center;gap:8px;padding:10px 12px;color:#fff;font:800 16px system-ui,sans-serif');
+      const title = el('div', 'flex:1;text-align:center', 'Bildschirm snippen');
+      bar.appendChild(btn('✕', 'background:#1e293b;color:#fff;padding:8px 12px', () => finish(null), 'Abbrechen'));
+      bar.appendChild(title);
+      bar.appendChild(btn('Ganzer Bildschirm', 'background:#1e293b;color:#fff;padding:8px 12px', () => snip(null, 'snip'), 'Ganzen Bildschirm lesen'));
+      const hintRow = el('div', 'display:flex;justify-content:center;padding:0 12px 8px');
+      const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;background:#334155', 'Rahmen über einen Block ziehen – wird sofort gelesen');
+      hintRow.appendChild(hint);
+      const stage = el('div', 'position:relative;flex:1;overflow:hidden;min-height:0;cursor:crosshair;touch-action:none');
+      const video = el('video', 'position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;background:#000');
+      video.muted = true; video.autoplay = true; video.setAttribute('playsinline', '');
+      const sel = el('div', 'position:absolute;display:none;border:3px solid #22c55e;background:rgba(34,197,94,.18);border-radius:6px;pointer-events:none');
+      const flash = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s');
+      stage.appendChild(video); stage.appendChild(sel); stage.appendChild(flash);
+      const chips = el('div', 'display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:8px 12px 0;min-height:8px');
+      const paintChips = () => {
+        chips.textContent = '';
+        results.slice(-5).forEach(r => {
+          const bg = r.st === 'ok' ? '#15803d' : r.st === 'leer' ? '#b91c1c' : '#334155';
+          chips.appendChild(el('div', 'color:#fff;font:700 13px system-ui,sans-serif;padding:5px 10px;border-radius:999px;background:' + bg, r.st === 'ok' ? '✓ ' + r.l + ': ' + r.t : r.st === 'leer' ? '✗ ' + r.l + ': nichts erkannt – nochmal ziehen' : '… ' + r.l + ' wird gelesen'));
+        });
+      };
+      const bottom = el('div', 'display:flex;align-items:center;justify-content:center;padding:12px 16px;gap:8px');
+      bottom.appendChild(btn('Fertig', 'background:#2563eb;color:#fff;min-width:140px;font-size:16px;padding:12px 22px', () => finishSession(), 'Fertig'));
+      root.appendChild(bar); root.appendChild(hintRow); root.appendChild(stage); root.appendChild(chips); root.appendChild(bottom);
+
+      const finish = res => {
+        if (done) return; done = true;
+        document.removeEventListener('keydown', onKey, true);
+        try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+        try { video.srcObject = null; } catch (e) {}
+        if (root.parentNode) root.parentNode.removeChild(root);
+        resolve(res);
+      };
+      const finishSession = () => {
+        finishing = true;
+        if (!pend) { finish('fertig'); return; }
+        hint.textContent = 'Wird gelesen …';
+      };
+      const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); finish(null); } };
+      // Sichtbarer Bildbereich im Element (object-fit: contain) -> Skalierung und Versatz
+      const geo = () => {
+        const W = video.videoWidth, H = video.videoHeight, r = stage.getBoundingClientRect();
+        if (!W || !H) return null;
+        const k = Math.min(r.width / W, r.height / H), dw = W * k, dh = H * k;
+        return { W, H, k, dx: (r.width - dw) / 2, dy: (r.height - dh) / 2, dw, dh, rect: r };
+      };
+      const snip = (box, art) => {
+        if (done || finishing) return;
+        const g = geo(); if (!g) return;
+        let sx = 0, sy = 0, sw = g.W, sh = g.H;
+        if (box) {
+          sx = Math.max(0, (box.l - g.dx) / g.k); sy = Math.max(0, (box.t - g.dy) / g.k);
+          sw = Math.min(g.W - sx, box.w / g.k); sh = Math.min(g.H - sy, box.h / g.k);
+        }
+        if (sw < 24 || sh < 12) return;
+        const c = document.createElement('canvas'), q = Math.min(1, 4096 / Math.max(sw, sh));
+        c.width = Math.round(sw * q); c.height = Math.round(sh * q);
+        c.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        flash.style.opacity = '0.6'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
+        c.toBlob(b => {
+          if (!b || done) return;
+          const file = new File([b], 'o2-snip.png', { type: 'image/png', lastModified: Date.now() });
+          const item = { l: art === 'snip' ? 'Bildschirm' : 'Block ' + blockN, n: blockN, t: '', st: 'lade' };
+          results.push(item); pend++;
+          if (art !== 'snip') blockN++;
+          paintChips();
+          let p; try { p = Promise.resolve(o.onShot(file, art)); } catch (e) { p = Promise.resolve(''); }
+          p.then(t => { item.t = String(t || ''); item.st = item.t ? 'ok' : 'leer'; }, () => { item.st = 'leer'; }).then(() => {
+            pend--;
+            if (item.st === 'leer' && art !== 'snip' && blockN - 1 === item.n) blockN--;
+            paintChips();
+            if (done) return;
+            if (finishing && !pend) finish('fertig');
+          });
+        }, 'image/png');
+      };
+      // Rahmen ziehen: loslassen = lesen
+      stage.addEventListener('pointerdown', e => {
+        const g = geo(); if (!g || finishing) return;
+        const r = g.rect;
+        drag = { x: Math.min(Math.max(e.clientX - r.left, g.dx), g.dx + g.dw), y: Math.min(Math.max(e.clientY - r.top, g.dy), g.dy + g.dh) };
+        sel.style.display = 'block'; sel.style.left = drag.x + 'px'; sel.style.top = drag.y + 'px'; sel.style.width = '0px'; sel.style.height = '0px';
+        try { stage.setPointerCapture(e.pointerId); } catch (er) {}
+      });
+      const boxOf = e => {
+        const g = geo(), r = g.rect;
+        const x = Math.min(Math.max(e.clientX - r.left, g.dx), g.dx + g.dw), y = Math.min(Math.max(e.clientY - r.top, g.dy), g.dy + g.dh);
+        return { l: Math.min(x, drag.x), t: Math.min(y, drag.y), w: Math.abs(x - drag.x), h: Math.abs(y - drag.y) };
+      };
+      stage.addEventListener('pointermove', e => {
+        if (!drag || !geo()) return;
+        const b = boxOf(e); sel.style.left = b.l + 'px'; sel.style.top = b.t + 'px'; sel.style.width = b.w + 'px'; sel.style.height = b.h + 'px';
+      });
+      stage.addEventListener('pointerup', e => {
+        if (!drag || !geo()) { drag = null; return; }
+        const b = boxOf(e); drag = null; sel.style.display = 'none';
+        snip(b, 'block');
+      });
+      // Zeigt das Bild nur Schwarz (Schutz gegen Bildschirmaufnahmen in der Umgebung), ist das Snippen sinnlos -> klare Meldung
+      const blocked = () => {
+        if (!video.videoWidth) return false;
+        const W = 160, H = Math.max(8, Math.round(W * video.videoHeight / video.videoWidth)), c = document.createElement('canvas'); c.width = W; c.height = H;
+        const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(video, 0, 0, W, H);
+        const d = x.getImageData(0, 0, W, H).data, n = W * H; let s = 0, s2 = 0;
+        for (let i = 0, p = 0; i < n; i++, p += 4) { const v = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]; s += v; s2 += v * v; }
+        const m = s / n, sd = Math.sqrt(Math.max(0, s2 / n - m * m));
+        return sd < 5 || m < 12;
+      };
+      const check = () => {
+        if (done) return;
+        if (!video.videoWidth) { if (++tries < 12) setTimeout(check, 250); return; }
+        if (blocked()) {
+          if (++tries < 4) { setTimeout(check, 700); return; }
+          stage.innerHTML = '';
+          const box = el('div', 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;color:#fff;text-align:center;font:700 16px system-ui,sans-serif');
+          box.appendChild(el('div', '', 'Der Bildschirm kommt nur schwarz an – die Umgebung blockiert Aufnahmen. Bitte Block-Fotos mit der Kamera nehmen.'));
+          box.appendChild(btn('Schließen', 'background:#2563eb;color:#fff;font-size:16px;padding:14px 22px', () => finish('geschwaerzt')));
+          stage.appendChild(box); hint.textContent = ''; hint.style.background = 'transparent';
+        }
+      };
+      document.body.appendChild(root);
+      document.addEventListener('keydown', onKey, true);
+      st.getVideoTracks()[0].addEventListener('ended', () => { if (!done) { if (pend) finishSession(); else finish(results.length ? 'fertig' : null); } });
+      video.srcObject = st;
+      video.play().catch(() => {});
+      setTimeout(check, 600);
+    }
+  });
+}
 // Obergrenzen je Foto-Etappe (mehr passt nicht sinnvoll auf die Angebotskarte)
 const PS_O2_MAX = { tarife: 6, geraete: 6, internet: 2 };
 function PsO2Import({ onApply, onClose, initial }) {
@@ -13758,9 +13911,21 @@ function PsO2Import({ onApply, onClose, initial }) {
   const toggleOwnCam = v => { setOwnCam(v); try { localStorage.setItem('ps_o2_owncam', v ? '1' : '0'); } catch (e) {} };
   // v55.199: Modus "Block-Fotos": die Kamera bleibt offen, je Block ein Foto (Block 1, Block 2 ...), zuletzt der Kostenblock.
   // Gelesen wird nacheinander im Hintergrund; "Ganzes Foto" = bisheriges Verhalten (eine Taste je Bereich).
-  const [mode, setModeS] = React.useState(() => { try { return localStorage.getItem('ps_o2_mode') === 'ganz' ? 'ganz' : 'block'; } catch (e) { return 'block'; } });
+  // v55.203: dritter Modus "Bildschirm" (nur am PC): Activate+ Fenster freigeben, Rahmen ziehen = lesen
+  const snipOk = psO2SnipSupported();
+  const [mode, setModeS] = React.useState(() => { try { const mv = localStorage.getItem('ps_o2_mode'); if (mv === 'ganz' || mv === 'block' || mv === 'snip') return mv; } catch (e) {} return snipOk ? 'snip' : 'block'; });
   const setMode = m => { setModeS(m); try { localStorage.setItem('ps_o2_mode', m); } catch (e) {} };
-  const camOk = psO2CamSupported(), blockMode = mode === 'block' && camOk;
+  const camOk = psO2CamSupported(), eff = mode === 'snip' && !snipOk ? 'block' : mode;
+  const blockMode = eff === 'block' && camOk, snipMode = eff === 'snip' && snipOk, quick = blockMode || snipMode;
+  const openSnip = async () => {
+    setNote('');
+    const res = await psO2SnipOpen({ onShot: (file, art) => {
+      const job = jobRef.current.then(() => readPhoto(Promise.resolve(file), art === 'snip' ? 'ganz' : 'block', null));
+      jobRef.current = job.catch(() => {});
+      return job;
+    } });
+    if (res === 'geschwaerzt') setNote('Der Bildschirm kommt nur schwarz an – die Umgebung blockiert Aufnahmen. Bitte „Block-Fotos“ mit der Kamera nehmen.');
+  };
   const jobRef = React.useRef(Promise.resolve());
   const openBlocks = step => {
     setNote('');
@@ -13910,7 +14075,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const sec = (title, n, stage, label, hideBtn, body, max) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
     h('div', { className: 'flex items-center justify-between gap-2' },
       h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n + (max ? '/' + max : '') : '')),
-      hideBtn || blockMode && stage !== 'kosten' ? null : h('div', { className: 'flex gap-2' },
+      hideBtn || snipMode || blockMode && stage !== 'kosten' ? null : h('div', { className: 'flex gap-2' },
         h('button', { onClick: () => blockMode ? openBlocks('kosten') : pick(stage, false), disabled: !!busy, className: sBtn }, label),
         blockMode ? null : h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
     body);
@@ -13927,15 +14092,18 @@ function PsO2Import({ onApply, onClose, initial }) {
         onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
-      camOk ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto'], ['block', 'Block-Fotos']].map(([m, lbl]) =>
-        h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (mode === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
-      h('div', { className: 'text-sm text-slate-600 mt-2' }, blockMode
+      (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto']].concat(camOk ? [['block', 'Block-Fotos']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
+        h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
+      h('div', { className: 'text-sm text-slate-600 mt-2' }, snipMode
+        ? 'Activate+ Fenster freigeben, dann einen Rahmen über jeden Block ziehen (Tarif, Handy, Internet@Home, Kostenblock) – wird sofort gelesen. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
+        : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
+      snipMode ? h('button', { onClick: openSnip, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '🖥 Weiter snippen' : '🖥 Bildschirm freigeben und snippen') : null,
       blockMode ? h('button', { onClick: () => openBlocks('block'), disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '📷 Weitere Blöcke fotografieren' : '📷 Block-Fotos starten') : null,
-      blockMode ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
+      quick ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
-      blockMode ? null : h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
+      quick ? null : h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: ownCam, onChange: e => toggleOwnCam(e.target.checked) }), 'Eigene Kamera mit Rahmen (empfohlen)'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       blur ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3' },
