@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.209';
+    window.APP_VERSION = '55.210';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12831,9 +12831,14 @@ function psO2BrightBox(bmp) {
   x.drawImage(bmp, 0, 0, w, hh);
   const d = x.getImageData(0, 0, w, hh).data, n = w * hh, g = new Float32Array(n);
   for (let i = 0, p = 0; i < n; i++, p += 4) g[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2];
-  const srt = Float32Array.from(g).sort(), thr = srt[Math.floor(n * 0.95)] * 0.62;
+  const srt = Float32Array.from(g).sort(), p95 = srt[Math.floor(n * 0.95)];
+  // v55.210: Schwelle je Spalte (Sichtschutzfolie / schraeg: eine Bildschirmseite ist deutlich dunkler), aber nie unter 35 % der globalen
+  const cp = new Float32Array(w), col = new Float32Array(hh);
+  for (let xx = 0; xx < w; xx++) { for (let y = 0; y < hh; y++) col[y] = g[y * w + xx]; col.sort(); cp[xx] = col[Math.floor(hh * 0.95)]; }
+  const thrX = new Float32Array(w);
+  for (let xx = 0; xx < w; xx++) { let sm = 0, k = 0; for (let j = Math.max(0, xx - 15); j <= Math.min(w - 1, xx + 15); j++) { sm += cp[j]; k++; } thrX[xx] = Math.max(sm / k, p95 * 0.35) * 0.62; }
   const rows = new Float32Array(hh), cols = new Float32Array(w);
-  for (let y = 0; y < hh; y++) for (let xx = 0; xx < w; xx++) if (g[y * w + xx] > thr) { rows[y]++; cols[xx]++; }
+  for (let y = 0; y < hh; y++) for (let xx = 0; xx < w; xx++) if (g[y * w + xx] > thrX[xx]) { rows[y]++; cols[xx]++; }
   // laengster zusammenhaengender Abschnitt, in dem die Zeile/Spalte ueberwiegend hell ist
   const run = (v, len) => {
     let bs = -1, be = -1, cs = -1;
@@ -12852,6 +12857,37 @@ function psO2BrightBox(bmp) {
   const bw = x1 - x0, bh = y1 - y0, teil = bw * bh / (bmp.width * bmp.height);
   return bw < 160 || bh < 160 || teil < 0.12 || teil > 0.93 ? null : [x0, y0, bw, bh];
 }
+// v55.210: Ausleuchtung ausgleichen (Sichtschutzfolie, schraeger Blickwinkel, Vignette): Hintergrund (Papierweiss) blockweise
+// schaetzen, glaetten und jedes Pixel durch seinen Hintergrund teilen -> ueberall gleich helles Weiss, Schrift bleibt dunkel.
+// Nur wenn das Bild ungleich hell oder flau ist. Ergebnis: true = ausgeglichen.
+function psO2Flatten(g, W, H, force) {
+  const B = Math.max(8, Math.round(Math.max(W, H) / 120)), bw = Math.ceil(W / B), bh = Math.ceil(H / B), m = new Float32Array(bw * bh);
+  for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+    // helles Ende je Block (90 %), robust gegen Rauschen und einzelne Spitzlichter
+    const hs = new Uint16Array(256); let n = 0;
+    for (let y = by * B, ye = Math.min(H, y + B); y < ye; y++) for (let x = bx * B, xe = Math.min(W, x + B); x < xe; x++) { hs[g[y * W + x]]++; n++; }
+    let a = 0, v = 255; for (; v > 0; v--) { a += hs[v]; if (a >= n * 0.1) break; }
+    m[by * bw + bx] = v;
+  }
+  // Ungleichmaessigkeit messen: nur dort, wo Papier ist (helle Bloecke)
+  const sorted = Array.from(m).sort((a, b) => a - b), p50 = sorted[Math.floor(sorted.length * 0.5)], p95 = sorted[Math.floor(sorted.length * 0.95)];
+  const paper = Array.from(m).filter(v => v >= p50).sort((a, b) => a - b), q10 = paper[Math.floor(paper.length * 0.1)] || p95;
+  if (!force && p95 >= 200 && q10 / Math.max(1, p95) > 0.82) return false;
+  // Maximum ueber 2 Bloecke (Schrift-Bloecke bekommen das Weiss der Nachbarn), dann 2x glaetten
+  const mx = new Float32Array(bw * bh), R = 2;
+  for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let v = 0; for (let yy = Math.max(0, y - R); yy <= Math.min(bh - 1, y + R); yy++) for (let xx = Math.max(0, x - R); xx <= Math.min(bw - 1, x + R); xx++) v = Math.max(v, m[yy * bw + xx]); mx[y * bw + x] = v; }
+  const blur = (a, r) => { const o = new Float32Array(a.length); for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let sm = 0, n = 0; for (let yy = Math.max(0, y - r); yy <= Math.min(bh - 1, y + r); yy++) for (let xx = Math.max(0, x - r); xx <= Math.min(bw - 1, x + r); xx++) { sm += a[yy * bw + xx]; n++; } o[y * bw + x] = sm / n; } return o; };
+  const bg = blur(blur(mx, 2), 2);
+  for (let y = 0; y < H; y++) {
+    const fy = Math.min(bh - 1, Math.max(0, (y + 0.5) / B - 0.5)), y0 = Math.floor(fy), y1 = Math.min(bh - 1, y0 + 1), ty = fy - y0;
+    for (let x = 0; x < W; x++) {
+      const fx = Math.min(bw - 1, Math.max(0, (x + 0.5) / B - 0.5)), x0 = Math.floor(fx), x1 = Math.min(bw - 1, x0 + 1), tx = fx - x0;
+      const b = (bg[y0 * bw + x0] * (1 - tx) + bg[y0 * bw + x1] * tx) * (1 - ty) + (bg[y1 * bw + x0] * (1 - tx) + bg[y1 * bw + x1] * tx) * ty;
+      const i = y * W + x; g[i] = Math.min(255, g[i] * 245 / Math.max(24, b));
+    }
+  }
+  return true;
+}
 async function psO2Prepare(file, mode) {
   const bmp = await createImageBitmap(file);
   // Versuch 3: Rand (Raum, Bildschirmrahmen, Taskleiste) weglassen und den Inhalt groesser rechnen
@@ -12867,6 +12903,12 @@ async function psO2Prepare(file, mode) {
   const id = x.getImageData(0, 0, W, H), d = id.data, n = W * H, g = new Uint8ClampedArray(n);
   const hist = new Uint32Array(256);
   for (let i = 0, p = 0; i < n; i++, p += 4) { const v = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) | 0; g[i] = v; hist[v]++; }
+  if (mode !== 1 && psO2Flatten(g, W, H, false)) {
+    // ausgeglichene (meist flaue, verrauschte) Fotos: Rauschen leicht glaetten (3x3), sonst liest die Texterkennung Krümel
+    const t = new Uint8ClampedArray(g);
+    for (let y = 1; y < H - 1; y++) for (let xx = 1; xx < W - 1; xx++) { const i = y * W + xx; g[i] = (t[i - W - 1] + 2 * t[i - W] + t[i - W + 1] + 2 * t[i - 1] + 4 * t[i] + 2 * t[i + 1] + t[i + W - 1] + 2 * t[i + W] + t[i + W + 1]) >> 4; }
+    hist.fill(0); for (let i = 0; i < n; i++) hist[g[i]]++;
+  }
   if (mode === 1) {
     // Lokale Schwelle (Bradley): Pixel dunkler als der Schnitt seiner Umgebung = Schrift -> schwarz auf weiss
     const W1 = W + 1, I = new Uint32Array(W1 * (H + 1));
@@ -13258,7 +13300,8 @@ async function psO2ReadLocal(file, onMsg, isDone) {
     out.forEach(o => { txt += (res.length ? '\n--- Versuch ' + (res.length + 1) + ' ---\n' : '') + o.t; res.push(o.r); });
     r = res.length === 1 ? res[0] : psO2Combine(res);
   };
-  const hard = () => (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0;
+  // v55.210: gar nichts gelesen (z. B. flaues Foto durch Sichtschutzfolie) -> weitere Aufbereitungen versuchen
+  const hard = () => (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0 || psO2Score(r) <= 0;
   for (let k = 0; k < modes.length; ) {
     if (__psO2Worker2 && k + 1 < modes.length) {
       // zwei Durchgaenge gleichzeitig auf zwei Arbeitern
@@ -13433,13 +13476,14 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
 // Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
 // w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
 let __psO2CamHoch = null; // null = automatisch nach Bildformat
-const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, arS: 1.35, sGo: 0.55, sMax: 1.0, w: 1600, rMin: 0.2, rel: 0.7, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
+const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, arS: 1.35, sGo: 0.55, sMax: 1.0, w: 1600, rMin: 0.2, rel: 0.7, vMin: 8, motion: 10, dark: 40, tilt: 0.55, bright: 0.9, hold: 400, warm: 500 };
 const PS_O2_CAM_MSG = {
   start: ['Kamera startet …', '#334155', '#ffffff'],
   dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
   bright: ['Zu hell oder Spiegelung – Winkel leicht ändern', '#b45309', '#f59e0b'],
   blur: ['Unscharf – etwas Abstand, kurz ruhig halten', '#b91c1c', '#ef4444'],
   shaky: ['Ruhig halten …', '#b45309', '#f59e0b'],
+  tilt: ['Gerade von vorne halten – eine Seite ist zu dunkel', '#b45309', '#f59e0b'],
   ok: ['Scharf ✓ – ruhig halten', '#15803d', '#22c55e']
 };
 function psO2CamSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
@@ -13472,13 +13516,17 @@ function psO2CamMeasure(video, fr, cv, cx, prev) {
   for (let gy = 0; gy < GY; gy++) for (let gx = 0; gx < GX; gx++) sub[gy * GX + gx] = g[Math.min(H - 1, Math.floor((gy + 0.5) * H / GY)) * W + Math.min(W - 1, Math.floor((gx + 0.5) * W / GX))];
   let mo = 0;
   if (prev && prev.length === sub.length) { for (let i = 0; i < sub.length; i++) mo += Math.abs(sub[i] - prev[i]); mo /= sub.length; }
-  return { sharp: v2 > 1e-6 ? v1 / v2 : 0, v1, mean: sum / n, sat: sat / n, sub, motion: mo };
+  // helles Ende (Papier) im linken und rechten Drittel: Sichtschutzfolie + schraeg gehalten -> eine Seite deutlich dunkler
+  const side = (a, b) => { const v = []; for (let gy = 0; gy < GY; gy++) for (let gx = a; gx < b; gx++) v.push(sub[gy * GX + gx]); v.sort((p, q) => p - q); return v[Math.floor(v.length * 0.9)]; };
+  const sl = side(0, 16), sr = side(32, 48), lr = Math.min(sl, sr) / Math.max(1, sl, sr);
+  return { sharp: v2 > 1e-6 ? v1 / v2 : 0, v1, mean: sum / n, sat: sat / n, sub, motion: mo, lr };
 }
 // Entscheidung aus den Messwerten: start | dark | bright | blur | shaky | ok  (peak = beste Schaerfe der letzten Sekunden)
 function psO2CamState(m, peak, age) {
   const C = PS_O2_CAM;
   if (age < C.warm) return 'start';
   if (m.mean < C.dark) return 'dark';
+  if (m.lr != null && m.lr < C.tilt) return 'tilt';
   if (m.sat > C.bright) return 'bright';
   if (m.v1 < C.vMin || m.sharp < C.rMin || m.sharp < C.rel * peak) return 'blur';
   if (m.motion > C.motion) return 'shaky';
@@ -13628,6 +13676,41 @@ function psO2CamOpen(opts) {
       return c;
     };
     const fromVideo = () => cropOf(video, video.videoWidth, video.videoHeight, [0, 0, video.videoWidth, video.videoHeight]);
+    // v55.210: 6 Videobilder kurz hintereinander, gegeneinander ausgerichtet (Zeilen-/Spaltenprofil) und gemittelt:
+    // Rauschen sinkt deutlich (flaue Bilder durch Sichtschutzfolie, wenig Licht). Rueckfall: ein einzelnes Videobild.
+    const fromVideoStack = async () => {
+      try {
+        const N = 6, first = fromVideo(), CW = first.width, CH = first.height;
+        if (CW * CH > 9e6) return first;
+        const acc = new Float32Array(CW * CH * 3), cnt = new Uint8Array(CW * CH);
+        const SC = Math.min(1, 480 / CW), PW = Math.max(16, Math.round(CW * SC)), PH = Math.max(16, Math.round(CH * SC));
+        const pc2 = document.createElement('canvas'); pc2.width = PW; pc2.height = PH; const px2 = pc2.getContext('2d', { willReadFrequently: true });
+        const prof = c => {
+          px2.drawImage(c, 0, 0, PW, PH); const d = px2.getImageData(0, 0, PW, PH).data, rw = new Float32Array(PH), cl = new Float32Array(PW);
+          for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) { const i = (y * PW + x) * 4, v = d[i] + d[i + 1] + d[i + 2]; rw[y] += v; cl[x] += v; }
+          return [rw, cl];
+        };
+        const best = (a, b) => { const S = Math.max(2, Math.round(a.length * 0.03)); let bs = 0, be = Infinity; for (let sh = -S; sh <= S; sh++) { let e = 0, k = 0; for (let i = Math.max(0, -sh); i < a.length && i + sh < a.length; i++) { e += Math.abs(b[i] - a[i + sh]); k++; } e /= k; if (e < be) { be = e; bs = sh; } } return bs; };
+        const add = (c, dx, dy) => {
+          const d = c.getContext('2d').getImageData(0, 0, CW, CH).data;
+          for (let y = 0; y < CH; y++) { const sy = y + dy; if (sy < 0 || sy >= CH) continue; for (let x = 0; x < CW; x++) { const sx = x + dx; if (sx < 0 || sx >= CW) continue; const j = y * CW + x, i = (sy * CW + sx) * 4; acc[j * 3] += d[i]; acc[j * 3 + 1] += d[i + 1]; acc[j * 3 + 2] += d[i + 2]; cnt[j]++; } }
+        };
+        const p0 = prof(first); add(first, 0, 0);
+        for (let k = 1; k < N; k++) {
+          await new Promise(r => setTimeout(r, 45));
+          if (done) return first;
+          const c = fromVideo(); if (c.width !== CW || c.height !== CH) continue;
+          const pk = prof(c), dy = Math.round(best(p0[0], pk[0]) / SC), dx = Math.round(best(p0[1], pk[1]) / SC);
+          add(c, dx, dy);
+        }
+        const out = document.createElement('canvas'); out.width = CW; out.height = CH;
+        const ox = out.getContext('2d'), od = ox.createImageData(CW, CH);
+        for (let j = 0; j < CW * CH; j++) { const n = cnt[j] || 1, i = j * 4; od.data[i] = acc[j * 3] / n; od.data[i + 1] = acc[j * 3 + 1] / n; od.data[i + 2] = acc[j * 3 + 2] / n; od.data[i + 3] = 255; }
+        ox.putImageData(od, 0, 0);
+        try { window.__psO2CamInfo = Object.assign({}, window.__psO2CamInfo || {}, { stack: N, size: CW + 'x' + CH }); } catch (e) {}
+        return out;
+      } catch (e) { return fromVideo(); }
+    };
     const grabStill = async () => {
       if (!ic) return null;
       const w = video.videoWidth, h = video.videoHeight, arV = w / h, GW = 128, GH = Math.max(8, Math.round(GW / arV));
@@ -13666,7 +13749,7 @@ function psO2CamOpen(opts) {
       flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
       const st = step, sub = prev;
       if (ic) { hint.textContent = 'Foto wird aufgenommen …'; hint.style.background = '#334155'; }
-      (ic ? grabStill() : Promise.resolve(null)).then(c => c || fromVideo()).then(c => new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)), () => null).then(b => {
+      (ic ? grabStill() : Promise.resolve(null)).then(c => c || fromVideoStack()).then(c => new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)), () => null).then(b => {
         cur = '';
         if (!b || done) { shot = false; return; }
         try { if (navigator.vibrate) navigator.vibrate(30); } catch (e) {}
@@ -14141,7 +14224,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   // v55.203: dritter Modus "Bildschirm" (nur am PC): Activate+ Fenster freigeben, Rahmen ziehen = lesen
   const snipOk = psO2SnipSupported();
   // v55.209: Tablet-Standard = "Scannen" (Block-Fotos und QR vom PC entfallen in der Auswahl)
-  const [mode, setModeS] = React.useState(() => { try { const mv = localStorage.getItem('ps_o2_mode'); if (mv === 'ganz' || mv === 'snip' || mv === 'scan') return mv; } catch (e) {} return snipOk ? 'snip' : 'scan'; });
+  const [mode, setModeS] = React.useState(() => { try { const mv = localStorage.getItem('ps_o2_mode'); if (mv === 'ganz' || mv === 'snip' || mv === 'scan') return mv; } catch (e) {} return snipOk ? 'snip' : 'ganz'; });
   const setMode = m => { setModeS(m); try { localStorage.setItem('ps_o2_mode', m); } catch (e) {} };
   // v55.205: Tablet (ohne Bildschirmfreigabe): Knopf "Vom PC scannen" immer oben, kein eigener Modus mehr
   const camOk = psO2CamSupported(), eff = mode === 'snip' && !snipOk ? 'scan' : mode;
@@ -14402,7 +14485,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
       scanOk ? h('button', { onClick: () => scanQr(false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📲 Vom PC scannen') : null,
       scanOk ? h('div', { className: 'text-xs text-slate-500 mt-1 text-center' }, 'Am PC erscheint der QR-Code, sobald dort der Bildschirm gelesen wurde. Oder selbst fotografieren:') : null,
-      (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, (camOk ? [['scan', 'Scannen']] : []).concat([['ganz', 'Einzelfotos']], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
+      (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Foto']].concat(camOk ? [['scan', 'Scannen']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
         h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
       h('div', { className: 'text-sm text-slate-600 mt-2' }, snipMode
         ? 'Beim ersten Mal im Reiter „Fenster“ das Edge der Windows App wählen (Edge-Symbol mit kleinem Windows-Logo) und „Teilen“ – Pencil Selling bleibt vorn. Danach wird der Vorschlag sofort gelesen und der QR-Code erscheint.'
@@ -14410,7 +14493,8 @@ function PsO2Import({ onApply, onClose, initial }) {
         ? 'Tablet oben an den Vorschlag halten und langsam nach unten führen – oder Tablet ruhig halten und am PC langsam scrollen. Die Fotos macht die App selbst, beim Kostenblock ist Schluss. Auch für 2–3 Seiten.'
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
-        : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
+        : 'Den Vorschlag gerade von vorne fotografieren, so groß wie möglich im Rahmen. Geht er über mehrere Seiten: weiterblättern und noch ein Foto. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
+      !quick ? h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, any ? '📷 Noch ein Foto (nächste Seite)' : '📷 Vorschlag fotografieren') : null,
       snipMode && any ? h('button', { onClick: sendQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, '📲 QR-Code fürs Tablet') : null,
       snipMode ? h('button', { onClick: openSnip, disabled: !!busy, className: (any ? gBtn : sBtn) + ' w-full mt-2 py-3 text-base' }, any ? '🖥 Nochmal lesen (z. B. nach Scrollen)' : '🖥 Bildschirm lesen') : null,
       snipMode && psO2SnipLive() ? h('div', { className: 'mt-2 flex justify-center gap-4 text-xs font-bold text-slate-500' },
