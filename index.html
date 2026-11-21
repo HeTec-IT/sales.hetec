@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.206';
+    window.APP_VERSION = '55.207';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13744,7 +13744,7 @@ function psO2CamOpen(opts) {
 // Am PC den Activate+ Bildschirm (Fenster der Windows App) freigeben, Rahmen ueber einen Block ziehen -> Ausschnitt in voller
 // Aufloesung geht sofort zum Lesen (pixelscharf, keine Foto-Unschaerfe). Tablets/Handys koennen keine Bildschirmfreigabe.
 // opts.onShot(file, art) -> Promise<kurzer Text, leer = nichts erkannt>; art = 'block' (Rahmen) | 'snip' (ganzer Bildschirm).
-// Ergebnis: 'fertig' | 'geschwaerzt' (Schutz zeigt nur Schwarz) | null (abgebrochen).
+// Ergebnis: 'fertig' | 'geschwaerzt' (Schutz zeigt nur Schwarz) | 'leer' (Auto-Lauf: nichts erkannt) | null (abgebrochen).
 function psO2SnipSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia); }
 // v55.206: die Freigabe bleibt offen, bis der Browser sie beendet oder "Bildschirmfreigabe beenden" gedrueckt wird -> kein erneutes Auswaehlen
 function psO2SnipLive() { const s = window.__psO2SnipStream; return !!(s && s.getVideoTracks().some(t => t.readyState === 'live')); }
@@ -13755,8 +13755,13 @@ function psO2SnipOpen(opts) {
     let stream = null;
     if (psO2SnipLive()) { go(window.__psO2SnipStream, true); return; }
     try {
-      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion); Fenster vorgewaehlt
-      navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5, displaySurface: 'window' }, audio: false, selfBrowserSurface: 'exclude' }).then(st => {
+      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion). Liste: Edge-Tab vorgewaehlt, kein "Gesamter Bildschirm",
+      // dieser Tab nicht dabei. Nach "Teilen" springt der Browser NICHT zum geteilten Tab (Pencil Selling bleibt vorn).
+      let ctl = null; try { if (window.CaptureController) ctl = new CaptureController(); } catch (e) { ctl = null; }
+      const cons = { video: { frameRate: 5, displaySurface: 'browser' }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude' };
+      if (ctl) cons.controller = ctl;
+      navigator.mediaDevices.getDisplayMedia(cons).then(st => {
+        try { if (ctl) ctl.setFocusBehavior('no-focus-change'); } catch (e) {}
         window.__psO2SnipStream = st;
         try { st.getVideoTracks()[0].addEventListener('ended', () => { if (window.__psO2SnipStream === st) window.__psO2SnipStream = null; }); } catch (e) {}
         go(st, false);
@@ -13776,7 +13781,7 @@ function psO2SnipOpen(opts) {
       bar.appendChild(title);
       bar.appendChild(btn('Ganzer Bildschirm', 'background:#1e293b;color:#fff;padding:8px 12px', () => snip(null, 'snip'), 'Ganzen Bildschirm lesen'));
       const hintRow = el('div', 'display:flex;justify-content:center;padding:0 12px 8px');
-      const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;background:#334155', o.auto ? 'Bildschirm wird gelesen …' : 'Rahmen über einen Block ziehen – wird sofort gelesen');
+      const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;background:#334155', o.auto ? 'Vorschlag wird gelesen …' : 'Rahmen über einen Block ziehen – wird sofort gelesen');
       hintRow.appendChild(hint);
       const stage = el('div', 'position:relative;flex:1;overflow:hidden;min-height:0;cursor:crosshair;touch-action:none');
       const video = el('video', 'position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;background:#000');
@@ -13844,6 +13849,7 @@ function psO2SnipOpen(opts) {
             if (done) return;
             // automatisch gelesen und etwas erkannt: Fenster schliesst sich von selbst
             if (o.auto && art === 'snip' && item.st === 'ok') finishing = true;
+            else if (o.auto && art === 'snip' && item.st === 'leer' && !finishing) { finish('leer'); return; }
             else if (item.st === 'leer' && !finishing) hint.textContent = 'Nichts erkannt – Rahmen über den Block ziehen oder „Ganzer Bildschirm“';
             if (finishing && !pend) finish('fertig');
           });
@@ -14118,6 +14124,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       return job;
     } });
     if (res === 'geschwaerzt') setNote('Der Bildschirm kommt nur schwarz an – die Umgebung blockiert Aufnahmen. Bitte „Block-Fotos“ mit der Kamera nehmen.');
+    else if (res === 'leer') setNote('Keine Vorschlag-Seite erkannt. Im Edge-Tab „Activate+“ die Seite „Vorschlag“ öffnen, dann hier noch einmal „Bildschirm lesen“ (ohne neue Auswahl).');
     // etwas gelesen: QR-Code fuers Tablet gleich anzeigen (kein weiterer Klick)
     else if (res === 'fertig') {
       await new Promise(r => setTimeout(r, 200));
@@ -14302,7 +14309,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto']].concat(camOk ? [['block', 'Block-Fotos']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
         h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
       h('div', { className: 'text-sm text-slate-600 mt-2' }, snipMode
-        ? 'Der Bildschirm wird sofort gelesen, danach erscheint der QR-Code fürs Tablet. Die Fensterauswahl kommt nur beim ersten Mal.'
+        ? 'Beim ersten Mal den Edge-Tab „Activate+“ (Seite „Vorschlag“) wählen und „Teilen“ – Pencil Selling bleibt vorn. Danach wird der Vorschlag sofort gelesen und der QR-Code erscheint.'
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
