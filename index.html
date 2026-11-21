@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.208';
+    window.APP_VERSION = '55.209';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12643,7 +12643,7 @@ function psO2Parse(text) {
     let cols = psO2Cols(raw);
     if (!cols && kind === 'geraete') for (let k = from; k < Math.min(lines.length, from + 3) && !cols; k++) if (/MyHandy|Monate/i.test(lines[k])) cols = psO2Cols(lines[k].replace(/Gesamtpreis.*?€/i, ''));
     if (!cols && hdr) cols = psO2Cols(hdr); // v55.193: bei o2 steht der Preis oft in der Kopfzeile (TARIF 29,99 €)
-    out[kind].push({ name, idx: i, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', am: cols, rb: psO2Adjust(lines, from), details: psO2Collect(lines, from) });
+    out[kind].push({ name, idx: i, yf: lines.length ? i / lines.length : 0, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', am: cols, rb: psO2Adjust(lines, from), details: psO2Collect(lines, from) });
   };
   lines.forEach((l, i) => {
     const kind = psO2HeadKind(l);
@@ -13226,12 +13226,31 @@ function psO2Combine(res) {
 // Jeder Durchgang wird einmal wie bisher (Zeilen) und einmal nach Position ausgewertet; es gilt das bessere Ergebnis.
 // Harte Luecken (etwas Sichtbares fehlt, Summen stimmen nicht, isDone) -> weiterlesen bis zum fuenften Durchgang;
 // weiche Luecken (Lesemuell im Namen, wenig Inhalte) -> hoechstens ein zweiter Durchgang.
+// v55.209: Lage jedes Eintrags im Foto (0 = oben, 1 = unten) aus den Wortpositionen – fuer die Ueberschneidung beim Scannen
+function psO2PlaceItems(r, words) {
+  if (!r || !words || words.length < 8) return;
+  const byLn = new Map();
+  words.forEach(w => { if (!byLn.has(w.ln)) byLn.set(w.ln, []); byLn.get(w.ln).push(w); });
+  const L = Array.from(byLn.values()).map(ws => ({ t: ws.map(w => w.t).join(' ').toLowerCase(), y: ws.reduce((a, w) => a + (w.y0 + w.y1) / 2, 0) / ws.length })).sort((a, b) => a.y - b.y);
+  let Y0 = Infinity, Y1 = -Infinity;
+  words.forEach(w => { if (w.y0 < Y0) Y0 = w.y0; if (w.y1 > Y1) Y1 = w.y1; });
+  if (!(Y1 - Y0 > 10)) return;
+  const hit = (nm, t) => { const tk = String(nm || '').toLowerCase().replace(/[(),]/g, ' ').split(/\s+/).filter(x => x.length >= 2); return tk.length > 0 && tk.filter(x => t.indexOf(x) > -1).length / tk.length >= 0.6; };
+  ['tarife', 'geraete', 'internet'].forEach(kind => {
+    let from = 0;
+    (r[kind] || []).forEach(it => {
+      const j = L.findIndex((l, li) => li >= from && (hit(it.name, l.t) || kind === 'geraete' && hit(psO2Pretty(it.name), l.t)));
+      if (j >= 0) { it.yf = (L[j].y - Y0) / (Y1 - Y0); from = j + 1; }
+    });
+  });
+}
 async function psO2ReadLocal(file, onMsg, isDone) {
   const modes = [3, 4, 0, 1, 2], res = [];
   let txt = '', r = null;
   const pass = async (mode, w) => {
     const o = await psO2RecognizeFull(file, onMsg, mode, res.length, w);
     const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
+    psO2PlaceItems(cls, o.words); psO2PlaceItems(pos, o.words);
     const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
     return { r: usePos ? Object.assign(pos, { byPos: true }) : cls, t: usePos ? pt : o.text };
   };
@@ -13414,7 +13433,7 @@ function PsO2Crop({ file, onOk, onSkip, onCancel, onRetake, hint }) {
 // Rueckfall: normale Kamera-App (Knopf im Overlay bzw. Haken im Dialog).
 // w = Analysebreite (nahe an der Breite, auf der die Texterkennung liest); rMin/rel = Schaerfe-Untergrenze bzw. Anteil der besten Schaerfe der letzten 3 s
 let __psO2CamHoch = null; // null = automatisch nach Bildformat
-const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, w: 1600, rMin: 0.2, rel: 0.7, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
+const PS_O2_CAM = { ar: 1.7, arP: 0.72, arB: 4.0, arK: 6.5, arS: 1.35, sGo: 0.55, sMax: 1.0, w: 1600, rMin: 0.2, rel: 0.7, vMin: 8, motion: 10, dark: 55, bright: 0.9, hold: 400, warm: 500 };
 const PS_O2_CAM_MSG = {
   start: ['Kamera startet …', '#334155', '#ffffff'],
   dark: ['Zu dunkel – mehr Licht oder Bildschirm heller stellen', '#b45309', '#f59e0b'],
@@ -13469,31 +13488,36 @@ function psO2CamState(m, peak, age) {
 // Einzelfoto: Ergebnis { file, auto } | 'native' (normale Kamera-App nehmen) | null (abgebrochen).
 // Block-Fotos (opts.session): die Kamera bleibt offen, jedes Foto geht an opts.onShot(file, schritt) -> Promise<kurzer Text, leer = nichts erkannt>.
 // Schritte: "block" (Block 1, 2, ... je ein Tarif-/Handy-/Internet-Block, flacher Rahmen) und "kosten" (Kostenblock, beendet die Reihe). Ergebnis: 'fertig' | null.
+// v55.209 Scannen (opts.scan): die Kamera verfolgt, wie weit der Vorschlag durchs Bild gewandert ist (Tablet nach unten fuehren
+// ODER am PC scrollen) und macht selbst ein Foto, sobald gut die Haelfte neu ist. opts.onShot(file, 'scan', ueberlappung 0..1)
+// -> Promise<Text | { t, end }>; end = Kostenblock gelesen -> Scannen endet von selbst.
 function psO2CamOpen(opts) {
-  const o = opts || {}, C = PS_O2_CAM, ses = !!o.session;
+  const o = opts || {}, C = PS_O2_CAM, scan = !!o.scan, ses = !!o.session || scan;
   return new Promise(resolve => {
     let stream = null, timer = 0, done = false, shot = false, curHoch = false, vw = 0, vh = 0, fr = { x: 0.03, y: 0.05, w: 0.94, h: 0.9 }, okSince = 0, hist = [], prev = null, cur = '';
     let step = o.step === 'kosten' ? 'kosten' : 'block', blockN = 1, lastSub = null, pend = 0, finishing = false;
     let ic = null, photoSet = null, stillFail = 0, errored = false, lastShotAt = 0, moved = true, moveTicks = 0;
+    let travel = 0, prevP = null, nShots = 0;
     const results = [];
     const t0 = Date.now();
     // Einzelfoto: Auto standardmaessig an. Block-Reihe: aus (Foto-Taste), sonst loest jede Handbewegung einen neuen "Block" aus.
     const AK = ses ? 'ps_o2_camauto_s' : 'ps_o2_camauto';
     let auto = !ses; try { const av = localStorage.getItem(AK); if (av != null) auto = av === '1'; } catch (e) {}
+    if (scan) auto = true;
     const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.setAttribute('style', css); if (txt != null) n.textContent = txt; return n; };
     const btn = (txt, css, fn, label) => { const b = el('button', 'font:700 14px system-ui,sans-serif;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;' + css, txt); b.type = 'button'; if (label) b.setAttribute('aria-label', label); b.onclick = fn; return b; };
     const root = el('div', 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:100020;background:#000;display:flex;flex-direction:column;touch-action:manipulation;-webkit-user-select:none;user-select:none');
     root.setAttribute('data-ps-cam', '1');
     const bar = el('div', 'display:flex;align-items:center;gap:8px;padding:10px 12px;color:#fff;font:800 16px system-ui,sans-serif');
     const title = el('div', 'flex:1;text-align:center', '');
-    const paintTitle = () => { title.textContent = ses ? (step === 'kosten' ? 'Kostenblock fotografieren' : 'Block ' + blockN + ' fotografieren') : (o.label ? o.label + ' fotografieren' : 'Foto aufnehmen'); };
+    const paintTitle = () => { title.textContent = scan ? 'Vorschlag scannen' + (nShots ? ' · ' + nShots + (nShots === 1 ? ' Foto' : ' Fotos') : '') : ses ? (step === 'kosten' ? 'Kostenblock fotografieren' : 'Block ' + blockN + ' fotografieren') : (o.label ? o.label + ' fotografieren' : 'Foto aufnehmen'); };
     paintTitle();
     const autoB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { auto = !auto; okSince = 0; try { localStorage.setItem(AK, auto ? '1' : '0'); } catch (e) {} paintAuto(); }, 'Automatisch auslösen');
     const paintAuto = () => { autoB.textContent = auto ? 'Auto ✓' : 'Auto aus'; };
     paintAuto();
     const oriB = btn('', 'background:#1e293b;color:#fff;padding:8px 12px', () => { __psO2CamHoch = !curHoch; layout(); }, 'Rahmen hoch oder quer');
     bar.appendChild(btn('✕', 'background:#1e293b;color:#fff;padding:8px 12px', () => finish(null), 'Abbrechen'));
-    bar.appendChild(title); if (!ses) bar.appendChild(oriB); bar.appendChild(autoB);
+    bar.appendChild(title); if (!ses) bar.appendChild(oriB); if (scan) bar.appendChild(el('div', 'width:44px')); else bar.appendChild(autoB);
     const hintRow = el('div', 'display:flex;justify-content:center;padding:0 12px 8px');
     const hint = el('div', 'color:#fff;font:800 15px system-ui,sans-serif;padding:8px 16px;border-radius:999px;text-align:center;max-width:94%;transition:background .2s', '');
     hintRow.appendChild(hint);
@@ -13523,9 +13547,9 @@ function psO2CamOpen(opts) {
     const sideL = sideBtn('left'), sideR = sideBtn('right');
     let stepB = null, doneB = null;
     if (ses) {
-      stepB = btn('', 'background:#1e293b;color:#cbd5e1;font-size:13px;min-width:96px', () => { step = step === 'block' ? 'kosten' : 'block'; lastSub = null; okSince = 0; paintTitle(); paintStep(); layout(); }, 'Zwischen Block und Kostenblock wechseln');
+      stepB = scan ? null : btn('', 'background:#1e293b;color:#cbd5e1;font-size:13px;min-width:96px', () => { step = step === 'block' ? 'kosten' : 'block'; lastSub = null; okSince = 0; paintTitle(); paintStep(); layout(); }, 'Zwischen Block und Kostenblock wechseln');
       doneB = btn('Fertig', 'background:#2563eb;color:#fff;min-width:96px', () => finishSession(), 'Fertig');
-      bottom.appendChild(stepB); bottom.appendChild(shutter); bottom.appendChild(doneB);
+      bottom.appendChild(stepB || el('div', 'min-width:96px')); bottom.appendChild(shutter); bottom.appendChild(doneB);
     } else {
       bottom.appendChild(btn('Kamera-App', 'background:#1e293b;color:#cbd5e1;font-size:13px', () => finish('native'), 'Normale Kamera-App öffnen'));
       bottom.appendChild(shutter); bottom.appendChild(el('div', 'width:96px'));
@@ -13547,7 +13571,7 @@ function psO2CamOpen(opts) {
       curHoch = __psO2CamHoch != null ? __psO2CamHoch : h > w;
       oriB.textContent = curHoch ? '▯ Hochformat' : '▭ Querformat';
       let fw, fh;
-      if (ses) { const ar = step === 'kosten' ? C.arK : C.arB; fw = dw * 0.94; fh = fw / ar; if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * ar; } }
+      if (ses) { const ar = scan ? C.arS : step === 'kosten' ? C.arK : C.arB; fw = dw * 0.94; fh = fw / ar; if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * ar; } }
       else if (curHoch) { fh = dh * 0.92; fw = fh * C.arP; if (fw > dw * 0.94) { fw = dw * 0.94; fh = fw / C.arP; } }
       else { fw = dw * 0.94; fh = fw / C.ar; if (fh > dh * 0.9) { fh = dh * 0.9; fw = fh * C.ar; } }
       const fl = dx + (dw - fw) / 2, ft = dy + (dh - fh) / 2;
@@ -13636,6 +13660,9 @@ function psO2CamOpen(opts) {
     const capture = isAuto => {
       if (done || shot || finishing || !video.videoWidth) return;
       shot = true; lastShotAt = Date.now(); moved = false; moveTicks = 0;
+      // Scannen: Anteil, der mit dem vorigen Foto ueberlappt (1 - gewandert); ab hier neu messen
+      const capF = scan ? (nShots ? Math.max(0, Math.min(1, 1 - travel)) : 0) : undefined;
+      if (scan) { travel = 0; prevP = null; }
       flash.style.opacity = '0.85'; setTimeout(() => { flash.style.opacity = '0'; }, 80);
       const st = step, sub = prev;
       if (ic) { hint.textContent = 'Foto wird aufgenommen …'; hint.style.background = '#334155'; }
@@ -13646,17 +13673,19 @@ function psO2CamOpen(opts) {
         const file = new File([b], 'o2-kamera.jpg', { type: 'image/jpeg', lastModified: Date.now() });
         if (!ses) { finish({ file, auto: !!isAuto }); return; }
         // Reihe: das Foto geht zum Lesen in den Dialog, die Kamera bleibt fuer den naechsten Block offen
-        const item = { l: st === 'kosten' ? 'Kostenblock' : 'Block ' + blockN, n: blockN, t: '', st: 'lade' };
+        if (scan) { nShots++; paintTitle(); }
+        const item = { l: scan ? 'Foto ' + nShots : st === 'kosten' ? 'Kostenblock' : 'Block ' + blockN, n: blockN, t: '', st: 'lade' };
         results.push(item); pend++;
-        if (st === 'block') { blockN++; paintTitle(); }
+        if (st === 'block' && !scan) { blockN++; paintTitle(); }
         lastSub = sub; paintChips();
-        let p; try { p = Promise.resolve(o.onShot(file, st)); } catch (e) { p = Promise.resolve(''); }
-        p.then(t => { item.t = String(t || ''); item.st = item.t ? 'ok' : 'leer'; }, () => { item.st = 'leer'; }).then(() => {
+        let p; try { p = Promise.resolve(o.onShot(file, scan ? 'scan' : st, capF)); } catch (e) { p = Promise.resolve(''); }
+        p.then(t => { const ob = t && typeof t === 'object'; item.end = !!(ob && t.end); item.t = String((ob ? t.t : t) || ''); item.st = item.t ? 'ok' : 'leer'; }, () => { item.st = 'leer'; }).then(() => {
           pend--;
-          if (item.st === 'leer' && st === 'block' && blockN - 1 === item.n) { blockN--; paintTitle(); }
+          if (item.st === 'leer' && st === 'block' && !scan && blockN - 1 === item.n) { blockN--; paintTitle(); }
           paintChips();
           if (done) return;
-          if (st === 'kosten' && item.st === 'ok') finishSession();
+          if (scan && item.end) { setState('start'); hint.textContent = '✓ Kostenblock gelesen – fertig'; hint.style.background = '#15803d'; setTimeout(() => finishSession(), 700); }
+          else if (st === 'kosten' && item.st === 'ok') finishSession();
           else if (finishing && !pend) finish('fertig');
         });
         setTimeout(() => { shot = false; }, 500);
@@ -13675,6 +13704,33 @@ function psO2CamOpen(opts) {
       }
       return d / n > 8;
     };
+    // Scannen: Zeilenprofil des Rahmens (Helligkeit je Zeile) -> vertikale Verschiebung gegen das vorige Bild
+    const SP = 160, SW = 48, pcv = document.createElement('canvas'); pcv.width = SW; pcv.height = SP;
+    const pcx = pcv.getContext('2d', { willReadFrequently: true });
+    const scanProf = () => {
+      const W = video.videoWidth, H = video.videoHeight;
+      pcx.drawImage(video, fr.x * W, fr.y * H, fr.w * W, fr.h * H, 0, 0, SW, SP);
+      const d = pcx.getImageData(0, 0, SW, SP).data, pr = new Float32Array(SP);
+      for (let r = 0; r < SP; r++) { let a = 0; for (let x = 0; x < SW; x++) { const i = (r * SW + x) * 4; a += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; } pr[r] = a / SW; }
+      let m = 0; for (let r = 0; r < SP; r++) m += pr[r]; m /= SP;
+      let v = 0; for (let r = 0; r < SP; r++) v += (pr[r] - m) * (pr[r] - m); v = Math.sqrt(v / SP);
+      if (v < 1.5) return null; // leere Flaeche: nichts zu verfolgen
+      for (let r = 0; r < SP; r++) pr[r] = (pr[r] - m) / v;
+      return pr;
+    };
+    // > 0: Inhalt ist nach oben gewandert (weiter unten im Vorschlag)
+    const scanShift = (a, b) => {
+      const S = 48; let best = 0, be = Infinity, e0 = Infinity;
+      for (let sh = -S; sh <= S; sh++) {
+        let e = 0, n = 0;
+        for (let r = Math.max(0, -sh); r < SP && r + sh < SP; r++) { e += Math.abs(b[r] - a[r + sh]); n++; }
+        if (n < SP * 0.55) continue;
+        e /= n; if (sh === 0) e0 = e;
+        if (e < be) { be = e; best = sh; }
+      }
+      return e0 - be > 0.06 ? best : 0;
+    };
+    const scanHint = (k, txt, bg, bc) => { if (cur === k) return; cur = k; hint.textContent = txt; hint.style.background = bg; frame.style.borderColor = bc; };
     const tick = () => {
       if (done) return;
       timer = setTimeout(tick, 120);
@@ -13687,10 +13743,20 @@ function psO2CamOpen(opts) {
       while (hist.length && now - hist[0].t > 3000) hist.shift();
       const peak = hist.reduce((a, b) => Math.max(a, b.s), 0);
       const st = psO2CamState(m, peak, now - t0);
-      if (!finishing) setState(st);
+      if (scan) { const pr = scanProf(); if (pr && prevP) travel += scanShift(prevP, pr) / SP; if (pr) prevP = pr; }
+      if (finishing) {}
+      else if (scan && nShots && travel > C.sMax) scanHint('zurueck', 'Zu weit – ein Stück zurück ↑', '#b45309', '#f59e0b');
+      else if (scan && nShots && travel < C.sGo && (st === 'ok' || st === 'shaky')) scanHint('weiter', 'Langsam weiter nach unten ↓  (oder am PC scrollen)', '#1d4ed8', '#60a5fa');
+      else if (scan && !nShots && st === 'ok') scanHint('erst', 'Scharf ✓ – oben am Vorschlag anfangen', '#15803d', '#22c55e');
+      else setState(st);
       if (root.getAttribute('data-dbg')) root.setAttribute('data-m', JSON.stringify({ st, s: +m.sharp.toFixed(3), v1: Math.round(m.v1), peak: +peak.toFixed(3), mean: Math.round(m.mean), sat: +m.sat.toFixed(2), mo: +m.motion.toFixed(1), step, blockN, pend }));
       if (ses) { if (m.motion > 12) moveTicks++; else if (moveTicks > 0) moveTicks--; if (moveTicks >= 3) moved = true; }
-      if (st === 'ok' && !finishing) { if (!okSince) okSince = now; if (auto && now - okSince >= C.hold && (!ses || (moved && now - lastShotAt > 2000 && changed(m.sub)))) capture(true); } else okSince = 0;
+      if (st === 'ok' && !finishing) {
+        if (!okSince) okSince = now;
+        const go = scan ? (nShots ? travel >= C.sGo && travel <= C.sMax && now - okSince >= 250 && now - lastShotAt > 900 : now - okSince >= C.hold)
+          : now - okSince >= C.hold && (!ses || (moved && now - lastShotAt > 2000 && changed(m.sub)));
+        if (auto && go) capture(true);
+      } else okSince = 0;
     };
     const showError = e => {
       const denied = e && /NotAllowed|Security|PermissionDenied/i.test(e.name || '');
@@ -14074,11 +14140,24 @@ function PsO2Import({ onApply, onClose, initial }) {
   // Gelesen wird nacheinander im Hintergrund; "Ganzes Foto" = bisheriges Verhalten (eine Taste je Bereich).
   // v55.203: dritter Modus "Bildschirm" (nur am PC): Activate+ Fenster freigeben, Rahmen ziehen = lesen
   const snipOk = psO2SnipSupported();
-  const [mode, setModeS] = React.useState(() => { try { const mv = localStorage.getItem('ps_o2_mode'); if (mv === 'ganz' || mv === 'block' || mv === 'snip' || mv === 'pc') return mv; } catch (e) {} return snipOk ? 'snip' : 'block'; });
+  // v55.209: Tablet-Standard = "Scannen" (Block-Fotos und QR vom PC entfallen in der Auswahl)
+  const [mode, setModeS] = React.useState(() => { try { const mv = localStorage.getItem('ps_o2_mode'); if (mv === 'ganz' || mv === 'snip' || mv === 'scan') return mv; } catch (e) {} return snipOk ? 'snip' : 'scan'; });
   const setMode = m => { setModeS(m); try { localStorage.setItem('ps_o2_mode', m); } catch (e) {} };
   // v55.205: Tablet (ohne Bildschirmfreigabe): Knopf "Vom PC scannen" immer oben, kein eigener Modus mehr
-  const camOk = psO2CamSupported(), eff = mode === 'snip' && !snipOk ? 'block' : mode === 'pc' ? (snipOk ? 'snip' : camOk ? 'block' : 'ganz') : mode;
-  const blockMode = eff === 'block' && camOk, snipMode = eff === 'snip' && snipOk, scanOk = !snipOk && camOk, quick = blockMode || snipMode;
+  const camOk = psO2CamSupported(), eff = mode === 'snip' && !snipOk ? 'scan' : mode;
+  const blockMode = false, scanMode = eff === 'scan' && camOk, snipMode = eff === 'snip' && snipOk, scanOk = false, quick = scanMode || snipMode;
+  const lastRRef = React.useRef(null), scanPrevRef = React.useRef(null);
+  const openScan = () => {
+    setNote(''); scanPrevRef.current = null;
+    psO2CamOpen({ scan: true, onShot: (file, st, f) => {
+      const job = jobRef.current.then(() => readPhoto(Promise.resolve(file), 'scan', null, f)).then(t => {
+        const q = lastRRef.current;
+        return { t, end: !!(q && q.einmalig && q.monatlich) };
+      });
+      jobRef.current = job.catch(() => {});
+      return job;
+    } });
+  };
   const myShop = () => { try { return String(window.__PS_SHOP || ''); } catch (e) { return ''; } };
   const shopName = id => (typeof SHOPS !== 'undefined' && SHOPS[id] && SHOPS[id].name) || id;
   const sendQr = async () => {
@@ -14138,7 +14217,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const autoOpenRef = React.useRef(false);
   React.useEffect(() => { if (autoOpenRef.current) return; autoOpenRef.current = true;
     if (snipOk && eff === 'snip' && !had) openSnip();
-    else if (scanOk && !had) { let off = false; try { off = localStorage.getItem('ps_o2_autoscan') === '0'; } catch (e) {} if (!off) scanQr(true); } }, []);
+    else if (false && scanOk && !had) { let off = false; try { off = localStorage.getItem('ps_o2_autoscan') === '0'; } catch (e) {} if (!off) scanQr(true); } }, []);
   const openBlocks = step => {
     setNote('');
     psO2CamOpen({ session: true, step, onShot: (file, st) => {
@@ -14179,7 +14258,7 @@ function PsO2Import({ onApply, onClose, initial }) {
     } catch (e) { /* laesst sich nicht pruefen -> einfach lesen */ }
     readPhoto(Promise.resolve(file), stage, file);
   };
-  const readPhoto = async (jobP, stage, retryFile) => {
+  const readPhoto = async (jobP, stage, retryFile, ovF) => {
     let sum = ''; // kurzer Text "was wurde erkannt" (fuer die Block-Reihe in der Kamera)
     setBlur(null);
     try {
@@ -14200,7 +14279,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         const loc = await psO2ReadLocal(file, m => setBusy(m), q => !missOf(q));
         r = loc.r; txt = loc.txt;
       }
-      setSeen(txt);
+      setSeen(txt); lastRRef.current = r;
       sum = [].concat(r.tarife.map(x => x.name), r.geraete.map(x => psO2Pretty(x.name)), r.internet.map(x => x.name)).join(', ') || (r.einmalig || r.monatlich ? 'Kosten ' + (r.einmalig || '–') + ' / ' + (r.monatlich || '–') + ' €' : '');
       // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
       const miss = missOf(r);
@@ -14213,7 +14292,22 @@ function PsO2Import({ onApply, onClose, initial }) {
         return 0;
       };
       // Block-Fotos zeigen je einen eigenen Block: da gibt es keine Ueberschneidung (zwei gleiche Tarife sind zwei Tarife)
-      const ov = stage === 'block' ? { tarife: 0, geraete: 0, internet: 0 } : { tarife: ovl('tarife'), geraete: ovl('geraete'), internet: ovl('internet') };
+      // Scannen: ein Eintrag ist nur dann schon da, wenn er im vorigen Foto an der passenden Stelle stand (Lage + gewanderte Strecke).
+      // So bleiben zwei gleiche Tarife untereinander zwei Tarife.
+      const prevS = scanPrevRef.current, mv = 1 - (ovF || 0);
+      const ovlS = kind => {
+        if (!ovF || !prevS || !prevS[kind] || !prevS[kind].length) return 0;
+        const used = new Set(); let k = 0;
+        for (const it of r[kind]) {
+          const y = (it.yf || 0) + mv, nm = nmOf(kind, it);
+          const j = prevS[kind].findIndex((q, qi) => !used.has(qi) && Math.abs(q.yf - y) < 0.17 && psO2Similar(q.name, nm));
+          if (j < 0) break;
+          used.add(j); k++;
+        }
+        return Math.min(k, cur[kind].length);
+      };
+      const ov = stage === 'block' ? { tarife: 0, geraete: 0, internet: 0 } : stage === 'scan' ? { tarife: ovlS('tarife'), geraete: ovlS('geraete'), internet: ovlS('internet') } : { tarife: ovl('tarife'), geraete: ovl('geraete'), internet: ovl('internet') };
+      if (stage === 'scan') scanPrevRef.current = { tarife: r.tarife.map(it => ({ yf: it.yf || 0, name: it.name })), geraete: r.geraete.map(it => ({ yf: it.yf || 0, name: psO2Pretty(it.name) })), internet: r.internet.map(it => ({ yf: it.yf || 0, name: it.name })) };
       const merge = (kind, p) => {
         const old = p[kind].slice(), k = ov[kind], neu = r[kind];
         // Bei der Ueberschneidung die vollstaendigere Fassung behalten (am Seitenrand sind Inhalte oft abgeschnitten)
@@ -14228,7 +14322,9 @@ function PsO2Import({ onApply, onClose, initial }) {
         if (r.tarife.length) n.tarife = merge('tarife', p).map(it => it.det !== undefined ? it : conv('tarife', it));
         // Kamen Tarife UND Handys von einem einzigen Foto (z. B. ganze Vorschlagsseite), gehoert jedes Handy zu dem Tarif darueber
         const one = !r.mixed && !p.tarife.length && !p.geraete.length && r.tarife.length && r.geraete.length;
-        if (r.geraete.length) n.geraete = merge('geraete', p).map(it => it.det !== undefined ? it : conv('geraete', one ? { ...it, t: r.tarife.filter(x => x.idx < it.idx).length } : it));
+        // Scannen: Handy gehoert zum Tarif darueber – auch wenn der im vorigen Foto stand
+        const tOf = it => stage === 'scan' ? { ...it, t: Math.max(0, p.tarife.length - ov.tarife) + r.tarife.filter(x => x.idx < it.idx).length } : one ? { ...it, t: r.tarife.filter(x => x.idx < it.idx).length } : it;
+        if (r.geraete.length) n.geraete = merge('geraete', p).map(it => it.det !== undefined ? it : conv('geraete', tOf(it)));
         if (r.internet.length) n.internet = merge('internet', p).map(it => it.det !== undefined ? it : conv('internet', it));
         if (r.einmalig) n.einmalig = r.einmalig;
         if (r.monatlich) n.monatlich = r.monatlich;
@@ -14251,7 +14347,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         const same = ov.tarife + ov.geraete + ov.internet;
         // PDF-Vorschlag: "Seite 1 von 2" und noch keine Summen -> der Kostenblock steht auf der naechsten Seite
         const pg = /Seite\s*(\d)\s*v[o0]n\s*(\d)/i.exec(txt);
-        const more = pg && +pg[1] < +pg[2] && !(r.einmalig || r.monatlich) && !(cur.einmalig || cur.monatlich) ? ' · Seite ' + pg[1] + ' von ' + pg[2] + ': die Kosten stehen auf Seite ' + (+pg[1] + 1) + ' – bitte noch fotografieren (📷 Kosten)' : '';
+        const more = stage !== 'scan' && pg && +pg[1] < +pg[2] && !(r.einmalig || r.monatlich) && !(cur.einmalig || cur.monatlich) ? ' · Seite ' + pg[1] + ' von ' + pg[2] + ': die Kosten stehen auf Seite ' + (+pg[1] + 1) + ' – bitte noch fotografieren (📷 Kosten)' : '';
         const lap = same ? ' · Überschneidung mit dem vorigen Foto, nichts doppelt (gleicher Eintrag nochmal: „+1“)' : '';
         const ok = parts.length ? '✓ Erkannt: ' + parts.join(', ') + lap + more : (same ? '✓ Nichts Neues – das Foto überschneidet sich mit dem vorigen' + more : 'Nichts erkannt' + tip);
         if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich) && parts.length) setNote('Neu dazu (' + parts.join(', ') + ') – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
@@ -14287,7 +14383,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const sec = (title, n, stage, label, hideBtn, body, max) => h('div', { className: 'mt-3 rounded-xl border border-slate-200 p-3' },
     h('div', { className: 'flex items-center justify-between gap-2' },
       h('div', { className: 'text-[11px] font-black tracking-wide text-blue-700' }, title + (n ? ' · ' + n + (max ? '/' + max : '') : '')),
-      hideBtn || snipMode || blockMode && stage !== 'kosten' ? null : h('div', { className: 'flex gap-2' },
+      hideBtn || snipMode || (blockMode || scanMode) && stage !== 'kosten' ? null : h('div', { className: 'flex gap-2' },
         h('button', { onClick: () => blockMode ? openBlocks('kosten') : pick(stage, false), disabled: !!busy, className: sBtn }, label),
         blockMode ? null : h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
     body);
@@ -14306,10 +14402,12 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
       scanOk ? h('button', { onClick: () => scanQr(false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📲 Vom PC scannen') : null,
       scanOk ? h('div', { className: 'text-xs text-slate-500 mt-1 text-center' }, 'Am PC erscheint der QR-Code, sobald dort der Bildschirm gelesen wurde. Oder selbst fotografieren:') : null,
-      (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto']].concat(camOk ? [['block', 'Block-Fotos']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
+      (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, (camOk ? [['scan', 'Scannen']] : []).concat([['ganz', 'Einzelfotos']], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
         h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
       h('div', { className: 'text-sm text-slate-600 mt-2' }, snipMode
         ? 'Beim ersten Mal im Reiter „Fenster“ das Edge der Windows App wählen (Edge-Symbol mit kleinem Windows-Logo) und „Teilen“ – Pencil Selling bleibt vorn. Danach wird der Vorschlag sofort gelesen und der QR-Code erscheint.'
+        : scanMode
+        ? 'Tablet oben an den Vorschlag halten und langsam nach unten führen – oder Tablet ruhig halten und am PC langsam scrollen. Die Fotos macht die App selbst, beim Kostenblock ist Schluss. Auch für 2–3 Seiten.'
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
@@ -14318,6 +14416,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       snipMode && psO2SnipLive() ? h('div', { className: 'mt-2 flex justify-center gap-4 text-xs font-bold text-slate-500' },
         h('button', { onClick: () => { psO2SnipStop(); openSnip(); }, disabled: !!busy, className: 'underline' }, 'Anderes Fenster wählen'),
         h('button', { onClick: () => { psO2SnipStop(); setNote('Freigabe beendet.'); }, className: 'underline text-slate-400' }, 'Freigabe beenden')) : null,
+      scanMode ? h('button', { onClick: openScan, disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, any ? '📷 Weiter scannen' : '📷 Scannen starten') : null,
       blockMode ? h('button', { onClick: () => openBlocks('block'), disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '📷 Weitere Blöcke fotografieren' : '📷 Block-Fotos starten') : null,
       quick ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
