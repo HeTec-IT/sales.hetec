@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.207';
+    window.APP_VERSION = '55.208';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13755,10 +13755,10 @@ function psO2SnipOpen(opts) {
     let stream = null;
     if (psO2SnipLive()) { go(window.__psO2SnipStream, true); return; }
     try {
-      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion). Liste: Edge-Tab vorgewaehlt, kein "Gesamter Bildschirm",
-      // dieser Tab nicht dabei. Nach "Teilen" springt der Browser NICHT zum geteilten Tab (Pencil Selling bleibt vorn).
+      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion). Liste: Reiter "Fenster" vorgewaehlt (das Edge der Windows App ist
+      // ein eigenes Fenster), kein "Gesamter Bildschirm". Nach "Teilen" springt der Browser NICHT zum geteilten Fenster (Pencil Selling bleibt vorn).
       let ctl = null; try { if (window.CaptureController) ctl = new CaptureController(); } catch (e) { ctl = null; }
-      const cons = { video: { frameRate: 5, displaySurface: 'browser' }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude' };
+      const cons = { video: { frameRate: 5, displaySurface: 'window' }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'exclude', monitorTypeSurfaces: 'exclude' };
       if (ctl) cons.controller = ctl;
       navigator.mediaDevices.getDisplayMedia(cons).then(st => {
         try { if (ctl) ctl.setFocusBehavior('no-focus-change'); } catch (e) {}
@@ -14124,7 +14124,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       return job;
     } });
     if (res === 'geschwaerzt') setNote('Der Bildschirm kommt nur schwarz an – die Umgebung blockiert Aufnahmen. Bitte „Block-Fotos“ mit der Kamera nehmen.');
-    else if (res === 'leer') setNote('Keine Vorschlag-Seite erkannt. Im Edge-Tab „Activate+“ die Seite „Vorschlag“ öffnen, dann hier noch einmal „Bildschirm lesen“ (ohne neue Auswahl).');
+    else if (res === 'leer') setNote('Keine Vorschlag-Seite erkannt. Falsches Fenster geteilt? Dann „Anderes Fenster wählen“. Sonst im Edge der Windows App den Vorschlag öffnen und noch einmal „Bildschirm lesen“.');
     // etwas gelesen: QR-Code fuers Tablet gleich anzeigen (kein weiterer Klick)
     else if (res === 'fertig') {
       await new Promise(r => setTimeout(r, 200));
@@ -14309,13 +14309,15 @@ function PsO2Import({ onApply, onClose, initial }) {
       (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto']].concat(camOk ? [['block', 'Block-Fotos']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
         h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
       h('div', { className: 'text-sm text-slate-600 mt-2' }, snipMode
-        ? 'Beim ersten Mal den Edge-Tab „Activate+“ (Seite „Vorschlag“) wählen und „Teilen“ – Pencil Selling bleibt vorn. Danach wird der Vorschlag sofort gelesen und der QR-Code erscheint.'
+        ? 'Beim ersten Mal im Reiter „Fenster“ das Edge der Windows App wählen (Edge-Symbol mit kleinem Windows-Logo) und „Teilen“ – Pencil Selling bleibt vorn. Danach wird der Vorschlag sofort gelesen und der QR-Code erscheint.'
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
       snipMode && any ? h('button', { onClick: sendQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, '📲 QR-Code fürs Tablet') : null,
       snipMode ? h('button', { onClick: openSnip, disabled: !!busy, className: (any ? gBtn : sBtn) + ' w-full mt-2 py-3 text-base' }, any ? '🖥 Nochmal lesen (z. B. nach Scrollen)' : '🖥 Bildschirm lesen') : null,
-      snipMode && psO2SnipLive() ? h('button', { onClick: () => { psO2SnipStop(); setNote('Bildschirmfreigabe beendet.'); }, className: 'mt-2 w-full text-center text-xs font-bold text-slate-400 underline' }, 'Bildschirmfreigabe beenden') : null,
+      snipMode && psO2SnipLive() ? h('div', { className: 'mt-2 flex justify-center gap-4 text-xs font-bold text-slate-500' },
+        h('button', { onClick: () => { psO2SnipStop(); openSnip(); }, disabled: !!busy, className: 'underline' }, 'Anderes Fenster wählen'),
+        h('button', { onClick: () => { psO2SnipStop(); setNote('Freigabe beendet.'); }, className: 'underline text-slate-400' }, 'Freigabe beenden')) : null,
       blockMode ? h('button', { onClick: () => openBlocks('block'), disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '📷 Weitere Blöcke fotografieren' : '📷 Block-Fotos starten') : null,
       quick ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
