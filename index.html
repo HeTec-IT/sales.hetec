@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.205';
+    window.APP_VERSION = '55.206';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12725,12 +12725,26 @@ function psO2Check(d) {
   const items = [].concat(d.tarife || [], d.geraete || [], d.internet || []);
   if (!items.length || E == null && M == null) return null;
   let se = 0, sm = 0, re = 0, rm = 0;
+  const ae = [], am = [];
   for (const it of items) {
     if (!it.am || !it.rb || it.rb.bad) return null;
-    se += psO2Cents(it.am[0]) || 0; sm += psO2Cents(it.am[1]) || 0; re += it.rb.e; rm += it.rb.m;
+    const a = psO2Cents(it.am[0]) || 0, b = psO2Cents(it.am[1]) || 0;
+    ae.push(a); am.push(b); se += a; sm += b; re += it.rb.e; rm += it.rb.m;
   }
-  const mk = (val, sum, adj) => { if (val == null) return null; const c = adj ? [sum, sum + adj] : [sum]; return { val, calc: c, ok: c.indexOf(val) > -1 }; };
-  return { e: mk(E, se, re), m: mk(M, sm, rm) };
+  // v55.206: Texterkennung verschluckt vorne gern eine Ziffer (19,99 -> 9,99). Passt die Differenz zur Summe bei genau
+  // einem Eintrag genau so (9,99 + 10,00 = 19,99, endet auf 9,99), gilt die Summe als bestaetigt.
+  const mk = (val, sum, adj, arr) => {
+    if (val == null) return null;
+    const c = adj ? [sum, sum + adj] : [sum];
+    let ok = c.indexOf(val) > -1;
+    if (!ok) for (const t of c) {
+      const diff = val - t; if (diff <= 0) continue;
+      const hit = arr.filter(a => a > 0 && String(a + diff).length > String(a).length && String(a + diff).endsWith(String(a)));
+      if (hit.length === 1) { ok = true; break; }
+    }
+    return { val, calc: c, ok };
+  };
+  return { e: mk(E, se, re, ae), m: mk(M, sm, rm, am) };
 }
 // === v55.189 (Beta): o2-VORSCHLAG VON DER KI LESEN LASSEN =================================================
 // Das Foto geht an denselben Dienst wie die Handschrift (Cloud Function -> Gemini auf Vertex AI, EU) und kommt
@@ -13732,16 +13746,23 @@ function psO2CamOpen(opts) {
 // opts.onShot(file, art) -> Promise<kurzer Text, leer = nichts erkannt>; art = 'block' (Rahmen) | 'snip' (ganzer Bildschirm).
 // Ergebnis: 'fertig' | 'geschwaerzt' (Schutz zeigt nur Schwarz) | null (abgebrochen).
 function psO2SnipSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia); }
+// v55.206: die Freigabe bleibt offen, bis der Browser sie beendet oder "Bildschirmfreigabe beenden" gedrueckt wird -> kein erneutes Auswaehlen
+function psO2SnipLive() { const s = window.__psO2SnipStream; return !!(s && s.getVideoTracks().some(t => t.readyState === 'live')); }
+function psO2SnipStop() { try { const s = window.__psO2SnipStream; if (s) s.getTracks().forEach(t => t.stop()); } catch (e) {} window.__psO2SnipStream = null; }
 function psO2SnipOpen(opts) {
   const o = opts || {};
   return new Promise(resolve => {
     let stream = null;
+    if (psO2SnipLive()) { go(window.__psO2SnipStream, true); return; }
     try {
-      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion)
-      stream = null;
-      navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 }, audio: false }).then(go, () => resolve(null));
+      // direkt im Klick aufrufen (Browser verlangt eine Nutzeraktion); Fenster vorgewaehlt
+      navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5, displaySurface: 'window' }, audio: false, selfBrowserSurface: 'exclude' }).then(st => {
+        window.__psO2SnipStream = st;
+        try { st.getVideoTracks()[0].addEventListener('ended', () => { if (window.__psO2SnipStream === st) window.__psO2SnipStream = null; }); } catch (e) {}
+        go(st, false);
+      }, () => resolve(null));
     } catch (e) { resolve(null); return; }
-    function go(st) {
+    function go(st, reused) {
       stream = st;
       let done = false, finishing = false, pend = 0, drag = null, blockN = 1, tries = 0, btries = 0, autoStarted = false;
       const results = [];
@@ -13778,7 +13799,6 @@ function psO2SnipOpen(opts) {
       const finish = res => {
         if (done) return; done = true;
         document.removeEventListener('keydown', onKey, true);
-        try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
         try { video.srcObject = null; } catch (e) {}
         if (root.parentNode) root.parentNode.removeChild(root);
         resolve(res);
@@ -13881,7 +13901,7 @@ function psO2SnipOpen(opts) {
       st.getVideoTracks()[0].addEventListener('ended', () => { if (!done) { if (pend) finishSession(); else finish(results.length ? 'fertig' : null); } });
       video.srcObject = st;
       video.play().catch(() => {});
-      setTimeout(check, 600);
+      setTimeout(check, reused ? 200 : 600);
     }
   });
 }
@@ -13892,9 +13912,9 @@ function psO2SnipOpen(opts) {
 const PS_O2_QR_MAX_AGE = 15 * 60 * 1000;
 const psO2B64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const psO2UnB64 = t => { const b = atob(t.replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
-async function psO2QrPack(d, shop) {
+async function psO2QrPack(d, shop, sure) {
   const it = k => (d[k] || []).map(x => [x.name || '', x.art || '', x.det || '', typeof x.t === 'number' ? x.t : null, x.am || null, x.rb || null]);
-  const o = { v: 1, s: shop || '', ts: Date.now(), k: it('tarife'), g: it('geraete'), i: it('internet'), e: d.einmalig || '', m: d.monatlich || '', h: d.hinweis || '' };
+  const o = { v: 1, s: shop || '', ts: Date.now(), k: it('tarife'), g: it('geraete'), i: it('internet'), e: d.einmalig || '', m: d.monatlich || '', h: d.hinweis || '', c: sure ? 1 : 0 };
   const raw = new TextEncoder().encode(JSON.stringify(o));
   let bytes = raw, tag = 'r';
   if (typeof CompressionStream !== 'undefined') {
@@ -13914,7 +13934,7 @@ async function psO2QrUnpack(txt, myShop) {
     if (o.s && myShop && o.s !== myShop) return { err: 'Dieses Angebot ist von ' + nm(o.s) + ' – dieses Tablet gehört zu ' + nm(myShop) + '. Es wird nicht übernommen.' };
     if (!o.ts || Date.now() - o.ts > PS_O2_QR_MAX_AGE || o.ts - Date.now() > 5 * 60 * 1000) return { err: 'Der QR-Code ist abgelaufen (älter als 15 Minuten) – am PC bitte neu anzeigen.' };
     const back = a => (a || []).map(x => ({ name: x[0], art: x[1], det: x[2], ...(typeof x[3] === 'number' ? { t: x[3] } : {}), ...(x[4] ? { am: x[4] } : {}), ...(x[5] ? { rb: x[5] } : {}) }));
-    return { d: { tarife: back(o.k), geraete: back(o.g), internet: back(o.i), einmalig: o.e || '', monatlich: o.m || '', hinweis: o.h || '' } };
+    return { d: { tarife: back(o.k), geraete: back(o.g), internet: back(o.i), einmalig: o.e || '', monatlich: o.m || '', hinweis: o.h || '' }, ok: o.c === 1 };
   } catch (e) { return { err: 'QR-Code nicht lesbar – bitte noch einmal scannen.' }; }
 }
 // QR-Code gross auf den Bildschirm (PC). Schliessen-Knopf; Ergebnis: Promise, wenn zu.
@@ -13935,17 +13955,17 @@ async function psO2QrShow(payload, info, warn) {
     root.setAttribute('data-ps-qr', '1');
     const card = el('div', 'background:#fff;border-radius:18px;padding:20px;max-width:640px;width:100%;text-align:center;font:600 15px system-ui,sans-serif;color:#0f172a;max-height:100%;overflow:auto');
     card.appendChild(el('div', 'font:900 20px system-ui,sans-serif;margin-bottom:4px', 'Angebot ans Tablet senden'));
-    card.appendChild(el('div', 'color:#475569;margin-bottom:12px', 'Am Tablet: o2-Vorschlag einlesen → „Vom PC scannen“'));
+    card.appendChild(el('div', 'color:#475569;margin-bottom:12px', 'Am Tablet „o2-Vorschlag einlesen“ antippen – der Scanner öffnet sich von selbst'));
     c.setAttribute('style', 'width:min(72vmin,680px);height:min(72vmin,680px);image-rendering:pixelated;border:1px solid #e2e8f0;border-radius:8px');
     card.appendChild(c);
     card.appendChild(el('div', 'margin-top:10px;color:#166534;font-weight:800', info || ''));
     if (warn) card.appendChild(el('div', 'margin-top:4px;color:#b45309;font-weight:800', warn));
     card.appendChild(el('div', 'margin-top:2px;color:#64748b;font-size:13px', 'Gilt 15 Minuten und nur für den eigenen Shop'));
-    const b = el('button', 'margin-top:14px;font:800 16px system-ui,sans-serif;border:0;border-radius:12px;padding:13px 26px;background:#2563eb;color:#fff;cursor:pointer', 'Schließen');
+    const b = el('button', 'margin-top:14px;font:800 16px system-ui,sans-serif;border:0;border-radius:12px;padding:13px 26px;background:#2563eb;color:#fff;cursor:pointer', 'Fertig');
     b.type = 'button';
     const done = () => { document.removeEventListener('keydown', onKey, true); if (root.parentNode) root.parentNode.removeChild(root); resolve(); };
     const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(); } };
-    b.onclick = done; card.appendChild(b); root.appendChild(card); document.body.appendChild(root);
+    b.onclick = done; root.onclick = e => { if (e.target === root) done(); }; card.appendChild(b); root.appendChild(card); document.body.appendChild(root);
     document.addEventListener('keydown', onKey, true);
   });
 }
@@ -14064,18 +14084,24 @@ function PsO2Import({ onApply, onClose, initial }) {
       if (nN) parts.push('Internet@Home');
       if (x.einmalig) parts.push('Einmalig ' + x.einmalig + ' €');
       if (x.monatlich) parts.push('Monatlich ' + x.monatlich + ' €');
-      const c = psO2Check(x), bad = c && [c.e, c.m].some(r => r && !r.ok);
-      await psO2QrShow(await psO2QrPack(x, myShop()), shopName(myShop()) + ': ' + (parts.join(' · ') || 'nichts erkannt'), bad ? '⚠ Summen passen nicht ganz – besser erst schließen und prüfen' : '');
+      const c = psO2Check(x), sure = !!c && [c.e, c.m].every(r => !r || r.ok);
+      await psO2QrShow(await psO2QrPack(x, myShop(), sure), shopName(myShop()) + ': ' + (parts.join(' · ') || 'nichts erkannt'),
+        sure ? '' : c ? '⚠ Summen passen nicht ganz – am PC prüfen oder weiter lesen' : 'Summen nicht geprüft – am Tablet kurz kontrollieren');
+      return sure;
     }
-    catch (e) { setNote('QR-Code nicht möglich: ' + (e && e.message || e)); }
+    catch (e) { setNote('QR-Code nicht möglich: ' + (e && e.message || e)); return false; }
   };
-  const scanQr = async () => {
+  const scanQr = async auto => {
     setNote('');
+    if (!auto) { try { localStorage.setItem('ps_o2_autoscan', '1'); } catch (e) {} }
     let txt = null;
     try { txt = await psO2QrScan(); } catch (e) { setNote('QR-Scanner nicht möglich: ' + (e && e.message || e)); return; }
-    if (!txt) return;
+    // vom Mitarbeiter selbst abgebrochen: nicht mehr von selbst oeffnen
+    if (!txt) { if (auto) { try { localStorage.setItem('ps_o2_autoscan', '0'); } catch (e) {} } return; }
     const r = await psO2QrUnpack(txt, myShop());
     if (r.err) { setNote(r.err); return; }
+    // Summen stimmen schon am PC -> gleich ins Angebot (sonst zur Kontrolle anzeigen)
+    if (r.ok && !had) { onApply(r.d); return; }
     setD(r.d);
     const nT = r.d.tarife.length, nG = r.d.geraete.length, nN = r.d.internet.length, parts = [];
     if (nT) parts.push(nT + (nT === 1 ? ' Tarif' : ' Tarife'));
@@ -14096,13 +14122,16 @@ function PsO2Import({ onApply, onClose, initial }) {
     else if (res === 'fertig') {
       await new Promise(r => setTimeout(r, 200));
       const x = dRef.current;
-      if (x.tarife.length || x.geraete.length || x.internet.length || x.einmalig || x.monatlich) sendQr();
+      // alles stimmig und QR-Code geschlossen: Dialog schliesst sich selbst
+      if (x.tarife.length || x.geraete.length || x.internet.length || x.einmalig || x.monatlich) { if (await sendQr()) onClose(); }
     }
   };
   const jobRef = React.useRef(Promise.resolve());
   // PC: beim Oeffnen gleich die Fensterauswahl zeigen (Klick auf "o2-Vorschlag einlesen" zaehlt noch als Nutzeraktion; sonst Knopf)
   const autoOpenRef = React.useRef(false);
-  React.useEffect(() => { if (autoOpenRef.current) return; autoOpenRef.current = true; if (snipOk && eff === 'snip' && !had) openSnip(); }, []);
+  React.useEffect(() => { if (autoOpenRef.current) return; autoOpenRef.current = true;
+    if (snipOk && eff === 'snip' && !had) openSnip();
+    else if (scanOk && !had) { let off = false; try { off = localStorage.getItem('ps_o2_autoscan') === '0'; } catch (e) {} if (!off) scanQr(true); } }, []);
   const openBlocks = step => {
     setNote('');
     psO2CamOpen({ session: true, step, onShot: (file, st) => {
@@ -14268,17 +14297,18 @@ function PsO2Import({ onApply, onClose, initial }) {
         onRetake: () => { const st = crop.stage, lib = libModeRef.current; setCrop(null); pick(st, lib); } }) : null,
       h('input', { ref: camRef, type: 'file', accept: 'image/*, application/pdf', capture: 'environment', hidden: true, onChange: onFile, 'aria-label': 'Foto aufnehmen' }),
       h('input', { ref: libRef, type: 'file', accept: 'image/*', hidden: true, onChange: onFile, 'aria-label': 'Foto auswählen' }),
-      scanOk ? h('button', { onClick: scanQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📲 Vom PC scannen') : null,
+      scanOk ? h('button', { onClick: () => scanQr(false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📲 Vom PC scannen') : null,
       scanOk ? h('div', { className: 'text-xs text-slate-500 mt-1 text-center' }, 'Am PC erscheint der QR-Code, sobald dort der Bildschirm gelesen wurde. Oder selbst fotografieren:') : null,
       (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Ganzes Foto']].concat(camOk ? [['block', 'Block-Fotos']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
         h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null,
       h('div', { className: 'text-sm text-slate-600 mt-2' }, snipMode
-        ? 'Fenster der Windows App wählen – der Bildschirm wird sofort gelesen, danach erscheint der QR-Code fürs Tablet.'
+        ? 'Der Bildschirm wird sofort gelesen, danach erscheint der QR-Code fürs Tablet. Die Fensterauswahl kommt nur beim ersten Mal.'
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'In Etappen fotografieren: je Tarif, Handy und Internet ein Foto, zuletzt den Kostenblock. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
       snipMode && any ? h('button', { onClick: sendQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, '📲 QR-Code fürs Tablet') : null,
       snipMode ? h('button', { onClick: openSnip, disabled: !!busy, className: (any ? gBtn : sBtn) + ' w-full mt-2 py-3 text-base' }, any ? '🖥 Nochmal lesen (z. B. nach Scrollen)' : '🖥 Bildschirm lesen') : null,
+      snipMode && psO2SnipLive() ? h('button', { onClick: () => { psO2SnipStop(); setNote('Bildschirmfreigabe beendet.'); }, className: 'mt-2 w-full text-center text-xs font-bold text-slate-400 underline' }, 'Bildschirmfreigabe beenden') : null,
       blockMode ? h('button', { onClick: () => openBlocks('block'), disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '📷 Weitere Blöcke fotografieren' : '📷 Block-Fotos starten') : null,
       quick ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
