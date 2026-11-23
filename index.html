@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.218';
+    window.APP_VERSION = '55.219';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -29546,7 +29546,15 @@ const PS_PRICE_FIELDS = [['offer1', 'monatlich'], ['offer1', 'einmalig'], ['offe
 const psPriceKey = (offerKey, field) => 'cost_p' + String(offerKey).slice(-1) + '_' + field;
 // v55.51 (Beta): Kacheln verbinden. Gruppen = zusammengehoerende Kacheln (Index 0..2); pro Gruppe zaehlt
 // nur das Preispaar der ersten Kachel (Leader) in die Summen.
-const psParseEuro = v => parseFloat(String(v || '').replace(',', '.')) || 0;
+// v55.219: Betraege mit Tausenderpunkt (z. B. "1.616,90" aus dem o2-Vorschlag) wurden falsch gelesen,
+// weil nur das Komma ersetzt wurde ("1.616.90" -> parseFloat bricht bei "1,62" ab). Jetzt wird bei
+// einem Komma zuerst jeder Punkt (Tausendertrennzeichen) entfernt.
+const psParseEuro = v => {
+  let s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+  if (s.indexOf(',') !== -1) s = s.replace(/\./g, '').replace(',', '.');
+  return parseFloat(s) || 0;
+};
 // Bestehende Verträge (bleiben unverändert): Arten zur Schnellauswahl
 const PS_BST_ARTEN = ['Mobilfunk', 'Festnetz / DSL', 'TV', 'Sonstiges'];
 // v55.56: Rechner-Eingabe ohne Komma ab 3 Ziffern = letzte 2 Ziffern sind Cent (8499 -> 84,99; 999 -> 9,99).
