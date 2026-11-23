@@ -77,6 +77,14 @@ const O2_PROMPT = [
   'Bei Geraeten den Namen ausschreiben und Abkuerzungen aufloesen: IP = iPhone, PM = Pro Max, BURG. = Burgunder, SWZ = Schwarz, VIO = Violett, BK = Schwarz, Speicher mit GB. Marke nicht doppelt nennen.',
   'details = die Leistungszeilen darunter, woertlich. NICHT aufnehmen: UMTS-Option, alle Rabatt- und Vorteilszeilen, Anschlusspreis, Aktivierung, Gesamtpreis, Installationsadresse, Seitenfuss, Werbung.',
   'einmalig und monatlich je Zeile = die beiden Preisspalten rechts neben dem Produktnamen, als deutsche Zahl ohne Euro-Zeichen (z. B. "39,99"); steht dort ein Strich, leer lassen.',
+  'Preislogik fuer Produktkopfzeilen: einmalig und monatlich sind NUR die Preise in der fetten Hauptzeile rechts. Unterzeilen mit Anschlusspreis oder anderen Erlaeuterungen NICHT zusaetzlich addieren, keine zweite Position daraus erzeugen.',
+  'Internetbeispiel: Steht bei O2 Home XL 600 oben einmalig 9,99 und darunter Anschlusspreis 49,99 sowie 40 EUR Rabatt auf den Anschlusspreis, dann ist 9,99 bereits der rabattierte Kopfzeilenpreis. rabattEinmalig fuer dieses Internetprodukt leer lassen, sonst wuerde der Rabatt doppelt abgezogen.',
+  'Monatlicher Rabatt: Steht beim Tarif als Kopfzeilenpreis monatlich 29,99 und in einer separaten Unterzeile Plus-Rabatt -15,00, dann monatlich=29,99 und rabattMonatlich=15,00, sofern die Gesamtsumme dies bestaetigt; Rabatt NICHT zu den Details schreiben.',
+  'Rabattfelder nur fuellen, wenn der Rabatt noch NICHT im zugehoerigen Kopfzeilenpreis enthalten ist. Negative Rabatte als positive Zahl in rabattEinmalig oder rabattMonatlich zurueckgeben. Keine Rabatte erraten.',
+  'Direkt abgedruckte Summenzeilen Einmalige Kosten und Monatliche Kosten exakt und separat in die aeusseren Felder einmalig/monatlich uebernehmen, nicht mit den einzelnen Produktkosten verwechseln.',
+  'Plausibilitaet: Summiere Kopfzeilenpreise und nur noch nicht eingerechnete Rabattzeilen je Spalte. Passt die Rechnung nicht zur abgedruckten Gesamtsumme, uebernehme die sichtbare Gesamtsumme unveraendert; erfinde keine korrigierten Preise.',
+  'Gleichnamige Tarife in getrennten TARIF-Bloecken sind unterschiedliche Positionen. Internet@Home nie als Mobilfunktarif erfassen. Installationsadresse niemals ausgeben.',
+  'readable=true, sobald mindestens ein echtes Produkt oder eine Gesamtkostenzeile erkennbar ist. Nur bei wirklich unlesbarem Vorschlag readable=false; teilweise erkannte Angebote sind kein Totalfehler.',
   'rabattEinmalig und rabattMonatlich = Summe der Rabatt- und Vorteilszeilen dieses Produkts je Spalte, als positive Zahl (z. B. "15,00"); ohne Rabatt leer lassen.',
   'tarif (nur bei geraete) = die Nummer des Tarifs, unter dem das Geraet im Bild steht, 1 fuer den ersten Tarif. Ist kein Tarif im Bild, 0.',
   'einmalig und monatlich ganz unten = die Zeilen "Einmalige Kosten" und "Monatliche Kosten".',
@@ -144,11 +152,15 @@ function cleanO2(j) {
     if (withTarif && Number.isInteger(it && it.tarif) && it.tarif > 0) o.tarif = Math.min(9, it.tarif);
     return o;
   }).filter(x => x.name.length >= 3);
-  return {
+  const out = {
     tarife: list(j.tarife), geraete: list(j.geraete, true), internet: list(j.internet),
     einmalig: amt(j.einmalig), monatlich: amt(j.monatlich), hinweis: '',
-    readable: j.readable !== false
+    readable: false
   };
+  // Bei bereits extrahierten Positionen ist ein readable=false des Modells ein Widerspruch.
+  // Ohne irgendeine Position oder Kostensumme ist readable=true kein verwertbares Ergebnis.
+  out.readable = Boolean(out.tarife.length || out.geraete.length || out.internet.length || out.einmalig || out.monatlich);
+  return out;
 }
 
 async function handle(req, res) {
