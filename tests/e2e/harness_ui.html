@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><title>PsO2Import Testseite</title>
+<!-- Testseite: laedt NUR den OCR-/Dialog-Teil der echten index.html (aus dem Repo-Stamm) mit React und lokaler Texterkennung. -->
+<script src="/node_modules/react/umd/react.development.js"></script>
+<script src="/node_modules/react-dom/umd/react-dom.development.js"></script>
+<script src="/node_modules/tesseract.js/dist/tesseract.min.js"></script>
+<script>
+function psPortLoadScript() { return Promise.resolve(); }
+function psHtrConfigured() { return false; }
+(function () {
+  const orig = Tesseract.createWorker;
+  Tesseract.createWorker = (l, o, opt) => orig(l, o, Object.assign({ workerPath: '/node_modules/tesseract.js/dist/worker.min.js', corePath: '/node_modules/tesseract.js-core/', langPath: '/node_modules/@tesseract.js-data/deu/4.0.0', cacheMethod: 'none' }, opt || {}));
+})();
+window.__applied = null; window.__closed = false;
+fetch('/index.html').then(r => r.text()).then(t => {
+  const L = t.replace(/\r\n/g, '\n').split('\n');
+  const a = L.findIndex(l => l.includes('o2-VORSCHLAG EINLESEN'));
+  const s = L.findIndex(l => l.startsWith('function PsO2Import('));
+  const b = L.findIndex((l, i) => i > s && l === '}');
+  const el = document.createElement('script'); el.textContent = L.slice(a, b + 1).join('\n'); document.body.appendChild(el);
+  window.__ready = true;
+});
+window.mountUi = initial => ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(PsO2Import, { onApply: d => { window.__applied = JSON.parse(JSON.stringify(d)); }, onClose: () => { window.__closed = true; }, initial: initial || null }));
+</script>
+<div id="root"></div>

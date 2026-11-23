@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.223';
+    window.APP_VERSION = '55.224';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12475,6 +12475,26 @@ function psO2Dist(a, b) {
   for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return d[n][m];
 }
+// v55.224: Tarifname trotz Lesefehlern erkennen ("uOrMebile L (2026)" -> "O2 Mobile L (2026)"): Familienwort (unscharf) + Groesse + Jahr.
+// Ohne diese Erkennung fiel ein ganzer Tarif weg, wenn nur sein Name verlesen war (der Parser fand keine Namenszeile).
+const PS_O2_FAMILIES = ['Mobile', 'Free', 'Grow', 'Unlimited', 'Prepaid', 'Basic', 'Smart', 'Connect'];
+function psO2FuzzyTarif(line) {
+  const m = /([A-Za-zÄÖÜäöü0-9|]{3,14})\s+(XS|S|M|L|XL|XXL)\s*\(\s*(20\d\d)\s*\)/.exec(String(line || ''));
+  if (!m) return '';
+  const tok = m[1].replace(/[^A-Za-zÄÖÜäöü]/g, '').toLowerCase();
+  let best = '';
+  PS_O2_FAMILIES.forEach(f => {
+    if (best) return;
+    const fl = f.toLowerCase();
+    // Endstuecke des Wortes pruefen (davor kann Linien-/Icon-Muell haengen: "uOrMebile")
+    for (let k = 0; k < tok.length; k++) {
+      const t = tok.slice(k);
+      if (t.length < fl.length - 1) break;
+      if (t.length <= fl.length + 1 && psO2Dist(t, fl) <= 1) { best = f; return; }
+    }
+  });
+  return best ? 'O2 ' + best + ' ' + m[2].toUpperCase() + ' (' + m[3] + ')' : '';
+}
 // Typische Lesefehler korrigieren ("Veice" -> "Voice", "Daterwolumen" -> "Datenvolumen", "Inklusk" -> "Inklusiv")
 function psO2FixWords(s) {
   s = String(s || '').replace(/\bInklus[kl1I]\b/g, 'Inklusiv').replace(/\bDat[a-z]{0,3}[vw]olumen\b/g, 'Datenvolumen');
@@ -12535,6 +12555,7 @@ function psO2CleanName(line, kind) {
   line = line.replace(/(^|[\s‚'’`´])[O0][:;]\s?(?=[A-Z][a-z])/g, '$1O2 ');
   let s = String(line || '').replace(PS_O2_AMT, ' ').replace(/[€|\\\[\]{}_~„“"*]/g, ' ').replace(/\s+/g, ' ').trim();
   if (kind !== 'geraete') {
+    if (kind === 'tarife') { const fz = psO2FuzzyTarif(s); if (fz) return fz; } // v55.224
     // o2-Produkte beginnen mit O2/o2 (OCR liest auch 02, Oz, O₂)
     const m = s.match(/(?:^|[\s‚'’`´])(?:O|o|0)(?:[2₂z]|\s?[:;])[:;]?\s+\S/);
     if (m) s = 'O2 ' + s.slice(m.index + m[0].length - 1).trim();
@@ -12622,9 +12643,10 @@ function psO2Collect(lines, from) {
   return det.slice(0, 10);
 }
 // Namenszeile eines Produkts (je Bereich ein Muster; steht meist direkt unter der Kopfzeile, davor kann OCR-Muell stehen)
+const PS_O2_TARIF_RE = /(?:(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s+(?:Mobile|Free|Grow|Unlimited|Prepaid|Basic|Smart|Blue|Connect)\b|\b(?:Mobile|Free|Grow|Unlimited)\s+(?:S|M|L|XL)\b)/i;
 const PS_O2_NAME = {
   // v55.193: auch ohne gelesenes "O2" (die Texterkennung macht aus dem O₂-Zeichen oft "©:" oder "Ol"): Mobile/Free/Grow/Unlimited + Groesse
-  tarife: /(?:(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s+(?:Mobile|Free|Grow|Unlimited|Prepaid|Basic|Smart|Blue|Connect)\b|\b(?:Mobile|Free|Grow|Unlimited)\s+(?:S|M|L|XL)\b)/i,
+  tarife: { test: l => PS_O2_TARIF_RE.test(l) || !!psO2FuzzyTarif(l) }, // v55.224: auch verlesene Namen
   internet: /(?:^|[\s‚'’`´])(?:O|0)(?:[2₂z]|\s?[:;])[:;]?\s*Home(?:\b|(?=[SMLX]\d))/i,
   geraete: PS_O2_BRANDS
 };
@@ -12636,14 +12658,18 @@ function psO2Parse(text) {
   const anchor0 = all.findIndex(l => psO2HeadKind(l) || /(Einmalige|Monatliche)\s*Kosten/i.test(l) || PS_O2_NAME.tarife.test(l));
   const lim = limRaw > -1 && (anchor0 < 0 || limRaw > anchor0) ? limRaw : -1;
   const lines = lim > -1 ? all.slice(0, lim) : all;
-  const out = { internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' };
+  // v55.224: Zeilen NACH "Aktuell": je nach Leserichtung der Texterkennung steht dort der Betrag der Kostenzeile davor
+  // (bisher wurde alles hinter "Aktuell" verworfen -> "Monatliche Kosten" ohne Betrag -> "Kostenblock fehlt")
+  const tail = lim > -1 ? all.slice(lim + 1, lim + 5) : [];
+  const out = { internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', hdr: { tarife: 0, geraete: 0, internet: 0 } };
   const kostZ = { e: null, m: null }; // Zeilennummern der Kostenzeilen ohne Betrag
   const next = (i, re) => { for (let k = i + 1; k < Math.min(lines.length, i + 4); k++) if (re.test(lines[k])) return lines[k]; return ''; };
   const head = l => { const a = l.search(/\d{1,3}(?:\.\d{3})*,\d{2}/); return a > 0 ? l.slice(0, a) : l; }; // Preisspalten rechts abschneiden
   const add = (kind, i, raw, from, dedupe, hdr) => {
     const name = psO2CleanName(head(raw), kind);
     if (!name || name.length < 4) return;
-    if (dedupe && out[kind].some(x => psO2Similar(x.name, name))) return;
+    // v55.224: nur direkt benachbarte Zeilen sind dieselbe Position doppelt gelesen - zwei gleiche Tarife (je mit eigenen Inhalten) bleiben zwei
+    if (dedupe && out[kind].some(x => Math.abs(x.idx - i) <= 3 && psO2Similar(x.name, name))) return;
     const am = next(i, PS_O2_ARTEN).match(PS_O2_ARTEN);
     let cols = psO2Cols(raw);
     if (!cols && kind === 'geraete') for (let k = from; k < Math.min(lines.length, from + 3) && !cols; k++) if (/MyHandy|Monate/i.test(lines[k])) cols = psO2Cols(lines[k].replace(/Gesamtpreis.*?€/i, ''));
@@ -12652,6 +12678,7 @@ function psO2Parse(text) {
   };
   lines.forEach((l, i) => {
     const kind = psO2HeadKind(l);
+    if (kind) out.hdr[kind]++; // v55.224: wie viele Bloecke stehen im Bild (Gegenprobe zur Anzahl gelesener Eintraege)
     if (kind && lines[i + 1]) {
       let j = i + 1;
       for (let k = i + 1; k < Math.min(lines.length, i + 4); k++) if (PS_O2_NAME[kind].test(lines[k])) { j = k; break; }
@@ -12673,11 +12700,12 @@ function psO2Parse(text) {
   });
   // Beim Foto vom Bildschirm rutscht der Betrag oft in die Zeile darueber oder darunter ("35,49 €*" allein).
   // Solche Zeilen (nur ein Betrag, sonst nichts) der passenden Kostenzeile zuordnen, jede Zeile nur einmal.
-  const nurBetrag = i => {
-    const l = lines[i] || '', a = psO2Amounts(l);
+  const nurBetragOf = l => {
+    l = l || ''; const a = psO2Amounts(l);
     // genau ein Betrag, kurze Zeile, kaum Buchstaben (Lesemuell wie "a 35,49€ mm. 4" ist erlaubt)
     return a.length === 1 && l.length <= 26 && l.replace(/[^A-Za-zÄÖÜäöü]/g, '').length <= 4 ? a[0] : '';
   };
+  const nurBetrag = i => nurBetragOf(lines[i]);
   const belegt = {};
   [['monatlich', kostZ.m], ['einmalig', kostZ.e]].forEach(([feld, i]) => {
     if (out[feld] || i == null) return;
@@ -12687,6 +12715,12 @@ function psO2Parse(text) {
       if (v) { out[feld] = v; belegt[k] = 1; return; }
     }
   });
+  // v55.224: Betrag erst hinter "Aktuell": der Reihe nach den Kostenzeilen ohne Betrag zuordnen (ob er stimmt, zeigt spaeter die Gegenprobe)
+  if (tail.length) {
+    const open = [['einmalig', kostZ.e], ['monatlich', kostZ.m]].filter(([f, i]) => !out[f] && i != null).sort((a, b) => a[1] - b[1]);
+    const ta = tail.map(nurBetragOf).filter(Boolean);
+    open.forEach(([f], n) => { if (ta[n]) out[f] = ta[n]; });
+  }
   // Ohne Kopfzeilen (z. B. Uebersicht "Für Sie"): o2-Tarife und Geraete am Namen erkennen
   if (!out.internet.length) lines.forEach((l, i) => { if (PS_O2_NAME.internet.test(l)) add('internet', i - 1, l, i + 1, true); });
   if (!out.tarife.length) lines.forEach((l, i) => { if (PS_O2_NAME.tarife.test(l) && !/Activate|Bestandskunde|Beratung|VO:/i.test(l)) add('tarife', i - 1, l, i + 1, true); });
@@ -12715,7 +12749,7 @@ function psO2Similar(a, b) {
 }
 // GROSSBUCHSTABEN-Geraetenamen lesbar machen: "IPHONE 18 PRO 256GB, BURGUNDER" -> "iPhone 18 Pro 256GB, Burgunder"
 function psO2Pretty(s) {
-  s = String(s || '').replace(/\bPIXE\b/i, 'PIXEL').replace(/\b(\d{2,4})\s?G[8B]B?\b/, '$1GB');
+  s = String(s || '').replace(/\bPIXE\b/i, 'PIXEL').replace(/\b(\d{2,4})\s?G[8B]B?\b/, '$1GB').replace(/\b[Il|]\s?TB\b/gi, '1TB'); // v55.224: "1TB" wird oft als "ITB" gelesen
   s = String(s || '').replace(/\bIP (\d{1,2})\b/, 'iPhone $1').replace(/\b(iPhone \d{1,2}) PM\b/, '$1 Pro Max').replace(/\bBURG\.?(?=\s|,|$)/, 'Burgunder');
   if (/iPhone/.test(s)) s = s.replace(/\b(64|128|256|512)\b(?!\s?GB)/, '$1GB');
   s = String(s || '').split(' ').map(w => /^SWZ[,.]?$/.test(w) ? w.replace('SWZ', 'Schwarz') : /^[A-ZÄÖÜ]{2,}[,.]?$/.test(w) && !/^(GB|TB|LTE|USB|SE|FE|XL|II|III)[,.]?$/.test(w) || /^[A-ZÄÖÜ]{3,}\d+[,.]?$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(' ');
@@ -12734,12 +12768,14 @@ function psO2Check(d) {
   const E = psO2Cents(d.einmalig), M = psO2Cents(d.monatlich);
   const items = [].concat(d.tarife || [], d.geraete || [], d.internet || []);
   if (!items.length || E == null && M == null) return null;
-  let se = 0, sm = 0, re = 0, rm = 0;
+  let se = 0, sm = 0, re = 0, rm = 0, incM = false;
   const ae = [], am = [];
   for (const it of items) {
     if (!it.am || !it.rb || it.rb.bad) return null;
     const a = psO2Cents(it.am[0]) || 0, b = psO2Cents(it.am[1]) || 0;
     ae.push(a); am.push(b); se += a; sm += b; re += it.rb.e; rm += it.rb.m;
+    // v55.224: ein Tarif ohne gelesenen Monatspreis = Einzelpreise unvollstaendig (nicht: Summe falsch)
+    if (it.am[1] == null && (d.tarife || []).indexOf(it) > -1) incM = true;
   }
   // v55.206: Texterkennung verschluckt vorne gern eine Ziffer (19,99 -> 9,99). Passt die Differenz zur Summe bei genau
   // einem Eintrag genau so (9,99 + 10,00 = 19,99, endet auf 9,99), gilt die Summe als bestaetigt.
@@ -12754,7 +12790,52 @@ function psO2Check(d) {
     }
     return { val, calc: c, ok };
   };
-  return { e: mk(E, se, re, ae), m: mk(M, sm, rm, am) };
+  const res = { e: mk(E, se, re, ae), m: mk(M, sm, rm, am) };
+  if (incM && res.m && !res.m.ok) res.m.incomplete = true;
+  return res;
+}
+// v55.224: Fehlt eine Gesamtsumme, aber alle Einzelpreise sind gelesen, ist deren Summe ein VORSCHLAG (wird nie von selbst eingetragen).
+// Rueckgabe: { einmalig: [Cent...], monatlich: [Cent...] } nur fuer fehlende Summen mit vollstaendigen Einzelpreisen, sonst null.
+function psO2Suggest(d) {
+  const items = [].concat(d.tarife || [], d.geraete || [], d.internet || []);
+  if (!items.length || items.some(it => !it.am || !it.rb || it.rb.bad)) return null;
+  const out = {};
+  [['einmalig', 0], ['monatlich', 1]].forEach(([f, c]) => {
+    if (d[f]) return;
+    if (c === 1 && (d.tarife || []).some(t => t.am[1] == null)) return;
+    let sum = 0, adj = 0;
+    items.forEach(it => { sum += psO2Cents(it.am[c]) || 0; adj += c === 0 ? it.rb.e : it.rb.m; });
+    if (sum > 0) out[f] = adj ? [sum, sum + adj] : [sum];
+  });
+  return out.einmalig || out.monatlich ? out : null;
+}
+// v55.224: Was genau wurde (nicht) erkannt? Unterscheidet: technischer Fehler / kein Text / Text ohne Zuordnung / teilweise / Summen pruefen / Erfolg.
+// Rueckgabe { kind, msg, cnt }. Kein Kundentext, nur Zahlen und feste Saetze.
+function psO2Verdict(r, o) {
+  o = o || {};
+  const nT = r.tarife.length, nG = r.geraete.length, nN = r.internet.length, items = nT + nG + nN, hasE = !!r.einmalig, hasM = !!r.monatlich, hasK = hasE || hasM;
+  const txtLen = String(o.txt || '').replace(/^--- Durchgang \d+ ---$/gm, '').replace(/[^A-Za-zÄÖÜäöüß0-9]/g, '').length;
+  const cnt = [nT ? nT + (nT === 1 ? ' Tarif' : ' Tarife') : '', nG ? nG + (nG === 1 ? ' Handy' : ' Handys') : '', nN ? 'Internet@Home' : ''].filter(Boolean).join(', ');
+  const mk = (kind, msg) => ({ kind, msg, cnt });
+  if (!items && !hasK) {
+    if (o.cancelled || o.fail === 'cancelled') return mk('cancelled', 'Erkennung abgebrochen – neu fotografieren oder unten von Hand eintragen.');
+    if (o.fail === 'timeout') return mk('fail', 'Die Erkennung hat zu lange gedauert und wurde beendet. Bitte noch einmal fotografieren (näher, gerade, ohne Spiegelung) oder unten von Hand eintragen.');
+    if (o.fail === 'engine') return mk('fail', 'Die Texterkennung ist gerade nicht verfügbar (beim ersten Mal wird sie geladen – Internet prüfen). Du kannst unten von Hand eintragen.');
+    if (o.fail === 'image') return mk('fail', 'Das Foto konnte nicht geöffnet werden. Bitte noch einmal fotografieren.');
+    // kein einziges Beleg-Wort im gelesenen Text (oder kaum Zeichen): das Foto zeigt keinen lesbaren Beleg (Rauschen, Spiegelung, Unschaerfe)
+    if (txtLen < 25 || !/Tarif|Handy|Kosten|Mobile|iPhone|Galaxy|Pixel|Vorschlag|monatlich|einmalig|Artikel|Roaming|Datenvolumen|Aktuell|Gesamtpreis/i.test(String(o.txt || ''))) return mk('notext', 'Kein lesbarer Text erkannt – näher ran, gerade von vorne, ohne Spiegelung und noch einmal fotografieren.');
+    return mk('nopos', 'Text gelesen, aber keine Tarife, Handys oder Kosten zuordenbar – Foto gerader, näher und ohne Spiegelung wiederholen oder unten von Hand eintragen.');
+  }
+  if (!items) return mk('partial', 'Gesamtkosten erkannt. Tarife und Handys fehlen noch – bitte fotografieren oder unten eintragen.');
+  if (!hasK) return mk('partial', cnt + ' erkannt. Gesamtkosten konnten nicht sicher zugeordnet werden – Kostenblock fotografieren oder unten eintragen.');
+  if (hasE !== hasM) return mk('partial', cnt + ' erkannt. Nur die ' + (hasE ? 'einmaligen' : 'monatlichen') + ' Gesamtkosten erkannt – bitte die ' + (hasE ? 'monatlichen' : 'einmaligen') + ' ergänzen.');
+  const c = psO2Check(r), bad = c ? [c.e, c.m].filter(x => x && !x.ok) : [];
+  if (bad.some(x => x.incomplete)) return mk('check', 'Einige Angaben benötigen eine Kontrolle: ' + cnt + ' erkannt, bei einem Tarif fehlt der Einzelpreis – die gelesene Monatssumme bleibt unverändert.');
+  if (bad.length) return mk('check', 'Einige Angaben benötigen eine Kontrolle: ' + cnt + ' erkannt, aber die Summen passen nicht zu den Einzelpreisen.');
+  if (!c) return [].concat(r.tarife, r.geraete, r.internet).some(it => !it.am || it.am[0] == null && it.am[1] == null)
+    ? mk('check', 'Einige Angaben benötigen eine Kontrolle: ' + cnt + ' und Gesamtkosten erkannt, aber nicht alle Einzelpreise gelesen – die Summen konnten nicht geprüft werden. Fehlt ein Tarif oder Handy?')
+    : mk('ok', '✓ Erkennung abgeschlossen: ' + cnt + ' und Gesamtkosten erkannt – bitte kurz prüfen.');
+  return mk('ok', '✓ Erkennung abgeschlossen: ' + cnt + ' und Gesamtkosten erkannt, Summen stimmen.');
 }
 // === v55.189 (Beta): o2-VORSCHLAG VON DER KI LESEN LASSEN =================================================
 // Das Foto geht an denselben Dienst wie die Handschrift (Cloud Function -> Gemini auf Vertex AI, EU) und kommt
@@ -12795,7 +12876,7 @@ async function psO2CloudRead(file, onMsg) {
   onMsg && onMsg('Vorschlag wird gelesen …');
   const image = await psO2CloudImage(file);
   const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctl ? setTimeout(() => ctl.abort(), 60000) : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), 20000) : null;
   try {
     const r = await fetch(psHtrUrl(), {
       method: 'POST',
@@ -12898,102 +12979,173 @@ function psO2Flatten(g, W, H, force) {
   }
   return true;
 }
-async function psO2Prepare(file, mode) {
-  const bmp = await createImageBitmap(file);
-  // Versuch 3: Rand (Raum, Bildschirmrahmen, Taskleiste) weglassen und den Inhalt groesser rechnen
-  const bb = mode === 2 || mode === 3 || mode === 4 ? psO2BrightBox(bmp) : null;
+// v55.224: Bildquelle EINMAL entschluesseln (ein 12-MP-Foto belegt ~48 MB) und fuer alle Durchgaenge teilen; close() gibt den Speicher frei.
+// EXIF-Drehung wird beachtet (Tablet im Hochformat gehalten).
+async function psO2Bitmap(file) {
+  try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) { return await createImageBitmap(file); }
+}
+async function psO2Source(file) {
+  const bmp = await psO2Bitmap(file);
+  let bb;
+  return {
+    bmp,
+    get bb() { if (bb === undefined) { try { bb = psO2BrightBox(bmp); } catch (e) { bb = null; } } return bb; },
+    close() { try { if (bmp.close) bmp.close(); } catch (e) {} }
+  };
+}
+// Variante v = { side, blur, crop }: side = Zielgroesse (laengste Seite des Bildschirmbereichs; zu gross = Moire/Rauschen/Laufzeit,
+// zu klein = feine Schrift weg), blur = Anzahl 3x3-Glaettungen (Moire/Rauschen), crop = heller Bereich ausschneiden (Standard: ja).
+// Gemessen am Beleg-Foto: 1600 px liest besser UND doppelt so schnell wie 2000 px; Schaerfen/Binarisieren verstaerkt das Moire
+// (900+ Pseudo-Woerter, 6-17 s statt 2-5 s, ohne einen einzigen Treffer) und ist deshalb entfallen.
+async function psO2Prepare(src, v) {
+  v = v || {};
+  const bmp = src.bmp, bb = v.crop === false ? null : src.bb;
   const bx = bb ? bb[0] : 0, by = bb ? bb[1] : 0, bW = bb ? bb[2] : bmp.width, bH = bb ? bb[3] : bmp.height;
-  // Modus 3/4: auf ~2000 bzw. ~2400 px bringen (zu klein = Schrift zu fein, zu gross = Moiré/Rauschen), hoechstens 2,5-fach vergroessern
-  const sc = mode === 3 || mode === 4 ? Math.min(2.5, (mode === 3 ? 2000 : 2400) / Math.max(bW, bH * 0.75)) : Math.min(bb ? 2 : 1, 2400 / Math.max(bW, bH));
-  const W = Math.round(bW * sc), H = Math.round(bH * sc);
+  const sc = Math.min(2.5, (v.side || 1600) / Math.max(bW, bH * 0.75));
+  const W = Math.max(8, Math.round(bW * sc)), H = Math.max(8, Math.round(bH * sc));
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d', { willReadFrequently: true });
   x.imageSmoothingQuality = 'high';
   x.drawImage(bmp, bx, by, bW, bH, 0, 0, W, H);
   const id = x.getImageData(0, 0, W, H), d = id.data, n = W * H, g = new Uint8ClampedArray(n);
-  const hist = new Uint32Array(256);
-  for (let i = 0, p = 0; i < n; i++, p += 4) { const v = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) | 0; g[i] = v; hist[v]++; }
-  if (mode !== 1 && psO2Flatten(g, W, H, false)) {
-    // ausgeglichene (meist flaue, verrauschte) Fotos: Rauschen leicht glaetten (3x3), sonst liest die Texterkennung Krümel
+  for (let i = 0, p = 0; i < n; i++, p += 4) g[i] = (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2]) | 0;
+  const smooth = () => {
     const t = new Uint8ClampedArray(g);
     for (let y = 1; y < H - 1; y++) for (let xx = 1; xx < W - 1; xx++) { const i = y * W + xx; g[i] = (t[i - W - 1] + 2 * t[i - W] + t[i - W + 1] + 2 * t[i - 1] + 4 * t[i] + 2 * t[i + 1] + t[i + W - 1] + 2 * t[i + W] + t[i + W + 1]) >> 4; }
-    hist.fill(0); for (let i = 0; i < n; i++) hist[g[i]]++;
-  }
-  if (mode === 1) {
-    // Lokale Schwelle (Bradley): Pixel dunkler als der Schnitt seiner Umgebung = Schrift -> schwarz auf weiss
-    const W1 = W + 1, I = new Uint32Array(W1 * (H + 1));
-    for (let y = 0; y < H; y++) { let row = 0; for (let xx = 0; xx < W; xx++) { row += g[y * W + xx]; I[(y + 1) * W1 + xx + 1] = I[y * W1 + xx + 1] + row; } }
-    const r = Math.max(12, Math.round(W / 20));
+  };
+  // ungleich ausgeleuchtet (Sichtschutzfolie, Spiegelung, schraeg): Hintergrund angleichen, dabei Rauschen leicht glaetten
+  if (psO2Flatten(g, W, H, false)) smooth();
+  for (let k = 0; k < (v.blur || 0); k++) smooth();
+  if (v.adapt) {
+    // v55.224: lokaler Schwellwert (Mittel im Fenster ~ 1/24 der Breite): Text ist dunkler als seine Umgebung - egal wie hell die Stelle ist
+    const iw = W + 1, I = new Float64Array(iw * (H + 1));
+    for (let y = 0; y < H; y++) { let rs = 0; for (let xx = 0; xx < W; xx++) { rs += g[y * W + xx]; I[(y + 1) * iw + xx + 1] = I[y * iw + xx + 1] + rs; } }
+    const r = Math.max(8, Math.round(W / 48)), out = new Uint8ClampedArray(n);
     for (let y = 0; y < H; y++) {
-      const y0 = Math.max(0, y - r), y1 = Math.min(H - 1, y + r);
+      const y0 = Math.max(0, y - r), y1 = Math.min(H, y + r + 1);
       for (let xx = 0; xx < W; xx++) {
-        const x0 = Math.max(0, xx - r), x1 = Math.min(W - 1, xx + r);
-        const sum = I[(y1 + 1) * W1 + x1 + 1] - I[y0 * W1 + x1 + 1] - I[(y1 + 1) * W1 + x0] + I[y0 * W1 + x0];
-        const q = g[y * W + xx] < sum / ((x1 - x0 + 1) * (y1 - y0 + 1)) * 0.85 ? 0 : 255, p = (y * W + xx) * 4;
-        d[p] = d[p + 1] = d[p + 2] = q; d[p + 3] = 255;
+        const x0 = Math.max(0, xx - r), x1 = Math.min(W, xx + r + 1);
+        const mean = (I[y1 * iw + x1] - I[y0 * iw + x1] - I[y1 * iw + x0] + I[y0 * iw + x0]) / ((x1 - x0) * (y1 - y0));
+        out[y * W + xx] = g[y * W + xx] < mean * 0.88 ? 0 : 255;
       }
     }
+    for (let i = 0, p = 0; i < n; i++, p += 4) { d[p] = d[p + 1] = d[p + 2] = out[i]; d[p + 3] = 255; }
     x.putImageData(id, 0, 0);
     return c;
   }
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) hist[g[i]]++;
   let lo = 0, hi = 255, acc = 0;
-  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.01) { lo = v; break; } }
+  for (let q = 0; q < 256; q++) { acc += hist[q]; if (acc > n * 0.01) { lo = q; break; } }
   acc = 0;
-  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.01) { hi = v; break; } }
+  for (let q = 255; q >= 0; q--) { acc += hist[q]; if (acc > n * 0.01) { hi = q; break; } }
   const k = 255 / Math.max(1, hi - lo);
   for (let i = 0, p = 0; i < n; i++, p += 4) { const q = (g[i] - lo) * k; d[p] = d[p + 1] = d[p + 2] = q; d[p + 3] = 255; }
-  if (mode === 4) {
-    // Leicht nachschaerfen (unscharf maskieren, 3x3): feine Schrift auf Bildschirmfotos wird lesbarer
-    const f = new Float32Array(n);
-    for (let i = 0; i < n; i++) f[i] = (g[i] - lo) * k;
-    for (let y = 1; y < H - 1; y++) for (let xx = 1; xx < W - 1; xx++) {
-      const i = y * W + xx, bl = (f[i - W - 1] + f[i - W] + f[i - W + 1] + f[i - 1] + f[i] + f[i + 1] + f[i + W - 1] + f[i + W] + f[i + W + 1]) / 9, q = f[i] + (f[i] - bl), pp = i * 4;
-      d[pp] = d[pp + 1] = d[pp + 2] = q;
-    }
-  }
   x.putImageData(id, 0, 0);
   return c;
 }
-let __psO2Worker = null, __psO2Worker2 = null, __psO2WarmP = null;
-// v55.197: Texterkennung (Skript + Sprachdaten) schon beim Oeffnen des Dialogs laden, damit das erste Foto nicht darauf wartet
-// v55.202: zwei Arbeiter, damit zwei Leseversuche gleichzeitig laufen (halbe Wartezeit). Klappt der zweite nicht
-// (wenig Speicher, altes Geraet), wird wie bisher nacheinander gelesen.
-function psO2Warm() {
-  if (!__psO2WarmP) {
-    __psO2WarmP = (async () => {
-      try {
-        await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-        if (!__psO2Worker) __psO2Worker = await window.Tesseract.createWorker('deu', 1);
-      } catch (e) { __psO2WarmP = null; return; }
-      try { if (!__psO2Worker2 && (navigator.hardwareConcurrency || 2) >= 2) __psO2Worker2 = await window.Tesseract.createWorker('deu', 1); } catch (e) { __psO2Worker2 = null; }
-    })();
-  }
-  return __psO2WarmP;
+// === v55.224: ROBUSTE, BEGRENZTE UND ABBRECHBARE ERKENNUNG ====================================================
+// Vorher: zwei Arbeiter, zwei Durchgaenge parallel per Promise.all (haengt einer, haengen beide), Skript-Laden und Neuaufbau eines Arbeiters
+// ohne Zeitlimit, kein Abbruch durch den Benutzer, Arbeiter wurden nie freigegeben. Jetzt: ein wiederverwendeter Arbeiter, jede Phase mit
+// Zeitlimit, ein Gesamtbudget, ein haengender Arbeiter wird wirklich beendet (terminate) und bei Bedarf neu aufgebaut, ein Abbruch
+// (Benutzer / neue Aufnahme / Dialog zu) wirkt sofort, und ein alter Durchgang kann nie ein neues Ergebnis ueberschreiben.
+const PS_O2_TESS_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+// script = Skript laden, workerCold = erster Aufbau (Sprachdaten laden), workerWarm = Wiederaufbau (Sprachdaten im Cache),
+// pass = ein Lesedurchgang, budget = alles zusammen, minPass = kuerzeste sinnvolle Restzeit fuer einen weiteren Durchgang
+const PS_O2_T = { script: 15000, workerCold: 30000, workerWarm: 12000, pass: 25000, budget: 32000, minPass: 4000 };
+// Durchgaenge: 1 = Standard (1600 px). 2 nur bei Luecken: anderer Massstab (Moire entsteht je nach Massstab anders). 3 nur bei Luecken: entrauscht.
+// Nach einem Timeout geht es mit einer leichteren Variante (weniger Pixel) weiter statt mit demselben Aufwand noch einmal.
+// Reihenfolge nach Messung an echten/verschlechterten Fotos: 2. Durchgang = entrauscht (Moire/Kompression), 3. = entrauscht + lokaler Schwellwert (Spiegelung).
+// Liefert Durchgang 1 nichts und dafuer sehr viele Schein-Woerter (Reflex/Moire/Rauschen), kommt der Schwellwert-Durchgang direkt als 2.
+const PS_O2_PLAN_ADAPT = { side: 1600, blur: 1, adapt: true, psm: 6 }; // entrauscht + lokaler Schwellwert: rettet Spiegelungen/Reflexe, an denen die globale Binarisierung scheitert
+const PS_O2_PLAN = [{ side: 1600, blur: 0, psm: 6 }, { side: 2000, blur: 2, psm: 6 }, PS_O2_PLAN_ADAPT];
+const PS_O2_PLAN_LIGHT = { side: 1200, blur: 1, psm: 6 };
+const psO2Tick = () => new Promise(r => setTimeout(r, 0));
+function psO2WithTimeout(p, ms, tag) {
+  let t;
+  const to = new Promise((_, rej) => { t = setTimeout(() => rej(Object.assign(new Error(tag || 'timeout'), { psTimeout: true })), ms); });
+  return Promise.race([p, to]).then(v => { clearTimeout(t); return v; }, e => { clearTimeout(t); throw e; });
 }
-// mode 0 = normal, 1 = lokale Binarisierung + Zeilenmodus, 2 = heller Bereich + Spaltenmodus,
-// mode 3 (seit v55.193 der erste Durchgang) = heller Bereich ausschneiden, auf ~2000 px bringen, Zeilenmodus; mode 4 = wie 3, ~2400 px und nachgeschaerft.
-// Liefert Text UND Wortpositionen (words) fuer das Lesen nach Position.
-async function psO2RecognizeFull(file, onMsg, mode, attempt, worker) {
-  mode = mode || 0;
-  const nth = ['Erster', 'Zweiter', 'Dritter', 'Vierter', 'Fünfter'][attempt || 0] + ' Leseversuch …';
-  onMsg && onMsg(attempt ? nth : 'Texterkennung wird geladen … (beim ersten Mal etwas Geduld)');
-  if (!__psO2Worker) {
-    await psO2Warm();
-    if (!__psO2Worker) {
-      await psPortLoadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-      __psO2Worker = await window.Tesseract.createWorker('deu', 1);
-    }
+let __psO2W = null, __psO2WP = null, __psO2Gen = 0, __psO2Job = null, __psO2JobSeq = 0;
+function psO2Kill(w) { try { const p = w && w.terminate && w.terminate(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+// Arbeiter verwerfen (haengt / abgestuerzt / Dialog zu): der Thread wird wirklich beendet, der naechste Zugriff baut neu auf.
+function psO2ResetEngine() { __psO2Gen++; const w = __psO2W; __psO2W = null; __psO2WP = null; psO2Kill(w); }
+function psO2Release() { if (__psO2Job && !__psO2Job.done) __psO2Job.cancel('release'); psO2ResetEngine(); }
+function psO2LoadTess() {
+  if (window.Tesseract) return Promise.resolve();
+  return psO2WithTimeout(psPortLoadScript(PS_O2_TESS_SRC), PS_O2_T.script, 'script-timeout').catch(e => {
+    // haengendes Skript-Element entfernen, damit der naechste Versuch neu laedt statt ewig am alten zu warten
+    try { document.querySelectorAll('script[data-psport="' + PS_O2_TESS_SRC + '"]').forEach(sc => { if (!sc.dataset.done) sc.remove(); }); } catch (x) {}
+    throw e;
+  });
+}
+// Der eine Arbeiter. Ein laufender Aufbau wird geteilt (kein zweiter Aufbau), jeder Aufruf wartet hoechstens ms.
+function psO2Worker(ms) {
+  if (__psO2W) return Promise.resolve(__psO2W);
+  if (!__psO2WP) {
+    const gen = __psO2Gen;
+    __psO2WP = psO2LoadTess().then(() => window.Tesseract.createWorker('deu', 1)).then(w => {
+      if (gen !== __psO2Gen) { psO2Kill(w); throw new Error('released'); } // inzwischen verworfen: nicht mehr verwenden
+      __psO2W = w; __psO2WP = null; return w;
+    }, e => { if (gen === __psO2Gen) __psO2WP = null; throw e; });
+    __psO2WP.catch(() => {});
   }
-  onMsg && onMsg(attempt ? nth : 'Vorschlag wird gelesen …');
-  const w = worker || __psO2Worker;
-  const c = await psO2Prepare(file, mode);
-  // tessedit_do_invert = 0: kein zweiter Durchlauf mit umgekehrten Farben (spart rund ein Drittel der Zeit, gleiches Ergebnis)
-  try { await w.setParameters({ tessedit_pageseg_mode: mode === 1 || mode === 3 || mode === 4 ? '6' : '3', tessedit_do_invert: '0' }); } catch (e) {}
-  const r = await w.recognize(c, {}, { text: true, blocks: true, hocr: false, tsv: false });
+  return psO2WithTimeout(__psO2WP, ms, 'worker-timeout');
+}
+// Texterkennung schon beim Oeffnen des Dialogs laden, damit das erste Foto nicht darauf wartet (Fehler sind hier egal).
+function psO2Warm() { return psO2Worker(PS_O2_T.workerCold).catch(() => null); }
+// Eine Erkennung ("Job"). Eine neue Erkennung bricht eine noch laufende alte ab; cancel() wirkt sofort und beendet einen haengenden Arbeiter.
+function psO2NewJob() {
+  if (__psO2Job && !__psO2Job.done) __psO2Job.cancel('replaced');
+  const job = { id: ++__psO2JobSeq, cancelled: false, done: false, why: '', inBuild: false, inRecog: false };
+  job.cancelP = new Promise((_, rej) => { job.rej = rej; });
+  job.cancelP.catch(() => {});
+  job.cancel = why => {
+    if (job.cancelled || job.done) return;
+    job.cancelled = true; job.why = why || 'cancel';
+    job.rej(Object.assign(new Error('cancelled'), { psCancel: true }));
+    if (job.inBuild || job.inRecog) psO2ResetEngine(); // nur wenn der Arbeiter gerade rechnet/startet: sonst bleibt er fuer das naechste Foto warm
+  };
+  __psO2Job = job;
+  return job;
+}
+const psO2Err = (kind, msg) => Object.assign(new Error(msg || kind), { psKind: kind });
+// Ein Lesedurchgang. Wirft psCancel (abgebrochen) oder psKind: 'image' (Foto nicht lesbar), 'engine' (Texterkennung nicht startbar/abgestuerzt),
+// 'timeout' (Durchgang zu langsam). Bei engine/timeout wird der Arbeiter beendet, damit er nicht weiterrechnet und neu aufgebaut werden kann.
+async function psO2Pass(job, src, v, T, left, say, hooks) {
+  const t0 = Date.now(), H = hooks || {};
+  const race = p => Promise.race([p, job.cancelP]);
+  const chk = () => { if (job.cancelled) throw Object.assign(new Error('cancelled'), { psCancel: true }); };
+  chk();
+  say && say('prep');
+  let c;
+  try { c = await race((H.prepare || psO2Prepare)(src, v)); }
+  catch (e) { if (e && e.psCancel) throw e; throw psO2Err('image', e && e.message); }
+  chk(); await race(psO2Tick()); chk();
+  say && say('read');
+  let w;
+  job.inBuild = true;
+  try { w = await race(psO2Worker(__psO2W ? T.workerWarm : T.workerCold)); }
+  catch (e) { if (e && e.psCancel) throw e; psO2ResetEngine(); throw psO2Err('engine', e && e.message); }
+  finally { job.inBuild = false; }
+  chk();
+  job.inRecog = true;
+  let r;
+  try {
+    await race(psO2WithTimeout(w.setParameters({ tessedit_pageseg_mode: String(v.psm || 6), tessedit_do_invert: '0' }), 5000, 'param-timeout'));
+    r = await race(psO2WithTimeout(w.recognize(c, {}, { text: true, blocks: true, hocr: false, tsv: false }), Math.max(2000, Math.min(T.pass, left)), 'pass-timeout'));
+  } catch (e) {
+    job.inRecog = false;
+    if (e && e.psCancel) throw e;
+    psO2ResetEngine();
+    throw psO2Err(e && e.psTimeout ? 'timeout' : 'engine', e && e.message);
+  }
+  job.inRecog = false;
+  chk();
   const data = r && r.data ? r.data : {};
-  return { text: data.text || '', words: psO2WordsOf(data) };
+  return { text: data.text || '', words: psO2WordsOf(data), ms: Date.now() - t0 };
 }
-async function psO2Recognize(file, onMsg, mode) { return (await psO2RecognizeFull(file, onMsg, mode, mode ? 1 : 0)).text; }
 const psO2Esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 // Digitale Angebotskarte (HTML, scharf im PDF) aus den gepruefen Werten
 // Verteilung auf die drei Angebotskarten: Karte 1 = Tarif 1 + Handy 1, Karte 2 = Tarif 2 + Handy 2 und alle weiteren, Karte 3 = Internet.
@@ -13301,8 +13453,12 @@ function psO2Gaps(r, txt) {
   if (!r.geraete.length && /My\s?Handy|Gesamtpreis|\bHANDY\b|iPhone|Galaxy|PIXE|Xiaomi|Samsung/i.test(txt)) g.push('geraete');
   if (!r.tarife.length && /\bTARIF\b|(?:Mobile|Free|Grow|Unlimited)\s+(?:S|M|L|XL)\b/i.test(txt)) g.push('tarife');
   if (!(r.einmalig && r.monatlich) && /(Einmalige|Monatliche)\s*Kosten/i.test(txt)) g.push('kosten');
+  // v55.224: mehr Bloecke im Bild als Eintraege gelesen (z. B. 2 x TARIF, aber nur 1 Tarif erkannt)
+  if (r.hdr) { if (r.hdr.tarife > r.tarife.length) g.push('tarife-anzahl'); if (r.hdr.geraete > r.geraete.length) g.push('geraete-anzahl'); }
   const c = psO2Check(r);
   if (c && [c.e, c.m].some(x => x && !x.ok)) g.push('summen');
+  // Summen gelesen, aber Einzelpreise nicht vollstaendig -> Pruefung unmoeglich; ein weiterer (entrauschter) Durchgang findet oft den fehlenden Tarif/Preis
+  if (!c && (r.einmalig || r.monatlich) && ([].concat(r.tarife || [], r.geraete || []).some(it => !it.am) || (r.tarife || []).some(t => t.am[1] == null))) g.push('einzelpreise');
   return g;
 }
 // Wie "echt" ist ein gelesener Produktname? Anteil der Woerter, die zu Geraeten/Tarifen/Farben passen (Lesemuell wie "Goc Igle" faellt auf).
@@ -13310,7 +13466,7 @@ const PS_O2_KNOWN = /^(?:O2|Google|Pixel|Pro|Max|Plus|Ultra|Mini|Air|Fold|Flip|F
 function psO2NameQ(name) {
   const t = String(name || '').split(/\s+/).map(w => w.replace(/^[(\[]+|[)\],.;:]+$/g, '')).filter(Boolean);
   if (!t.length) return 0;
-  return t.filter(w => /\d/.test(w) || /^[A-Z]{2}$/.test(w) || PS_O2_KNOWN.test(w)).length / t.length;
+  return t.filter(w => /\d/.test(w) || /^[A-Z]{2}$/.test(w) || /^(?:XS|S|M|L|XL|XXL)$/.test(w) || PS_O2_KNOWN.test(w)).length / t.length; // v55.224: S/M/L = Tarifgroesse
 }
 function psO2ItemQ(kind, it) { return psO2NameQ(kind === 'geraete' ? psO2Pretty(it.name) : it.name); }
 // Qualitaet einer Liste (Tarife/Handys/Internet) aus einem Durchgang: echte Namen, viele Inhaltszeilen, Preise vorhanden
@@ -13339,14 +13495,29 @@ function psO2Combine(res) {
     res.forEach(x => { if (x[f] && cnt[x[f]] > n) { best = x[f]; n = cnt[x[f]]; } });
     return best;
   };
-  return { tarife: pick('tarife'), geraete: pick('geraete'), internet: pick('internet'), einmalig: vote('einmalig'), monatlich: (() => { const e = vote('einmalig'), m = vote('monatlich'); if (!e || m !== e) return m; const alt = res.map(x => x.monatlich).filter(v => v && v !== e); return alt.length ? alt[0] : m; })(), hinweis: vote('hinweis'), mixed: res.length > 1 };
+  const fill = kind => psO2FillPrices(pick(kind), res, kind);
+  const hdr = { tarife: 0, geraete: 0, internet: 0 };
+  res.forEach(x => { if (x.hdr) Object.keys(hdr).forEach(k => { hdr[k] = Math.max(hdr[k], x.hdr[k] || 0); }); });
+  return { tarife: fill('tarife'), geraete: fill('geraete'), internet: fill('internet'), hdr, einmalig: vote('einmalig'), monatlich: (() => { const e = vote('einmalig'), m = vote('monatlich'); if (!e || m !== e) return m; const alt = res.map(x => x.monatlich).filter(v => v && v !== e); return alt.length ? alt[0] : m; })(), hinweis: vote('hinweis'), mixed: res.length > 1 };
 }
-// Lokales Lesen: bis zu fuenf Durchgaenge. Die ersten beiden (Modus 3 und 4) schneiden den hellen Bildschirm aus dem Foto,
-// bringen ihn auf passende Groesse und lesen im Zeilenmodus – das liest Fotos vom Bildschirm am besten; Modus 4 schaerft
-// zusaetzlich nach (die Texterkennung reagiert auf Kleinigkeiten, zwei leicht verschiedene Bilder ergaenzen sich).
-// Jeder Durchgang wird einmal wie bisher (Zeilen) und einmal nach Position ausgewertet; es gilt das bessere Ergebnis.
-// Harte Luecken (etwas Sichtbares fehlt, Summen stimmen nicht, isDone) -> weiterlesen bis zum fuenften Durchgang;
-// weiche Luecken (Lesemuell im Namen, wenig Inhalte) -> hoechstens ein zweiter Durchgang.
+// v55.224: Fehlt einem Eintrag ein Preis, der in einem anderen Durchgang an gleicher Stelle gelesen wurde, wird er von dort ergaenzt
+// (n-tes Vorkommen gleichen Namens = gleicher Eintrag). "monatlich" nur bei Tarif/Internet (ein Handy hat oft keinen Monatspreis).
+function psO2FillPrices(list, res, kind) {
+  if (!list || !list.length || res.length < 2) return list;
+  const ord = it => { let n = 0; for (const x of list) { if (x === it) return n; if (psO2Similar(x.name, it.name)) n++; } return n; };
+  return list.map(it => {
+    if (!it.am || (it.am[0] != null && it.am[1] != null)) return it;
+    const am = it.am.slice(), n = ord(it);
+    for (const o of res) {
+      const arr = o[kind] || [];
+      if (arr === list) continue;
+      const same = arr.filter(x => x.am && psO2Similar(x.name, it.name)), cand = same[n] || same[0];
+      if (!cand) continue;
+      [0, 1].forEach(c => { if (am[c] == null && cand.am[c] != null && (c === 0 || kind !== 'geraete')) am[c] = cand.am[c]; });
+    }
+    return am[0] === it.am[0] && am[1] === it.am[1] ? it : Object.assign({}, it, { am });
+  });
+}
 // v55.209: Lage jedes Eintrags im Foto (0 = oben, 1 = unten) aus den Wortpositionen – fuer die Ueberschneidung beim Scannen
 function psO2PlaceItems(r, words) {
   if (!r || !words || words.length < 8) return;
@@ -13365,53 +13536,75 @@ function psO2PlaceItems(r, words) {
     });
   });
 }
-async function psO2ReadLocal(file, onMsg, isDone) {
-  const modes = [3, 4, 0, 1, 2], res = [];
-  let txt = '', r = null;
-  // v55.223: Ein Durchgang kann auf einem schwachen/ueberlasteten Geraet haengen bleiben (Arbeiter antwortet
-  // nie mehr) - dann blieb die App bisher für immer bei "Dritter Leseversuch ..." stehen. Jetzt bricht ein
-  // Durchgang nach 25 Sekunden ab, der Arbeiter wird verworfen und neu aufgebaut, und es geht mit einem
-  // leeren Ergebnis fuer diesen Durchgang weiter, statt die App einzufrieren.
-  const PS_O2_PASS_TIMEOUT_MS = 25000;
-  const pass = async (mode, w) => {
-    let o;
-    try {
-      o = await Promise.race([
-        psO2RecognizeFull(file, onMsg, mode, res.length, w),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), PS_O2_PASS_TIMEOUT_MS))
-      ]);
-    } catch (e) {
-      console.warn('[O2 Lesen] Durchgang abgebrochen:', e && e.message || e);
-      try { w && w.terminate && w.terminate(); } catch (e2) {}
-      if (w === __psO2Worker) __psO2Worker = null;
-      if (w === __psO2Worker2) { __psO2Worker2 = null; try { __psO2Worker2 = await window.Tesseract.createWorker('deu', 1); } catch (e3) { __psO2Worker2 = null; } }
-      return { r: { tarife: [], geraete: [], internet: [], einmalig: '', monatlich: '' }, t: '' };
-    }
+// Lokales Lesen mit Smart-Retry (v55.224). Durchgang 1 = Standard. Weitere Durchgaenge nur, wenn etwas Sichtbares fehlt (Eintrag, Summe,
+// Summen passen nicht, mehr Bloecke im Bild als gelesen) oder ein Name nach Lesemuell aussieht - und nur solange das Zeitbudget reicht.
+// Jeder Durchgang wird einmal zeilenweise und einmal nach Position ausgewertet (das bessere gilt); die Durchgaenge werden eintragsweise
+// zusammengefuehrt, ein spaeterer schwacher Durchgang loescht nie ein Ergebnis eines fruehren.
+// Ergebnis: { r, txt, fail, timedOut, ms, tries, cancelled }; fail ('timeout' | 'engine' | 'image' | 'cancelled') nur, wenn gar nichts gelesen werden konnte.
+async function psO2ReadLocal(file, onMsg, isDone, opts) {
+  opts = opts || {};
+  const T = Object.assign({}, PS_O2_T, opts.t || {}), H = opts.hooks || {};
+  const job = opts.job || psO2NewJob();
+  const t0 = Date.now(), res = [];
+  let txt = '', r = null, fail = '', timedOut = false, lastMs = 0, tries = 0, src = null, prevScore = -99;
+  const left = () => T.budget - (Date.now() - t0);
+  const say = k => { if (!onMsg) return; onMsg(k === 'prep' ? 'Foto wird vorbereitet …' : k === 'read' ? (tries > 1 ? 'Text wird erkannt – weiterer Durchgang …' : 'Text wird erkannt …') : k); };
+  const empty = () => ({ tarife: [], geraete: [], internet: [], einmalig: '', monatlich: '', hinweis: '', hdr: { tarife: 0, geraete: 0, internet: 0 } });
+  const take = o => {
+    say('Produkte und Tarife werden zugeordnet …');
     const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
     psO2PlaceItems(cls, o.words); psO2PlaceItems(pos, o.words);
     const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
-    return { r: usePos ? Object.assign(pos, { byPos: true }) : cls, t: usePos ? pt : o.text };
-  };
-  const take = out => {
-    out.forEach(o => { txt += (res.length ? '\n--- Versuch ' + (res.length + 1) + ' ---\n' : '') + o.t; res.push(o.r); });
+    // Nur der untere Teil des Belegs im Bild: die Spaltenzuordnung nach Position kann die Summen vertauschen -> dann gelten die Summen der Zeilenauswertung
+    if (usePos && cls.einmalig && cls.monatlich && cls.einmalig !== cls.monatlich && (!pos.einmalig || !pos.monatlich || pos.einmalig === pos.monatlich)) { pos.einmalig = cls.einmalig; pos.monatlich = cls.monatlich; }
+    txt += (res.length ? '\n--- Durchgang ' + (res.length + 1) + ' ---\n' : '') + (usePos ? pt : o.text);
+    res.push(usePos ? Object.assign(pos, { byPos: true }) : cls);
+    say('Preise werden geprüft …');
     r = res.length === 1 ? res[0] : psO2Combine(res);
   };
-  // v55.210: gar nichts gelesen (z. B. flaues Foto durch Sichtschutzfolie) -> weitere Aufbereitungen versuchen
   const hard = () => (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0 || psO2Score(r) <= 0;
-  for (let k = 0; k < modes.length; ) {
-    if (__psO2Worker2 && k + 1 < modes.length) {
-      // zwei Durchgaenge gleichzeitig auf zwei Arbeitern
-      take(await Promise.all([pass(modes[k], __psO2Worker), pass(modes[k + 1], __psO2Worker2)]));
-      k += 2;
-      if (!hard()) break;
-    } else {
-      take([await pass(modes[k], __psO2Worker)]);
-      k += 1;
-      if (!hard() && (k >= 2 || !psO2Soft(r))) break;
+  // Namen, die nach Lesemuell aussehen ("ECT 34"): ein zweiter Durchgang lohnt sich (hoechstens dieser eine)
+  const soft = () => ['tarife', 'geraete', 'internet'].some(k => (r[k] || []).some(it => psO2ItemQ(k, it) < 0.8));
+  try {
+    try { src = await Promise.race([(H.source || psO2Source)(file), job.cancelP]); }
+    catch (e) { fail = e && e.psCancel ? 'cancelled' : 'image'; }
+    let plan = PS_O2_PLAN.slice();
+    for (let k = 0; src && k < plan.length; k++) {
+      if (job.cancelled) { fail = 'cancelled'; break; }
+      if (k > 0 && psO2Score(r) <= 0 && lastMs > 8000) break; // langsam UND nichts Brauchbares = Rauschen: kein zweiter langer Durchgang
+      // Restzeit reicht fuer keinen weiteren Durchgang (ohne Ergebnis darf er knapper sein: der entrauschte 2. Durchgang ist meist schneller)
+      if (k > 0 && left() < Math.max(T.minPass, lastMs * (r && psO2Score(r) > 0 ? 1.2 : 0.5))) break;
+      tries++;
+      try {
+        const o = await psO2Pass(job, src, plan[k], T, left(), say, H);
+        lastMs = o.ms; take(o);
+        if (k === 0 && psO2Score(r) <= 0 && o.words.length > 350 && plan.length > 2) { const tp = plan[1]; plan[1] = plan[2]; plan[2] = tp; }
+      } catch (e) {
+        if (e && e.psCancel) { fail = 'cancelled'; break; }
+        const kind = (e && e.psKind) || 'engine';
+        if (kind === 'timeout') {
+          timedOut = true; lastMs = 0;
+          if (!res.length) fail = 'timeout';
+          if (plan[k] !== PS_O2_PLAN_LIGHT) plan.splice(k + 1, plan.length, PS_O2_PLAN_LIGHT); // leichtere Variante statt gleichem Aufwand
+          continue;
+        }
+        if (!res.length) fail = kind === 'image' ? 'image' : 'engine';
+        break; // Foto nicht lesbar / Texterkennung nicht verfuegbar: weitere Versuche bringen nichts
+      }
+      fail = ''; // etwas gelesen: ein frueherer Timeout ist kein Gesamtfehler mehr
+      const sc = psO2Score(r), improved = sc > prevScore;
+      prevScore = Math.max(prevScore, sc);
+      if (!hard() && (k >= 1 || !soft())) break;
+      if (k >= 1 && !improved && sc > 0) break; // etwas gelesen, aber der weitere Durchgang hat nichts Neues gebracht -> aufhoeren statt Zeit zu verbrennen
     }
+  } finally {
+    if (src) src.close();
+    job.done = true;
   }
-  return { r, txt };
+  if (!r) r = empty();
+  return { r, txt, fail, timedOut, ms: Date.now() - t0, tries, cancelled: job.cancelled };
 }
+
 // === v55.176 (Beta): FOTO ZUSCHNEIDEN + ENTZERREN ========================================================
 // Viereck (4 frei ziehbare Ecken, Bruchteile 0..1 des Fotos) -> gerades Rechteck. Das letzte Viereck wird gemerkt.
 const PS_O2_QUAD_KEY = 'ps_o2_quad';
@@ -14307,6 +14500,10 @@ function PsO2Import({ onApply, onClose, initial }) {
   const initD = React.useRef(d), [askClose, setAskClose] = React.useState(false);
   const [busy, setBusy] = React.useState('');
   const [note, setNote] = React.useState('');
+  // v55.224: jede Erkennung bekommt eine Lauf-Nummer; ein abgebrochener / ueberholter / nach dem Schliessen fertig gewordener Lauf aendert nichts mehr
+  const runRef = React.useRef(0), engRef = React.useRef(null), aliveRef = React.useRef(true);
+  React.useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; runRef.current++; try { engRef.current && engRef.current.cancel('unmount'); } catch (e) {} psO2Release(); }; }, []);
+  const cancelRead = () => { runRef.current++; try { engRef.current && engRef.current.cancel('user'); } catch (e) {} setBusy(''); setNote('Erkennung abgebrochen – neu fotografieren oder unten von Hand eintragen. Bereits Erkanntes bleibt erhalten.'); };
   const [crop, setCrop] = React.useState(null);
   // Zuschneiden ist nur noetig, wenn das Foto nicht lesbar war (dann oeffnet sich der Rahmen von selbst) – oder per Haken immer.
   const [alwaysCrop, setAlwaysCrop] = React.useState(() => { try { return localStorage.getItem('ps_o2_cropalways') === '1'; } catch (e) { return false; } });
@@ -14478,17 +14675,21 @@ function PsO2Import({ onApply, onClose, initial }) {
   };
   const readPhoto = async (jobP, stage, retryFile, ovF) => {
     let sum = ''; // kurzer Text "was wurde erkannt" (fuer die Block-Reihe in der Kamera)
+    const myRun = ++runRef.current, live = () => aliveRef.current && runRef.current === myRun;
+    const job = psO2NewJob(); engRef.current = job;
     setBlur(null);
     try {
       setBusy('Foto wird vorbereitet …');
       const file = await jobP;
+      if (!live()) return sum;
       const missOf = q => stage === 'tarife' ? !q.tarife.length : stage === 'geraete' ? !q.geraete.length : stage === 'internet' ? !q.internet.length : stage === 'kosten' ? !(q.einmalig || q.monatlich) : false;
       const got = q => !!(q && (q.tarife.length || q.geraete.length || q.internet.length || q.einmalig || q.monatlich));
-      let txt = '', r = null, cloudThin = false;
+      let txt = '', r = null, cloudThin = false, locFail = '', locCancelled = false;
       // 1. Weg: der Dienst (liest Fotos vom Bildschirm am besten). Geht er nicht, merkt die App sich das für diese Sitzung.
       if (!__psO2CloudOff && psHtrConfigured()) {
         try {
-          const cd = await psO2CloudRead(file, m => setBusy(m));
+          const cd = await psO2CloudRead(file, m => { if (live()) setBusy(m); });
+          if (!live()) return sum;
           if (got(cd)) {
             r = cd;
             // v55.221: Bei "ganze Seite"/Scannen gilt schon EIN gefundenes Feld als "etwas gefunden" - dann
@@ -14504,7 +14705,9 @@ function PsO2Import({ onApply, onClose, initial }) {
       }
       // 2. Weg: Texterkennung auf dem Gerät (v55.193: Bildschirm zuerst ausschneiden, Auswertung nach Position), bei Bedarf mit weiteren Aufbereitungen.
       if (!r || cloudThin) {
-        const loc = await psO2ReadLocal(file, m => setBusy(m), q => !missOf(q));
+        const loc = await psO2ReadLocal(file, m => { if (live()) setBusy(m); }, q => !missOf(q), { job });
+        if (!live()) return sum;
+        locFail = loc.fail; locCancelled = loc.cancelled;
         if (!r) { r = loc.r; txt = loc.txt; }
         else {
           txt = loc.txt;
@@ -14589,10 +14792,15 @@ function PsO2Import({ onApply, onClose, initial }) {
         return n;
       });
       const tip = ' – näher ran, gerade von vorne und noch einmal fotografieren.';
-      if (stage === 'tarife' && !r.tarife.length) setNote('Kein Tarif erkannt' + tip);
-      else if (stage === 'geraete' && !r.geraete.length) setNote('Kein Handy erkannt' + tip);
-      else if (stage === 'internet' && !r.internet.length) setNote('Kein Internet@Home erkannt' + tip);
-      else if (stage === 'kosten' && !(r.einmalig || r.monatlich)) setNote('Kostenblock nicht erkannt' + tip);
+      const vd = psO2Verdict(r, { txt, fail: locFail, cancelled: locCancelled });
+      const keep = (cur.tarife.length || cur.geraete.length || cur.internet.length || cur.einmalig || cur.monatlich) ? ' Bereits Erkanntes bleibt erhalten.' : '';
+      const what = vd.cnt ? ' Erkannt (und übernommen): ' + vd.cnt + '.' : '';
+      if (vd.kind === 'cancelled') setNote(vd.msg + keep);
+      else if (vd.kind === 'fail' || vd.kind === 'notext' || vd.kind === 'nopos') setNote(vd.msg + keep);
+      else if (stage === 'tarife' && !r.tarife.length) setNote('Kein Tarif erkannt' + tip + what);
+      else if (stage === 'geraete' && !r.geraete.length) setNote('Kein Handy erkannt' + tip + what);
+      else if (stage === 'internet' && !r.internet.length) setNote('Kein Internet@Home erkannt' + tip + what);
+      else if (stage === 'kosten' && !(r.einmalig || r.monatlich)) setNote('Kostenblock nicht erkannt' + tip + what);
       else if (stage === 'kosten' && !(r.einmalig && r.monatlich)) setNote('Nur ' + (r.einmalig ? 'die einmaligen' : 'die monatlichen') + ' Kosten erkannt – bitte ergänzen.');
       else {
         // Egal welche Taste: alles, was auf dem Foto steht, wird uebernommen – hier steht, was erkannt wurde.
@@ -14601,20 +14809,20 @@ function PsO2Import({ onApply, onClose, initial }) {
         if (nG) parts.push(nG + (nG === 1 ? ' Handy' : ' Handys'));
         if (nN) parts.push('Internet@Home');
         if (r.einmalig || r.monatlich) parts.push('Kosten');
-        const same = ov.tarife + ov.geraete + ov.internet;
+        const same = ov.tarife + ov.geraete + ov.internet, c0 = !!psO2Check(r);
         // PDF-Vorschlag: "Seite 1 von 2" und noch keine Summen -> der Kostenblock steht auf der naechsten Seite
         const pg = /Seite\s*(\d)\s*v[o0]n\s*(\d)/i.exec(txt);
         const more = stage !== 'scan' && pg && +pg[1] < +pg[2] && !(r.einmalig || r.monatlich) && !(cur.einmalig || cur.monatlich) ? ' · Seite ' + pg[1] + ' von ' + pg[2] + ': die Kosten stehen auf Seite ' + (+pg[1] + 1) + ' – bitte noch fotografieren (📷 Kosten)' : '';
         const lap = same ? ' · Überschneidung mit dem vorigen Foto, nichts doppelt (gleicher Eintrag nochmal: „+1“)' : '';
-        const ok = parts.length ? '✓ Erkannt: ' + parts.join(', ') + lap + more : (same ? '✓ Nichts Neues – das Foto überschneidet sich mit dem vorigen' + more : 'Nichts erkannt' + tip);
+        const ok = parts.length ? (vd.kind === 'ok' ? '✓ Erkennung abgeschlossen: ' + parts.join(', ') + (c0 ? ', Summen stimmen' : ', bitte kurz prüfen') : vd.msg) + lap + more : (same ? '✓ Nichts Neues – das Foto überschneidet sich mit dem vorigen' + more : vd.msg + keep);
         if (had && stage !== 'kosten' && (dRef.current.einmalig || dRef.current.monatlich) && parts.length) setNote('Neu dazu (' + parts.join(', ') + ') – bitte den Kostenblock neu fotografieren, die Summe hat sich geändert.');
         else setNote(ok);
       }
     } catch (err) {
-      console.error('[O2]', err);
-      setNote('Lesen fehlgeschlagen – bitte Internet prüfen (beim ersten Mal wird die Texterkennung geladen) und erneut versuchen.');
+      console.error('[O2]', err && err.message || 'Fehler');
+      if (live()) setNote('Lesen fehlgeschlagen – bitte erneut fotografieren oder unten von Hand eintragen. Bereits Erkanntes bleibt erhalten.');
     }
-    setBusy('');
+    if (live()) setBusy('');
     return sum;
   };
   const inp = (v, on, ph, big) => h('input', { value: v || '', placeholder: ph, onChange: e => on(e.target.value), className: 'w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: big ? 20 : 15, fontWeight: big ? 800 : 600 }, inputMode: big ? 'decimal' : 'text' });
@@ -14662,7 +14870,7 @@ function PsO2Import({ onApply, onClose, initial }) {
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'flex items-center justify-between gap-2' },
         h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '✏️ o2-Vorschlag bearbeiten' : '📷 o2-Vorschlag einlesen'),
-        any ? h('button', { onClick: () => { droppedRef.current = []; setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', beratungsId: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
+        any ? h('button', { onClick: () => { runRef.current++; try { engRef.current && engRef.current.cancel('reset'); } catch (e) {} setBusy(''); droppedRef.current = []; setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', beratungsId: '' }); }, className: 'text-xs font-bold text-slate-500 underline' }, 'Neu beginnen') : null),
       had ? h('div', { className: 'mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2 text-sm font-bold text-slate-700' }, 'Einträge unten direkt korrigieren oder ein weiteres Foto machen – dann „Ins Angebot übernehmen“: die Karten werden neu geschrieben.') : null,
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file, hint: crop.auto ? 'Nicht gut lesbar – bitte nur den Bereich einrahmen (Ecken ziehen, schräg ist ok)' : '',
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
@@ -14686,8 +14894,9 @@ function PsO2Import({ onApply, onClose, initial }) {
       !quick && any && !busy ? (() => {
         // Stand nach dem Foto: Kostenblock da und Summen stimmig -> "Fertig" gross; sonst "Weiteres Foto" gross
         const c = psO2Check(d), hasK = !!(d.einmalig && d.monatlich), okS = !!c && [c.e, c.m].every(x => !x || x.ok), done2 = hasK && (okS || !c);
-        const more = !!c && [c.e, c.m].some(x => x && !x.ok && x.val > Math.max.apply(null, x.calc));
-        const msg = !hasK ? 'Kostenblock fehlt noch – Liste am PC weiterscrollen und weiteres Foto machen.' : okS ? '✓ Summen stimmen – fertig.' : more ? '⚠ Es fehlen noch Einträge (Summe höher als gelesen) – Liste am PC weiterscrollen und weiteres Foto machen.' : c ? '⚠ Summen passen noch nicht – bitte unten prüfen.' : 'Kostenblock gelesen – bitte kurz prüfen.';
+        const more = !!c && [c.e, c.m].some(x => x && !x.ok && !x.incomplete && x.val > Math.max.apply(null, x.calc));
+        const inc = !!c && [c.e, c.m].some(x => x && !x.ok && x.incomplete);
+        const msg = !d.einmalig && !d.monatlich ? 'Gesamtkosten fehlen noch – Kostenblock fotografieren (Liste am PC weiterscrollen) oder unten eintragen.' : !hasK ? 'Nur die ' + (d.einmalig ? 'einmaligen' : 'monatlichen') + ' Gesamtkosten gelesen – die ' + (d.einmalig ? 'monatlichen' : 'einmaligen') + ' bitte ergänzen.' : okS ? '✓ Summen stimmen – fertig.' : inc ? '⚠ Einige Angaben benötigen eine Kontrolle: bei einem Tarif fehlt der Einzelpreis, die gelesene Summe bleibt stehen.' : more ? '⚠ Es fehlen noch Einträge (Summe höher als gelesen) – Liste am PC weiterscrollen und weiteres Foto machen.' : c ? '⚠ Summen passen noch nicht – bitte unten prüfen.' : 'Kostenblock gelesen – bitte kurz prüfen.';
         return h('div', { className: 'mt-3 rounded-xl border-2 p-3 ' + (done2 && okS ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50') },
           h('div', { className: 'text-sm font-black ' + (done2 && okS ? 'text-green-800' : 'text-slate-800') }, msg),
           h('div', { className: 'flex gap-2 mt-2' },
@@ -14705,10 +14914,12 @@ function PsO2Import({ onApply, onClose, initial }) {
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
       quick ? null : h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: ownCam, onChange: e => toggleOwnCam(e.target.checked) }), 'Kamera mit Rahmen und Auto-Auslöser (statt Kamera-App)'),
-      busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
+      busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 flex items-center justify-between gap-2', role: 'status' },
+        h('span', { className: 'flex-1 text-center' }, busy),
+        h('button', { onClick: cancelRead, className: 'px-3 py-2 rounded-lg border border-blue-300 bg-white text-blue-800 font-black text-sm' }, '✕ Abbrechen')) : null,
       blur ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3' },
-        h('div', { className: 'text-sm font-black text-amber-900' }, blur.dark ? 'Das Foto ist zu dunkel.' : 'Das Foto ist unscharf.'),
-        h('div', { className: 'text-xs font-bold text-amber-800 mt-1' }, blur.dark ? 'Mehr Licht, oder den Bildschirm heller stellen.' : 'Näher heran, Tablet mit beiden Händen ruhig halten und kurz scharfstellen lassen.'),
+        h('div', { className: 'text-sm font-black text-amber-900' }, blur.dark ? 'Foto ist zu dunkel.' : 'Foto ist unscharf. Bitte Kamera ruhig halten und erneut fotografieren.'),
+        h('div', { className: 'text-xs font-bold text-amber-800 mt-1' }, blur.dark ? 'Mehr Licht, oder den Bildschirm heller stellen – oder „Trotzdem lesen“.' : 'Näher heran, mit beiden Händen halten und kurz scharfstellen lassen – oder „Trotzdem lesen“.'),
         h('div', { className: 'flex gap-2 mt-2' },
           h('button', { onClick: () => { const b = blur; setBlur(null); pick(b.stage, libModeRef.current); }, className: sBtn }, '📷 Neu aufnehmen'),
           h('button', { onClick: () => { const b = blur; setBlur(null); readPhoto(Promise.resolve(b.file), b.stage, b.file); }, className: gBtn }, 'Trotzdem lesen'))) : null,
@@ -14722,12 +14933,21 @@ function PsO2Import({ onApply, onClose, initial }) {
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIGE KOSTEN (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
           h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICHE KOSTEN (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
         (() => {
+          const sg = psO2Suggest(d);
+          return sg ? h('div', { className: 'mt-2 flex flex-wrap items-center gap-1 text-xs font-bold text-amber-800' },
+            h('span', null, 'Summe nicht gelesen – Einzelpreise ergeben:'),
+            [['einmalig', 'einmalig'], ['monatlich', 'monatlich']].filter(x => sg[x[0]]).map(([f, l]) => sg[f].map(v => h('button', { key: f + v, onClick: () => setD(p => ({ ...p, [f]: psO2Fmt(v) })), className: 'px-2 py-1 rounded-md bg-white border border-amber-400 text-amber-900 font-black' }, l + ' ' + psO2Fmt(v) + ' €'))),
+            h('span', null, '(nur Vorschlag – bitte prüfen)')) : null;
+        })(),
+        (() => {
           const c = psO2Check(d);
           if (!c) return null;
           const bad = [['einmalig', 'Einmalig', c.e], ['monatlich', 'Monatlich', c.m]].filter(x => x[2] && !x[2].ok);
           if (!bad.length) return h('div', { className: 'mt-2 text-xs font-bold text-green-700' }, '✓ Summen stimmen mit den Einzelpreisen überein');
           return h('div', { className: 'mt-2 rounded-lg bg-amber-50 border border-amber-300 p-2 text-xs font-bold text-amber-800' },
-            bad.map(([f, lbl, r]) => r.val > Math.max.apply(null, r.calc)
+            bad.map(([f, lbl, r]) => r.incomplete
+              ? h('div', { key: f, className: 'py-0.5' }, lbl + ': gelesen ' + psO2Fmt(r.val) + ' € – bei einem Tarif fehlt der Einzelpreis, die Summe lässt sich nicht prüfen (bitte Preis oben ergänzen).')
+              : r.val > Math.max.apply(null, r.calc)
               // Kostenblock hoeher als alles Gelesene: vermutlich fehlt noch ein Tarif / Handy / Internet@Home
               ? h('div', { key: f, className: 'py-0.5' }, lbl + ': Kostenblock ' + psO2Fmt(r.val) + ' €, Einzelpreise ergeben bisher ' + psO2Fmt(Math.max.apply(null, r.calc)) + ' € – fehlt noch ein Tarif, Handy oder Internet@Home?')
               : h('div', { key: f, className: 'flex flex-wrap items-center gap-1 py-0.5' },
@@ -14737,7 +14957,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         })(),
         h('div', { className: 'mt-2' }, inp(d.hinweis, v => setD(p => ({ ...p, hinweis: v })), 'Hinweis (optional, wird nur bei Eingabe in die Karte geschrieben)')))),
       h('div', { className: 'flex gap-2 mt-4' },
-        h('button', { onClick: () => { const dirty = JSON.stringify(d) !== JSON.stringify(initD.current); if (!dirty || askClose) { onClose(); return; } setAskClose(true); setTimeout(() => setAskClose(false), 3500); }, disabled: !!busy, className: 'px-4 py-3 rounded-lg border font-bold text-sm disabled:opacity-50 ' + (askClose ? 'border-red-500 bg-red-600 text-white' : 'border-slate-300 text-slate-600') }, askClose ? 'Wirklich verwerfen?' : 'Abbrechen'),
+        h('button', { onClick: () => { const dirty = JSON.stringify(d) !== JSON.stringify(initD.current); if (!dirty || askClose) { onClose(); return; } setAskClose(true); setTimeout(() => setAskClose(false), 3500); }, className: 'px-4 py-3 rounded-lg border font-bold text-sm ' + (askClose ? 'border-red-500 bg-red-600 text-white' : 'border-slate-300 text-slate-600') }, askClose ? 'Wirklich verwerfen?' : 'Abbrechen'),
         h('button', { onClick: () => onApply(d), disabled: !!busy || !any, className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, 'Ins Angebot übernehmen'))));
 }
 // === v55.162 (Beta): HANDSCHRIFT -> TEXT ===============================================
