@@ -1,0 +1,25 @@
+name: O2 OCR Backend Regression Tests
+on:
+  pull_request:
+    paths:
+      - 'htr-function/**'
+      - '.github/workflows/o2-ocr-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: node --check index.js
+        working-directory: htr-function
+      - name: Test o2 OCR normalization and offer fixtures
+        run: npm test
+        working-directory: htr-function
