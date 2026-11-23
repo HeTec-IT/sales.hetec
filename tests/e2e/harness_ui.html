@@ -5,7 +5,8 @@
 <script src="/node_modules/tesseract.js/dist/tesseract.min.js"></script>
 <script>
 function psPortLoadScript() { return Promise.resolve(); }
-function psHtrConfigured() { return false; }
+function psHtrConfigured() { try { return !!localStorage.getItem('ps_htr_url'); } catch (e) { return false; } }
+function psHtrUrl() { return localStorage.getItem('ps_htr_url'); }
 (function () {
   const orig = Tesseract.createWorker;
   Tesseract.createWorker = (l, o, opt) => orig(l, o, Object.assign({ workerPath: '/node_modules/tesseract.js/dist/worker.min.js', corePath: '/node_modules/tesseract.js-core/', langPath: '/node_modules/@tesseract.js-data/deu/4.0.0', cacheMethod: 'none' }, opt || {}));

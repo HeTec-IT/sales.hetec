@@ -52,3 +52,24 @@ test('OCR prompt tells model to avoid double-counting a discounted setup fee', (
   assert.match(source, /Internet@Home nie als Mobilfunktarif erfassen/);
   assert.match(source, /readable=true, sobald mindestens ein echtes Produkt/);
 });
+
+test('Angebotskennzeichen (Zeitstempel, Beratungs-ID) werden normalisiert, nichts anderes aus dem Kopf uebernommen', () => {
+  const d = cleanO2({ tarife: [item('O2 Mobile L (2026)', '39,99', '34,99')], erstelltAm: 'erstellt am 23.11.2026 17:15 Uhr', beratungsId: 'ID 4711-0815' });
+  assert.equal(d.erstelltAm, '23.11.2026 17:15');
+  assert.equal(d.beratungsId, '47110815');
+  assert.equal(cleanO2({ tarife: [item('O2 Mobile L (2026)', '39,99', '34,99')], erstelltAm: 'gestern' }).erstelltAm, '');
+});
+
+test('Prompt: Ersparnis ist keine Kostenposition, Kennzeichen nur zur Zuordnung', () => {
+  assert.match(source, /Ersparnis \.\.\.\" ist keine Kostenposition/);
+  assert.match(source, /erstelltAm = Datum und Uhrzeit/);
+});
+
+test('Angebot B: Kopfzeilenpreise + Plus-Rabatt ergeben die gedruckten Summen (2.438,98 / 69,98)', () => {
+  const d = cleanO2({ internet: [item('O2 Home XL 600', '9,99', '54,99')], geraete: [item('Apple iPhone 18 Pro 1TB, Burgunder', '2.389,00', '')],
+    tarife: [item('O2 Mobile M Plus (2026)', '39,99', '29,99', '15,00')], einmalig: '2.438,98', monatlich: '69,98' });
+  const cents = v => v ? Math.round(parseFloat(v.replace(/\./g, '').replace(',', '.')) * 100) : 0;
+  const all = [].concat(d.internet, d.geraete, d.tarife);
+  assert.equal(all.reduce((a, x) => a + cents(x.einmalig), 0), cents(d.einmalig));
+  assert.equal(all.reduce((a, x) => a + cents(x.monatlich) - cents(x.rabattMonatlich), 0), cents(d.monatlich));
+});

@@ -89,7 +89,8 @@ const O2_PROMPT = [
   'tarif (nur bei geraete) = die Nummer des Tarifs, unter dem das Geraet im Bild steht, 1 fuer den ersten Tarif. Ist kein Tarif im Bild, 0.',
   'einmalig und monatlich ganz unten = die Zeilen "Einmalige Kosten" und "Monatliche Kosten".',
   'hinweis = immer leer lassen. Die Zeile "*Ab dem N. Monat: X" (Preiserhoehung, auch "ab dem 12. Monat") ignorieren: dieser Betrag ist weder einmalig noch monatlich.',
-  'Einen Abschnitt "Aktuell" (bisherige Vertraege des Kunden) komplett ignorieren.',
+  'Einen Abschnitt "Aktuell" (bisherige Vertraege des Kunden) komplett ignorieren. Die Zeile "Ersparnis ..." ist keine Kostenposition: weder einmalig noch monatlich daraus ableiten.',
+  'erstelltAm = Datum und Uhrzeit aus der Zeile "verbindlicher Vorschlag erstellt am TT.MM.JJJJ HH:MM" (z. B. "23.11.2026 17:15"), sonst leer. beratungsId = nur die Ziffern der Beratungs-ID, sonst leer. Beides dient nur der Zuordnung mehrerer Fotos zu EINEM Angebot.',
   'Nichts erfinden und nichts ergaenzen. Was nicht sicher lesbar ist, weglassen. Ist kein Vorschlag zu erkennen, alle Listen leer lassen und readable=false setzen.'
 ].join(' ');
 function buildO2Body(image, mime) {
@@ -106,6 +107,8 @@ function buildO2Body(image, mime) {
           einmalig: { type: 'STRING' },
           monatlich: { type: 'STRING' },
           hinweis: { type: 'STRING' },
+          erstelltAm: { type: 'STRING' },
+          beratungsId: { type: 'STRING' },
           readable: { type: 'BOOLEAN' }
         },
         required: ['tarife', 'geraete', 'internet', 'readable']
@@ -155,6 +158,8 @@ function cleanO2(j) {
   const out = {
     tarife: list(j.tarife), geraete: list(j.geraete, true), internet: list(j.internet),
     einmalig: amt(j.einmalig), monatlich: amt(j.monatlich), hinweis: '',
+    erstelltAm: (m => m ? m[1] + '.' + m[2] + '.' + m[3] + (m[4] ? ' ' + m[4] : '') : '')(/(\d{2})\.(\d{2})\.(20\d{2})(?:\D{1,3}(\d{2}:\d{2}))?/.exec(String(j.erstelltAm == null ? '' : j.erstelltAm))),
+    beratungsId: String(j.beratungsId == null ? '' : j.beratungsId).replace(/\D/g, '').slice(0, 15),
     readable: false
   };
   // Bei bereits extrahierten Positionen ist ein readable=false des Modells ein Widerspruch.
