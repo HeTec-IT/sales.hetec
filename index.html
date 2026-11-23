@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.210';
+    window.APP_VERSION = '55.211';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -14217,8 +14217,10 @@ function PsO2Import({ onApply, onClose, initial }) {
   // Etappen: jede Taste fotografiert genau einen Bereich. Kamera-Eingang wie bei "Foto einfuegen" (iPad: Foto aufnehmen / Mediathek / Dateien),
   // 🖼 = Foto aus der Mediathek.
   // v55.196: eigene Kamera mit Rahmen und Schaerfe-Anzeige (Haken im Dialog; Rueckfall: normale Kamera-App)
-  const [ownCam, setOwnCam] = React.useState(() => { try { return localStorage.getItem('ps_o2_owncam') !== '0'; } catch (e) { return true; } });
-  const toggleOwnCam = v => { setOwnCam(v); try { localStorage.setItem('ps_o2_owncam', v ? '1' : '0'); } catch (e) {} };
+  // v55.211: Standard = normale Kamera-App des Geraets (volle Aufloesung, Geraet schaerft/entrauscht selbst – schaerfer als jedes Videobild).
+  // Die eigene Kamera mit Rahmen bleibt per Haken waehlbar (neuer Schluessel: alle starten mit der Kamera-App).
+  const [ownCam, setOwnCam] = React.useState(() => { try { return localStorage.getItem('ps_o2_owncam2') === '1'; } catch (e) { return false; } });
+  const toggleOwnCam = v => { setOwnCam(v); try { localStorage.setItem('ps_o2_owncam2', v ? '1' : '0'); } catch (e) {} };
   // v55.199: Modus "Block-Fotos": die Kamera bleibt offen, je Block ein Foto (Block 1, Block 2 ...), zuletzt der Kostenblock.
   // Gelesen wird nacheinander im Hintergrund; "Ganzes Foto" = bisheriges Verhalten (eine Taste je Bereich).
   // v55.203: dritter Modus "Bildschirm" (nur am PC): Activate+ Fenster freigeben, Rahmen ziehen = lesen
@@ -14229,7 +14231,19 @@ function PsO2Import({ onApply, onClose, initial }) {
   // v55.205: Tablet (ohne Bildschirmfreigabe): Knopf "Vom PC scannen" immer oben, kein eigener Modus mehr
   const camOk = psO2CamSupported(), eff = mode === 'snip' && !snipOk ? 'scan' : mode;
   const blockMode = false, scanMode = eff === 'scan' && camOk, snipMode = eff === 'snip' && snipOk, scanOk = false, quick = scanMode || snipMode;
-  const lastRRef = React.useRef(null), scanPrevRef = React.useRef(null);
+  const lastRRef = React.useRef(null), scanPrevRef = React.useRef(null), droppedRef = React.useRef([]);
+  // v55.211: Beim Zusammensetzen mehrerer Fotos als "schon da" verworfene Eintraege: passen die Summen zum Kostenblock erst,
+  // wenn einer davon doch mitzaehlt (zwei gleiche Tarife untereinander), wird er automatisch wieder eingefuegt.
+  React.useEffect(() => {
+    const dr = droppedRef.current; if (!dr.length || busy) return;
+    const ok = c => c && [c.e, c.m].every(x => !x || x.ok), c0 = psO2Check(d);
+    if (!c0 || ok(c0)) return;
+    for (let n = 1; n <= dr.length; n++) {
+      const cand = { ...d, tarife: d.tarife.slice(), geraete: d.geraete.slice(), internet: d.internet.slice() };
+      dr.slice(0, n).forEach(x => { const a = cand[x.kind]; if (a.length < PS_O2_MAX[x.kind]) a.splice(Math.min(a.length, x.pos), 0, x.it); });
+      if (ok(psO2Check(cand))) { droppedRef.current = dr.slice(n); setD(cand); setNote('✓ Gleicher Eintrag stand mehrfach im Vorschlag – ergänzt, Summen stimmen jetzt.'); return; }
+    }
+  }, [d, busy]);
   const openScan = () => {
     setNote(''); scanPrevRef.current = null;
     psO2CamOpen({ scan: true, onShot: (file, st, f) => {
@@ -14391,6 +14405,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       };
       const ov = stage === 'block' ? { tarife: 0, geraete: 0, internet: 0 } : stage === 'scan' ? { tarife: ovlS('tarife'), geraete: ovlS('geraete'), internet: ovlS('internet') } : { tarife: ovl('tarife'), geraete: ovl('geraete'), internet: ovl('internet') };
       if (stage === 'scan') scanPrevRef.current = { tarife: r.tarife.map(it => ({ yf: it.yf || 0, name: it.name })), geraete: r.geraete.map(it => ({ yf: it.yf || 0, name: psO2Pretty(it.name) })), internet: r.internet.map(it => ({ yf: it.yf || 0, name: it.name })) };
+      if (stage !== 'block') ['tarife', 'geraete', 'internet'].forEach(kind => { const ol = cur[kind].length; for (let i = 0; i < ov[kind]; i++) droppedRef.current.push({ kind, pos: ol - ov[kind] + i + 1, it: conv(kind, r[kind][i]) }); });
       const merge = (kind, p) => {
         const old = p[kind].slice(), k = ov[kind], neu = r[kind];
         // Bei der Ueberschneidung die vollstaendigere Fassung behalten (am Seitenrand sind Inhalte oft abgeschnitten)
@@ -14475,7 +14490,7 @@ function PsO2Import({ onApply, onClose, initial }) {
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'flex items-center justify-between gap-2' },
         h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '📷 o2-Vorschlag ergänzen' : '📷 o2-Vorschlag einlesen'),
-        any ? h('button', { onClick: () => { setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
+        any ? h('button', { onClick: () => { droppedRef.current = []; setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file, hint: crop.auto ? 'Nicht gut lesbar – bitte nur den Bereich einrahmen (Ecken ziehen, schräg ist ok)' : '',
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
         onSkip: () => { const c = crop; setCrop(null); readPhoto(Promise.resolve(c.file), c.stage); },
@@ -14494,7 +14509,17 @@ function PsO2Import({ onApply, onClose, initial }) {
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'Den Vorschlag gerade von vorne fotografieren, so groß wie möglich im Rahmen. Geht er über mehrere Seiten: weiterblättern und noch ein Foto. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
-      !quick ? h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, any ? '📷 Noch ein Foto (nächste Seite)' : '📷 Vorschlag fotografieren') : null,
+      !quick && !any ? h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📷 Vorschlag fotografieren') : null,
+      !quick && any && !busy ? (() => {
+        // Stand nach dem Foto: Kostenblock da und Summen stimmig -> "Fertig" gross; sonst "Weiteres Foto" gross
+        const c = psO2Check(d), hasK = !!(d.einmalig && d.monatlich), okS = !!c && [c.e, c.m].every(x => !x || x.ok), done2 = hasK && (okS || !c);
+        const msg = !hasK ? 'Kostenblock fehlt noch – Liste am PC weiterscrollen und weiteres Foto machen.' : okS ? '✓ Summen stimmen – fertig.' : c ? '⚠ Summen passen noch nicht – fehlt ein Eintrag? Weiteres Foto oder unten prüfen.' : 'Kostenblock gelesen – bitte kurz prüfen.';
+        return h('div', { className: 'mt-3 rounded-xl border-2 p-3 ' + (done2 && okS ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50') },
+          h('div', { className: 'text-sm font-black ' + (done2 && okS ? 'text-green-800' : 'text-slate-800') }, msg),
+          h('div', { className: 'flex gap-2 mt-2' },
+            h('button', { onClick: () => pick('ganz', false), className: (done2 ? gBtn : sBtn) + ' flex-1 py-3 text-base' }, '📷 Weiteres Foto'),
+            h('button', { onClick: () => onApply(d), className: (done2 ? sBtn : gBtn) + ' flex-1 py-3 text-base' }, '✓ Fertig – übernehmen')));
+      })() : null,
       snipMode && any ? h('button', { onClick: sendQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, '📲 QR-Code fürs Tablet') : null,
       snipMode ? h('button', { onClick: openSnip, disabled: !!busy, className: (any ? gBtn : sBtn) + ' w-full mt-2 py-3 text-base' }, any ? '🖥 Nochmal lesen (z. B. nach Scrollen)' : '🖥 Bildschirm lesen') : null,
       snipMode && psO2SnipLive() ? h('div', { className: 'mt-2 flex justify-center gap-4 text-xs font-bold text-slate-500' },
@@ -14505,7 +14530,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       quick ? null : h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
         h('input', { type: 'checkbox', checked: alwaysCrop, onChange: e => toggleAlwaysCrop(e.target.checked) }), 'Foto vor dem Lesen immer zuschneiden'),
       quick ? null : h('label', { className: 'flex items-center gap-2 mt-1 text-xs font-bold text-slate-500' },
-        h('input', { type: 'checkbox', checked: ownCam, onChange: e => toggleOwnCam(e.target.checked) }), 'Eigene Kamera mit Rahmen (empfohlen)'),
+        h('input', { type: 'checkbox', checked: ownCam, onChange: e => toggleOwnCam(e.target.checked) }), 'Kamera mit Rahmen und Auto-Auslöser (statt Kamera-App)'),
       busy ? h('div', { className: 'mt-3 rounded-lg bg-blue-50 text-blue-800 text-sm font-bold p-3 text-center' }, busy) : null,
       blur ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3' },
         h('div', { className: 'text-sm font-black text-amber-900' }, blur.dark ? 'Das Foto ist zu dunkel.' : 'Das Foto ist unscharf.'),
