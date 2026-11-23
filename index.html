@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.219';
+    window.APP_VERSION = '55.220';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -14326,7 +14326,10 @@ function PsO2Import({ onApply, onClose, initial }) {
     const ok = c => c && [c.e, c.m].every(x => !x || x.ok), c0 = psO2Check(d);
     if (!c0 || ok(c0) || ![c0.e, c0.m].every(x => x && x.val >= Math.min.apply(null, x.calc))) return;
     const sols = [];
-    ['tarife', 'geraete', 'internet'].forEach(kind => {
+    // v55.220: Internet@Home kommt in einem Vorschlag praktisch nie doppelt vor (ein Anschluss je Adresse) -
+    // hier NIE von selbst verdoppeln, auch wenn die Summe rechnerisch dazu passen wuerde. Nur Tarif/Handy,
+    // die tatsaechlich mehrfach verkauft werden, duerfen automatisch ergaenzt werden.
+    ['tarife', 'geraete'].forEach(kind => {
       const seen = new Set();
       d[kind].forEach((it, i) => {
         const key = it.name + '|' + JSON.stringify(it.am || null); if (seen.has(key) || !it.am) return; seen.add(key);
