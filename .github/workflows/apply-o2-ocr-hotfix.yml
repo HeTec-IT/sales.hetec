@@ -1,0 +1,36 @@
+name: Apply o2 OCR hotfix on review branch
+on:
+  push:
+    branches:
+      - fix/o2-ocr-hang-cost-validation-20261123
+    paths:
+      - .github/workflows/apply-o2-ocr-hotfix.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply-hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout review branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/o2-ocr-hang-cost-validation-20261123
+          persist-credentials: true
+      - name: Validate script
+        run: python3 -m py_compile scripts/apply_o2_ocr_hotfix.py
+      - name: Apply precise source patch
+        run: python3 scripts/apply_o2_ocr_hotfix.py
+      - name: Verify amended application
+        run: |
+          grep -q 'PS_O2_READ_BUDGET_MS = 45000' index.html
+          grep -q "window.APP_VERSION = '55.224'" index.html
+          grep -q 'Kostenblock unvollständig' index.html
+          git diff --check
+      - name: Commit only index.html to review branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "fix: bound o2 OCR retries and validate both cost totals [skip ci]"
+          git push origin HEAD:fix/o2-ocr-hang-cost-validation-20261123
