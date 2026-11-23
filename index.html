@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.214';
+    window.APP_VERSION = '55.215';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -14216,6 +14216,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   });
   const had = !!(initial && (['internet', 'tarife', 'geraete'].some(k => (initial[k] || []).length) || initial.einmalig || initial.monatlich));
   const dRef = React.useRef(d); dRef.current = d;
+  const initD = React.useRef(d), [askClose, setAskClose] = React.useState(false);
   const [busy, setBusy] = React.useState('');
   const [note, setNote] = React.useState('');
   const [crop, setCrop] = React.useState(null);
@@ -14526,11 +14527,13 @@ function PsO2Import({ onApply, onClose, initial }) {
         blockMode ? null : h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
     body);
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
-  return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' }, onClick: e => { if (e.target === e.currentTarget && !busy) onClose(); } },
+  // v55.215: Tippen neben das Fenster schliesst NICHT mehr (Fotos gingen verloren) – nur "Abbrechen" (mit Rueckfrage) oder "Uebernehmen"
+  return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' } },
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'flex items-center justify-between gap-2' },
-        h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '📷 o2-Vorschlag ergänzen' : '📷 o2-Vorschlag einlesen'),
+        h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '✏️ o2-Vorschlag bearbeiten' : '📷 o2-Vorschlag einlesen'),
         any ? h('button', { onClick: () => { droppedRef.current = []; setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
+      had ? h('div', { className: 'mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2 text-sm font-bold text-slate-700' }, 'Einträge unten direkt korrigieren oder ein weiteres Foto machen – dann „Ins Angebot übernehmen“: die Karten werden neu geschrieben.') : null,
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file, hint: crop.auto ? 'Nicht gut lesbar – bitte nur den Bereich einrahmen (Ecken ziehen, schräg ist ok)' : '',
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
         onSkip: () => { const c = crop; setCrop(null); readPhoto(Promise.resolve(c.file), c.stage); },
@@ -14604,7 +14607,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         })(),
         h('div', { className: 'mt-2' }, inp(d.hinweis, v => setD(p => ({ ...p, hinweis: v })), 'Hinweis (optional, wird nur bei Eingabe in die Karte geschrieben)')))),
       h('div', { className: 'flex gap-2 mt-4' },
-        h('button', { onClick: onClose, disabled: !!busy, className: 'px-4 py-3 rounded-lg border border-slate-300 text-slate-600 font-bold text-sm disabled:opacity-50' }, 'Abbrechen'),
+        h('button', { onClick: () => { const dirty = JSON.stringify(d) !== JSON.stringify(initD.current); if (!dirty || askClose) { onClose(); return; } setAskClose(true); setTimeout(() => setAskClose(false), 3500); }, disabled: !!busy, className: 'px-4 py-3 rounded-lg border font-bold text-sm disabled:opacity-50 ' + (askClose ? 'border-red-500 bg-red-600 text-white' : 'border-slate-300 text-slate-600') }, askClose ? 'Wirklich verwerfen?' : 'Abbrechen'),
         h('button', { onClick: () => onApply(d), disabled: !!busy || !any, className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, 'Ins Angebot übernehmen'))));
 }
 // === v55.162 (Beta): HANDSCHRIFT -> TEXT ===============================================
@@ -35978,8 +35981,9 @@ function App() {
   };
   const applyO2Proposal = d => {
     const cards = psO2Cards(d);
-    const items = cards.map((hh, i) => hh ? ['offer' + (i + 1), hh] : null).filter(Boolean);
-    const lastKey = items.length ? items[items.length - 1][0] : 'offer1';
+    const prevCards = offerData.o2Proposal ? psO2Cards(offerData.o2Proposal) : [];
+    const items = cards.map((hh, i) => hh ? ['offer' + (i + 1), hh] : prevCards[i] ? ['offer' + (i + 1), null] : null).filter(Boolean);
+    const full = items.filter(x => x[1]), lastKey = full.length ? full[full.length - 1][0] : 'offer1';
     const pp = packagePrices || {};
     const updated = { ...pp };
     ['offer1', 'offer2', 'offer3'].forEach(k => {
@@ -51778,7 +51782,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         cursor: 'pointer',
         fontFamily: "'Segoe UI Variable','Segoe UI','Inter',system-ui,sans-serif"
       }
-    }, offerData.o2Proposal ? "📷 o2-Vorschlag ergänzen" : "📷 o2-Vorschlag einlesen"), o2ImportOpen ? ReactDOM.createPortal( /*#__PURE__*/React.createElement(PsO2Import, {
+    }, offerData.o2Proposal ? "✏️ o2-Vorschlag bearbeiten" : "📷 o2-Vorschlag einlesen"), o2ImportOpen ? ReactDOM.createPortal( /*#__PURE__*/React.createElement(PsO2Import, {
       initial: offerData.o2Proposal,
       onApply: applyO2Proposal,
       onClose: () => setO2ImportOpen(false)
