@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.217';
+    window.APP_VERSION = '55.218';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -14278,7 +14278,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const [d, setD] = React.useState(() => {
     const i = initial || {};
     const arr = v => Array.isArray(v) ? v.map(x => ({ ...x })) : [];
-    return { internet: arr(i.internet), tarife: arr(i.tarife), geraete: arr(i.geraete), einmalig: i.einmalig || '', monatlich: i.monatlich || '', hinweis: i.hinweis || '' };
+    return { internet: arr(i.internet), tarife: arr(i.tarife), geraete: arr(i.geraete), einmalig: i.einmalig || '', monatlich: i.monatlich || '', hinweis: i.hinweis || '', beratungsId: i.beratungsId || '' };
   });
   const had = !!(initial && (['internet', 'tarife', 'geraete'].some(k => (initial[k] || []).length) || initial.einmalig || initial.monatlich));
   const dRef = React.useRef(d); dRef.current = d;
@@ -14473,6 +14473,12 @@ function PsO2Import({ onApply, onClose, initial }) {
         r = loc.r; txt = loc.txt;
       }
       setSeen(txt); lastRRef.current = r;
+      // v55.217: Zeigt der Bildschirm eine Beratungs-ID, wird sie gleich mit erkannt und spaeter beim
+      // Uebernehmen oben eingetragen (nur wenn dort noch keine steht – nichts wird ueberschrieben).
+      if (!dRef.current.beratungsId) {
+        const bm = /Beratungs[\s-]?[I1l][D0]\D{0,4}(\d[\d .\-]{2,20}\d)/i.exec(txt);
+        if (bm) r.beratungsId = bm[1].replace(/\D/g, '').slice(0, 15);
+      }
       // v55.214: gleicher Name, Preise vertauscht (schraeges Foto: Zeilen verrutscht) -> Preise des ersten gleichen Eintrags
       ['tarife', 'geraete', 'internet'].forEach(kind => (r[kind] || []).forEach((it, i, arr) => { const f = arr.find(x => x !== it && x.name === it.name && x.am && it.am && x.am[0] === it.am[1] && x.am[1] === it.am[0]); if (f && arr.indexOf(f) < i) it.am = f.am.slice(); }));
       sum = [].concat(r.tarife.map(x => x.name), r.geraete.map(x => psO2Pretty(x.name)), r.internet.map(x => x.name)).join(', ') || (r.einmalig || r.monatlich ? 'Kosten ' + (r.einmalig || '–') + ' / ' + (r.monatlich || '–') + ' €' : '');
@@ -14525,6 +14531,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         if (r.einmalig) n.einmalig = r.einmalig;
         if (r.monatlich) n.monatlich = r.monatlich;
         if (r.hinweis && !p.hinweis) n.hinweis = r.hinweis;
+        if (r.beratungsId && !p.beratungsId) n.beratungsId = r.beratungsId;
         return n;
       });
       const tip = ' – näher ran, gerade von vorne und noch einmal fotografieren.';
@@ -14601,7 +14608,7 @@ function PsO2Import({ onApply, onClose, initial }) {
     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-5 w-full', style: { maxWidth: 560, maxHeight: '94vh', overflowY: 'auto' } },
       h('div', { className: 'flex items-center justify-between gap-2' },
         h('div', { className: 'text-lg font-black text-[#0b1e42]' }, had ? '✏️ o2-Vorschlag bearbeiten' : '📷 o2-Vorschlag einlesen'),
-        any ? h('button', { onClick: () => { droppedRef.current = []; setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
+        any ? h('button', { onClick: () => { droppedRef.current = []; setBlur(null); setNote(''); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', beratungsId: '' }); }, disabled: !!busy, className: 'text-xs font-bold text-slate-500 underline disabled:opacity-50' }, 'Neu beginnen') : null),
       had ? h('div', { className: 'mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2 text-sm font-bold text-slate-700' }, 'Einträge unten direkt korrigieren oder ein weiteres Foto machen – dann „Ins Angebot übernehmen“: die Karten werden neu geschrieben.') : null,
       crop ? h(PsO2Crop, { key: 'crop', file: crop.file, hint: crop.auto ? 'Nicht gut lesbar – bitte nur den Bereich einrahmen (Ecken ziehen, schräg ist ok)' : '',
         onOk: p => { const st = crop.stage; setCrop(null); readPhoto(p, st); },
@@ -36049,6 +36056,7 @@ function App() {
     it.forEach(x => doImportBundle({ kind: 'html', html: x[1] }, x[0], true));
   };
   const applyO2Proposal = d => {
+    if (d.beratungsId && !beratungsId) setBeratungsId(d.beratungsId);
     const cards = psO2Cards(d);
     const prevCards = offerData.o2Proposal ? psO2Cards(offerData.o2Proposal) : [];
     const items = cards.map((hh, i) => hh ? ['offer' + (i + 1), hh] : prevCards[i] ? ['offer' + (i + 1), null] : null).filter(Boolean);
