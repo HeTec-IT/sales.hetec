@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.213';
+    window.APP_VERSION = '55.214';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13258,14 +13258,17 @@ function psO2Combine(res) {
     if (!L.length) return [];
     return L.slice().sort((a, b) => psO2ListQ(kind, b) - psO2ListQ(kind, a))[0];
   };
+  // v55.214: Durchgang mit Einmalig = Monatlich (schraeges Foto: Betrag in die falsche Zeile gerutscht) zaehlt nicht,
+  // wenn ein anderer Durchgang zwei verschiedene Summen gelesen hat
+  const twoDiff = res.some(x => x.einmalig && x.monatlich && x.einmalig !== x.monatlich);
   const vote = f => {
     const cnt = {};
-    res.forEach(x => { if (x[f]) cnt[x[f]] = (cnt[x[f]] || 0) + (x.byPos ? 2 : 1); });
+    res.forEach(x => { if (x[f] && !(twoDiff && (f === 'einmalig' || f === 'monatlich') && x.einmalig === x.monatlich)) cnt[x[f]] = (cnt[x[f]] || 0) + (x.byPos ? 2 : 1) + (x.einmalig && x.monatlich && x.einmalig !== x.monatlich ? 1 : 0); });
     let best = '', n = 0;
     res.forEach(x => { if (x[f] && cnt[x[f]] > n) { best = x[f]; n = cnt[x[f]]; } });
     return best;
   };
-  return { tarife: pick('tarife'), geraete: pick('geraete'), internet: pick('internet'), einmalig: vote('einmalig'), monatlich: vote('monatlich'), hinweis: vote('hinweis'), mixed: res.length > 1 };
+  return { tarife: pick('tarife'), geraete: pick('geraete'), internet: pick('internet'), einmalig: vote('einmalig'), monatlich: (() => { const e = vote('einmalig'), m = vote('monatlich'); if (!e || m !== e) return m; const alt = res.map(x => x.monatlich).filter(v => v && v !== e); return alt.length ? alt[0] : m; })(), hinweis: vote('hinweis'), mixed: res.length > 1 };
 }
 // Lokales Lesen: bis zu fuenf Durchgaenge. Die ersten beiden (Modus 3 und 4) schneiden den hellen Bildschirm aus dem Foto,
 // bringen ihn auf passende Groesse und lesen im Zeilenmodus – das liest Fotos vom Bildschirm am besten; Modus 4 schaerft
@@ -14249,6 +14252,27 @@ function PsO2Import({ onApply, onClose, initial }) {
       if (ok(psO2Check(cand))) { droppedRef.current = dr.slice(n); setD(cand); setNote('✓ Gleicher Eintrag stand mehrfach im Vorschlag – ergänzt, Summen stimmen jetzt.'); return; }
     }
   }, [d, busy]);
+  // v55.214: Fehlt genau der Preis eines schon gelesenen Eintrags (einmalig UND monatlich, z. B. 39,99 € / 19,99 € = O2 Mobile S),
+  // stand dieser Eintrag mehrfach im Vorschlag und wurde nur einmal erkannt -> automatisch ergaenzen, wenn es genau EINE Loesung gibt.
+  React.useEffect(() => {
+    if (busy || !(d.einmalig && d.monatlich)) return;
+    const ok = c => c && [c.e, c.m].every(x => !x || x.ok), c0 = psO2Check(d);
+    if (!c0 || ok(c0) || ![c0.e, c0.m].every(x => x && x.val >= Math.min.apply(null, x.calc))) return;
+    const sols = [];
+    ['tarife', 'geraete', 'internet'].forEach(kind => {
+      const seen = new Set();
+      d[kind].forEach((it, i) => {
+        const key = it.name + '|' + JSON.stringify(it.am || null); if (seen.has(key) || !it.am) return; seen.add(key);
+        for (let n = 1; n <= 3 && d[kind].length + n <= PS_O2_MAX[kind]; n++) {
+          const arr = d[kind].slice(); let last = i; arr.forEach((x, k) => { if (x.name === it.name) last = k; });
+          for (let k = 0; k < n; k++) arr.splice(last + 1, 0, { ...it });
+          const cand = { ...d, [kind]: arr };
+          if (ok(psO2Check(cand))) { sols.push({ cand, txt: it.name + (n > 1 ? ' (' + (n + 1) + '×)' : ' (2×)') }); break; }
+        }
+      });
+    });
+    if (sols.length === 1) { setD(sols[0].cand); setNote('✓ ' + sols[0].txt + ' stand mehrfach im Vorschlag – ergänzt, Summen stimmen jetzt.'); }
+  }, [d, busy]);
   const openScan = () => {
     setNote(''); scanPrevRef.current = null;
     psO2CamOpen({ scan: true, onShot: (file, st, f) => {
@@ -14382,6 +14406,8 @@ function PsO2Import({ onApply, onClose, initial }) {
         r = loc.r; txt = loc.txt;
       }
       setSeen(txt); lastRRef.current = r;
+      // v55.214: gleicher Name, Preise vertauscht (schraeges Foto: Zeilen verrutscht) -> Preise des ersten gleichen Eintrags
+      ['tarife', 'geraete', 'internet'].forEach(kind => (r[kind] || []).forEach((it, i, arr) => { const f = arr.find(x => x !== it && x.name === it.name && x.am && it.am && x.am[0] === it.am[1] && x.am[1] === it.am[0]); if (f && arr.indexOf(f) < i) it.am = f.am.slice(); }));
       sum = [].concat(r.tarife.map(x => x.name), r.geraete.map(x => psO2Pretty(x.name)), r.internet.map(x => x.name)).join(', ') || (r.einmalig || r.monatlich ? 'Kosten ' + (r.einmalig || '–') + ' / ' + (r.monatlich || '–') + ' €' : '');
       // Immer noch nicht gelesen, was die Taste verspricht? Dann (einmalig) den Rahmen aufmachen und den Ausschnitt noch einmal lesen.
       const miss = missOf(r);
@@ -14476,7 +14502,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const money = v => String(v || '').replace(/[^\d,.]/g, '');
   // v55.212: gleiche Eintraege direkt untereinander (z. B. 2x O2 Mobile S) als EIN Eintrag mit "2×" – Aenderungen gelten fuer alle,
   // ✕ nimmt einen weg, +1 fuegt einen dazu
-  const sameIt = (a, b) => a && b && a.name === b.name && (a.det || '') === (b.det || '') && (a.art || '') === (b.art || '') && JSON.stringify(a.am || null) === JSON.stringify(b.am || null);
+  const sameIt = (a, b) => a && b && a.name === b.name && (a.art || '') === (b.art || '') && JSON.stringify(a.am || null) === JSON.stringify(b.am || null); // Inhalte koennen durch Lesefehler leicht abweichen
   const groups = key => { const g = []; d[key].forEach((it, i) => { const l = g[g.length - 1]; if (l && sameIt(d[key][l[0]], it)) l.push(i); else g.push([i]); }); return g; };
   const setItemG = (key, idxs, f, v) => setD(p => ({ ...p, [key]: p[key].map((x, k) => idxs.indexOf(k) > -1 ? { ...x, [f]: v } : x) }));
   const item = (key, idxs, ph) => {
