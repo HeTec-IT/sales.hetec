@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.222';
+    window.APP_VERSION = '55.223';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -13368,8 +13368,25 @@ function psO2PlaceItems(r, words) {
 async function psO2ReadLocal(file, onMsg, isDone) {
   const modes = [3, 4, 0, 1, 2], res = [];
   let txt = '', r = null;
+  // v55.223: Ein Durchgang kann auf einem schwachen/ueberlasteten Geraet haengen bleiben (Arbeiter antwortet
+  // nie mehr) - dann blieb die App bisher für immer bei "Dritter Leseversuch ..." stehen. Jetzt bricht ein
+  // Durchgang nach 25 Sekunden ab, der Arbeiter wird verworfen und neu aufgebaut, und es geht mit einem
+  // leeren Ergebnis fuer diesen Durchgang weiter, statt die App einzufrieren.
+  const PS_O2_PASS_TIMEOUT_MS = 25000;
   const pass = async (mode, w) => {
-    const o = await psO2RecognizeFull(file, onMsg, mode, res.length, w);
+    let o;
+    try {
+      o = await Promise.race([
+        psO2RecognizeFull(file, onMsg, mode, res.length, w),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), PS_O2_PASS_TIMEOUT_MS))
+      ]);
+    } catch (e) {
+      console.warn('[O2 Lesen] Durchgang abgebrochen:', e && e.message || e);
+      try { w && w.terminate && w.terminate(); } catch (e2) {}
+      if (w === __psO2Worker) __psO2Worker = null;
+      if (w === __psO2Worker2) { __psO2Worker2 = null; try { __psO2Worker2 = await window.Tesseract.createWorker('deu', 1); } catch (e3) { __psO2Worker2 = null; } }
+      return { r: { tarife: [], geraete: [], internet: [], einmalig: '', monatlich: '' }, t: '' };
+    }
     const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
     psO2PlaceItems(cls, o.words); psO2PlaceItems(pos, o.words);
     const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
