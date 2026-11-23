@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.212';
+    window.APP_VERSION = '55.213';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12694,7 +12694,12 @@ function psO2Parse(text) {
   return out;
 }
 const psO2Key = s => String(s || '').toLowerCase().replace(/[^a-z0-9äöü]/g, '');
+// v55.213: Groesse (S/M/L/XL), Zahlen (GB, Jahr, Modell) und Modellwoerter muessen genau passen – "Mobile S" ist nicht "Mobile L"
+function psO2Marks(t) {
+  return (String(t || '').replace(/[()]/g, ' ').match(/\b(?:XXS|XS|S|M|L|XL|XXL|\d+|Pro|Max|Plus|Ultra|Mini|Unlimited|Fold|Flip|Lite|FE|Special|Basic|Boost|Start|Home)\b/gi) || []).map(x => x.toLowerCase()).map(x => x === '5' ? 's' : x).sort().join(' '); // "Mobile 5" = verlesenes S
+}
 function psO2Similar(a, b) {
+  if (psO2Marks(a) !== psO2Marks(b)) return false;
   a = psO2Key(a); b = psO2Key(b);
   if (!a || !b) return false;
   if (a === b || a.indexOf(b) > -1 || b.indexOf(a) > -1) return true;
