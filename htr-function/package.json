@@ -4,10 +4,15 @@
   "private": true,
   "description": "Handschrift zu Text fuer Pencil Selling (Cloud Function, Vertex AI EU)",
   "main": "index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "dependencies": {
     "firebase-admin": "^13.0.0",
     "firebase-functions": "^6.0.0",
     "google-auth-library": "^9.0.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.cjs"
   }
 }
