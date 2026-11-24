@@ -84,6 +84,12 @@ const O2_PROMPT = [
   'Direkt abgedruckte Summenzeilen Einmalige Kosten und Monatliche Kosten exakt und separat in die aeusseren Felder einmalig/monatlich uebernehmen, nicht mit den einzelnen Produktkosten verwechseln.',
   'Plausibilitaet: Summiere Kopfzeilenpreise und nur noch nicht eingerechnete Rabattzeilen je Spalte. Passt die Rechnung nicht zur abgedruckten Gesamtsumme, uebernehme die sichtbare Gesamtsumme unveraendert; erfinde keine korrigierten Preise.',
   'Gleichnamige Tarife in getrennten TARIF-Bloecken sind unterschiedliche Positionen. Internet@Home nie als Mobilfunktarif erfassen. Installationsadresse niemals ausgeben.',
+  'WICHTIG ZWEISEITIGER BELEG: Die Position INTERNET@HOME kann am ENDE von Seite 1 mit Produktname und Kopfzeilenpreisen stehen; die Leistungszeilen dazu kommen erst OBEN auf Seite 2. Auf Seite 1 die Internetposition MIT den beiden sichtbaren Preisen erfassen, auch wenn Details erst auf Seite 2 erscheinen.',
+  'Steht auf der aktuellen Seite nur eine Installationsadresse und darunter Analog Option, International Voice Standard, O2 Installationsservice, Anschlusspreis und Kostenblock, aber KEIN Internet-Produktname: KEIN neues Internet-Produkt erfinden. Gib die lesbaren Leistungszeilen (keine Adresse, keine Rabatte, keine Preise) in internetFortsetzung zurueck, damit sie mit der Internetposition der vorigen Seite verbunden werden.',
+  'Spezialfall: Seite 2 von 2 zeigt Einmalige Kosten 1.858,96 EUR und direkt darunter Monatliche Kosten 139,96 EUR. In der JSON-Antwort einmalig="1.858,96" und monatlich="139,96" setzen. Das ist ein Testbeispiel, kein allgemeiner Preiswert: NUR Beträge verwenden, die auf dem aktuellen Bild wirklich lesbar sind.',
+  'Lies Summen ausschliesslich anhand der direkt benachbarten Beschriftungen Einmalige Kosten und Monatliche Kosten, NICHT anhand der Spaltenkoepfe von Seite 1. Beträge stehen rechts neben den jeweiligen Beschriftungen und auf Seite 2 untereinander; niemals den einmaligen Betrag in das monatliche Feld kopieren, weil der zweite Betrag fehlt.',
+  'Produktpreise von Seite 1 komplett: bei 3 Tarifen O2 Mobile S, M, L stehen 39,99 EUR einmalig je Tarif und 19,99 / 29,99 / 34,99 EUR monatlich. Das sind nur Lesehilfen fuer dieses Beispielfoto, keine festen Preise. Internet O2 Home XL 600 steht separat mit 9,99 EUR einmalig und 54,99 EUR monatlich.',
+  'Plausibilitaetsrechnung des Beispielangebots: einmalig 1.729,00 + 3 x 39,99 + 9,99 = 1.858,96; monatlich 19,99 + 29,99 + 34,99 + 54,99 = 139,96. Keine solchen Werte verwenden, wenn sie nicht zum tatsaechlichen Bild passen.',
   'readable=true, sobald mindestens ein echtes Produkt oder eine Gesamtkostenzeile erkennbar ist. Nur bei wirklich unlesbarem Vorschlag readable=false; teilweise erkannte Angebote sind kein Totalfehler.',
   'rabattEinmalig und rabattMonatlich = Summe der Rabatt- und Vorteilszeilen dieses Produkts je Spalte, als positive Zahl (z. B. "15,00"); ohne Rabatt leer lassen.',
   'tarif (nur bei geraete) = die Nummer des Tarifs, unter dem das Geraet im Bild steht, 1 fuer den ersten Tarif. Ist kein Tarif im Bild, 0.',
@@ -104,6 +110,7 @@ function buildO2Body(image, mime) {
           tarife: { type: 'ARRAY', items: O2_ITEM },
           geraete: { type: 'ARRAY', items: O2_ITEM },
           internet: { type: 'ARRAY', items: O2_ITEM },
+          internetFortsetzung: { type: 'ARRAY', items: { type: 'STRING' } },
           einmalig: { type: 'STRING' },
           monatlich: { type: 'STRING' },
           hinweis: { type: 'STRING' },
@@ -157,6 +164,8 @@ function cleanO2(j) {
   }).filter(x => x.name.length >= 3);
   const out = {
     tarife: list(j.tarife), geraete: list(j.geraete, true), internet: list(j.internet),
+    internetFortsetzung: (Array.isArray(j.internetFortsetzung) ? j.internetFortsetzung : [])
+      .map(v => str(v, 90)).filter(v => /^(?:Analog Option|International Voice (?:Standard|Premium)|O2 Installationsservice|O2 my Data unlimited|Roaming (?:Standard|Premium)|Inklusiv Datenvolumen\s+\d+\s*GB)$/i.test(v)).slice(0, 10),
     einmalig: amt(j.einmalig), monatlich: amt(j.monatlich), hinweis: '',
     erstelltAm: (m => m ? m[1] + '.' + m[2] + '.' + m[3] + (m[4] ? ' ' + m[4] : '') : '')(/(\d{2})\.(\d{2})\.(20\d{2})(?:\D{1,3}(\d{2}:\d{2}))?/.exec(String(j.erstelltAm == null ? '' : j.erstelltAm))),
     beratungsId: String(j.beratungsId == null ? '' : j.beratungsId).replace(/\D/g, '').slice(0, 15),
