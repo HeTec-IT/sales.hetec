@@ -24,6 +24,6 @@ test('page 2 continuation retains service features but not an address', () => {
 });
 test('model instruction mentions continuation and independent monthly amount', () => {
   assert.match(source, /internetFortsetzung zurueck/);
-  assert.match(source, /1\.858,96/);
-  assert.match(source, /Monatliche Kosten 139,96/);
+  assert.match(source, /Bei Seite 2 von 2 stehen die Gesamtkosten/);
+  assert.match(source, /niemals den anderen Betrag kopieren/);
 });
