@@ -12923,6 +12923,39 @@ function psO2FillAm(a, b) {
 }
 // Antwort des Dienstes in dieselbe Form bringen, die auch der eigene Parser liefert (Reihenfolge ueber idx:
 // so landet jedes Handy spaeter bei seinem Tarif).
+// v55.230: Mehrseitiger Beleg: Internet@Home-Details koennen auf Seite 2 ohne Produktkopf beginnen.
+function psO2Page2InternetDetails(txt) {
+  const lines = String(txt || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const begin = lines.findIndex(x => /Installationsadresse/i.test(x));
+  if (begin < 0 || !/(Einmalige|Monatliche)\s*Kosten/i.test(txt)) return [];
+  const details = [];
+  for (let i = begin + 1; i < Math.min(lines.length, begin + 16); i++) {
+    const x = lines[i];
+    if (/(Einmalige|Monatliche)\s*Kosten|^Aktuell\b|Seite\s+\d+\s+von/i.test(x)) break;
+    const d = psO2Detail(x);
+    if (d && !details.some(y => psO2Similar(y, d))) details.push(d);
+  }
+  return details.slice(0, 10);
+}
+// Schutz gegen falsche Zuordnung einer hohen Einmalsumme zum Monatsbetrag.
+function psO2SuspectTotals(r) {
+  return !!(r && r.einmalig && r.monatlich && r.einmalig === r.monatlich && (psO2Cents(r.einmalig) || 0) >= 100000);
+}
+function psO2CloudNeedsLocal(r, stage, previous) {
+  if (!r || (stage !== "ganz" && stage !== "scan")) return false;
+  const cats = ["tarife", "geraete", "internet"].filter(k => (r[k] || []).length).length;
+  const priceMissing = ["tarife", "internet"].some(k => (r[k] || []).some(it => !it.am || it.am[0] == null || it.am[1] == null));
+  const continuation = !!(previous && previous.internet && previous.internet.length && !r.internet.length && (r.einmalig || r.monatlich));
+  return psO2SuspectTotals(r) || priceMissing || continuation || (cats < 2 && !(r.einmalig || r.monatlich));
+}
+function psO2JoinDetails(oldText, additions) {
+  const all = String(oldText || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  (additions || []).forEach(x => {
+    const detail = psO2Detail(x);
+    if (detail && !all.some(y => psO2Similar(y, detail))) all.push(detail);
+  });
+  return all.slice(0, 12).join("\n");
+}
 function psO2CloudShape(d) {
   const it = (x, idx) => ({
     name: String(x.name || '').trim(), idx, art: '',
@@ -12935,6 +12968,7 @@ function psO2CloudShape(d) {
     geraete: (d.geraete || []).map(x => it(x, x.tarif > 0 ? (x.tarif - 1) * 10 + 5 : -1)),
     internet: (d.internet || []).map((x, i) => it(x, 1000 + i)),
     einmalig: d.einmalig || '', monatlich: d.monatlich || '', hinweis: '',
+    internetFortsetzung: Array.isArray(d.internetFortsetzung) ? d.internetFortsetzung.filter(x => typeof x === 'string').slice(0, 10) : [],
     beratungsId: String(d.beratungsId || '').replace(/\D/g, '').slice(0, 15), offerTs: psO2OfferTs(d.erstelltAm)
   };
 }
@@ -14898,7 +14932,8 @@ function PsO2Import({ onApply, onClose, initial }) {
             // Deshalb bei duennem Ergebnis zusaetzlich das Geraet lesen lassen und Fehlendes ergaenzen.
             if (stage === 'ganz' || stage === 'scan') {
               const catN = ['tarife', 'geraete', 'internet'].filter(k => (cd[k] || []).length).length;
-              cloudThin = catN < 2 && !(cd.einmalig || cd.monatlich);
+              cloudThin = psO2SuspectTotals(cd) || psO2CloudNeedsLocal(cd, stage, dRef.current);
+              if (psO2SuspectTotals(cd)) cd.monatlich = ''; // hohe Einmalsumme ist keine Monatsrate
             }
           }
         } catch (e) { if (!live()) return sum; console.warn('[O2 Dienst]', e && e.psKind || e && e.message || 'Fehler'); cloudFail = e && e.psKind || ''; if (e && e.name === 'TypeError') __psO2CloudOff = Date.now() + 120000; }
@@ -14924,11 +14959,15 @@ function PsO2Import({ onApply, onClose, initial }) {
             const rc = r[k], lc = loc.r[k];
             if (lc.length > rc.length) r[k] = lc;
             else if (lc.length === rc.length && lc.length > 0 && cut(rc, lc)) r[k] = lc;
+            else if (lc.length) r[k] = psO2FillPrices(rc, [{ [k]: rc }, { [k]: lc }], k);
           });
           if (!r.einmalig && loc.r.einmalig) r.einmalig = loc.r.einmalig;
           if (!r.monatlich && loc.r.monatlich) r.monatlich = loc.r.monatlich;
+          if (!r.internetFortsetzung || !r.internetFortsetzung.length) r.internetFortsetzung = loc.r.internetFortsetzung || [];
         }
       }
+      if (psO2SuspectTotals(r)) r.monatlich = '';
+      const internetContinue = [].concat(r.internetFortsetzung || [], psO2Page2InternetDetails(txt));
       setSeen(txt); lastRRef.current = r;
       // v55.217: Zeigt der Bildschirm eine Beratungs-ID, wird sie gleich mit erkannt und spaeter beim
       // Uebernehmen oben eingetragen (nur wenn dort noch keine steht – nichts wird ueberschrieben).
@@ -14990,7 +15029,9 @@ function PsO2Import({ onApply, onClose, initial }) {
       const totTake = { einmalig: false, monatlich: false }, totConf = [];
       [['einmalig', 'e'], ['monatlich', 'm']].forEach(([f, c]) => {
         if (!r[f]) return;
-        if (!cur[f] || cur[f] === r[f] || stage === 'kosten') { totTake[f] = true; return; }
+        if (!cur[f] || cur[f] === r[f] || stage === 'kosten' ||
+            (f === 'monatlich' && cur.einmalig === cur.monatlich &&
+             (psO2Cents(cur.einmalig) || 0) >= 100000 && r.einmalig === cur.einmalig && r.monatlich !== r.einmalig)) { totTake[f] = true; return; }
         const cN = psO2Check(r), cO = psO2Check(cur);
         if (cN && cN[c] && cN[c].ok && !(cO && cO[c] && cO[c].ok)) totTake[f] = true; else totConf.push(f);
       });
@@ -15004,6 +15045,12 @@ function PsO2Import({ onApply, onClose, initial }) {
         const tOf = it => stage === 'scan' ? { ...it, t: Math.max(0, p.tarife.length - ov.tarife) + r.tarife.filter(x => x.idx < it.idx).length } : one ? { ...it, t: r.tarife.filter(x => x.idx < it.idx).length } : it;
         if (r.geraete.length) n.geraete = merge('geraete', p).map(it => it.det !== undefined ? it : conv('geraete', tOf(it)));
         if (r.internet.length) n.internet = merge('internet', p).map(it => it.det !== undefined ? it : conv('internet', it));
+        // Internet@Home-Block von Seite 1: Fortsetzungszeilen von Seite 2 anhängen.
+        if (internetContinue.length && n.internet.length && !r.internet.length) {
+          n.internet = n.internet.slice();
+          const k = n.internet.length - 1, it = n.internet[k];
+          n.internet[k] = { ...it, det: psO2JoinDetails(it.det, internetContinue) };
+        }
         if (totTake.einmalig) n.einmalig = r.einmalig;
         if (totTake.monatlich) n.monatlich = r.monatlich;
         if (r.hinweis && !p.hinweis) n.hinweis = r.hinweis;
