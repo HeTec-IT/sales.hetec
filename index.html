@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.227';
+    window.APP_VERSION = '55.228';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12465,7 +12465,7 @@ const PS_O2_ARTEN = /(Vertragsverl[äa]ngerung|Neuvertrag|Neukunde|Tarifwechsel|
 const PS_O2_BRANDS = /(APPLE|IPHONE|IPAD|SAMSUNG|GALAXY|GOOGLE|PIXEL|XIAOMI|REDMI|MOTOROLA|NOKIA|OPPO|HONOR|HUAWEI|WATCH|AIRPODS|FAIRPHONE|ONEPLUS|SONY|XPERIA|NOTHING|EMPORIA|DORO)/i;
 const PS_O2_HEAD = [
   ['internet', /(INTERNET\s*@?\s*HOME|^DSL$|KABEL|FESTNETZ|GLASFASER|HOMESPOT)/i],
-  ['tarife', /^(TARIF|MOBILFUNK)$/i],
+  ['tarife', /^(TARI[FE]|MOBILFUNK)$/i],
   ['geraete', /^(HANDY|SMARTPHONE|TABLET|GER[ÄA]T|HARDWARE|ZUBEH[ÖO]R|SMARTWATCH)$/i]
 ];
 const PS_O2_VOCAB = ['International', 'Voice', 'Standard', 'Roaming', 'Datenvolumen', 'Inklusiv', 'Unbegrenztes', 'National', 'Flatrate', 'Mobilfunknetze', 'Installationsservice', 'unlimited', 'MyHandy', 'Monate', 'Router', 'Versand', 'Kombivorteil', 'Analog', 'Unlimited', 'Mobile', 'Telefonie'];
@@ -12756,7 +12756,7 @@ function psO2Parse(text) {
   }
   // Ohne Kopfzeilen (z. B. Uebersicht "Für Sie"): o2-Tarife und Geraete am Namen erkennen
   if (!out.internet.length) lines.forEach((l, i) => { if (PS_O2_NAME.internet.test(l)) add('internet', i - 1, l, i + 1, true); });
-  if (!out.tarife.length) lines.forEach((l, i) => { if (PS_O2_NAME.tarife.test(l) && !/Activate|Bestandskunde|Beratung|VO:/i.test(l)) add('tarife', i - 1, l, i + 1, true); });
+  lines.forEach((l, i) => { if ((!out.hdr.tarife || psO2Amounts(l).length) && PS_O2_NAME.tarife.test(l) && !/Activate|Bestandskunde|Beratung|VO:/i.test(l)) add('tarife', i - 1, l, i + 1, true); });
   if (!out.geraete.length) lines.forEach((l, i) => {
     if (!/My\s?Handy/i.test(l)) return;
     for (let k = i - 1; k >= Math.max(0, i - 2); k--) if (!psO2HeadKind(lines[k]) && !/My\s?Handy/i.test(lines[k]) && lines[k].replace(/[^A-Za-zÄÖÜäöü]/g, '').length >= 6) { add('geraete', k, lines[k], i, true); break; }
@@ -13109,7 +13109,7 @@ async function psO2Prepare(src, v) {
   // ungleich ausgeleuchtet (Sichtschutzfolie, Spiegelung, schraeg): Hintergrund angleichen, dabei Rauschen leicht glaetten
   if (psO2Flatten(g, W, H, false)) smooth();
   for (let k = 0; k < (v.blur || 0); k++) smooth();
-  if (v.adapt) {
+  if (v.adapt || v.paper) {
     // v55.224: lokaler Schwellwert (Mittel im Fenster ~ 1/24 der Breite): Text ist dunkler als seine Umgebung - egal wie hell die Stelle ist
     const iw = W + 1, I = new Float64Array(iw * (H + 1));
     for (let y = 0; y < H; y++) { let rs = 0; for (let xx = 0; xx < W; xx++) { rs += g[y * W + xx]; I[(y + 1) * iw + xx + 1] = I[y * iw + xx + 1] + rs; } }
@@ -13119,7 +13119,8 @@ async function psO2Prepare(src, v) {
       for (let xx = 0; xx < W; xx++) {
         const x0 = Math.max(0, xx - r), x1 = Math.min(W, xx + r + 1);
         const mean = (I[y1 * iw + x1] - I[y0 * iw + x1] - I[y1 * iw + x0] + I[y0 * iw + x0]) / ((x1 - x0) * (y1 - y0));
-        out[y * W + xx] = g[y * W + xx] < mean * 0.88 ? 0 : 255;
+        const pixel = g[y * W + xx];
+        out[y * W + xx] = v.paper ? 251 + 3 * (pixel - mean) : pixel < mean * 0.88 ? 0 : 255;
       }
     }
     for (let i = 0, p = 0; i < n; i++, p += 4) { d[p] = d[p + 1] = d[p + 2] = out[i]; d[p + 3] = 255; }
@@ -13152,7 +13153,7 @@ const PS_O2_T = { script: 15000, workerCold: 30000, workerWarm: 12000, pass: 250
 // Reihenfolge nach Messung an echten/verschlechterten Fotos: 2. Durchgang = entrauscht (Moire/Kompression), 3. = entrauscht + lokaler Schwellwert (Spiegelung).
 // Liefert Durchgang 1 nichts und dafuer sehr viele Schein-Woerter (Reflex/Moire/Rauschen), kommt der Schwellwert-Durchgang direkt als 2.
 const PS_O2_PLAN_ADAPT = { side: 1600, blur: 1, adapt: true, psm: 6 }; // entrauscht + lokaler Schwellwert: rettet Spiegelungen/Reflexe, an denen die globale Binarisierung scheitert
-const PS_O2_PLAN = [{ side: 1600, blur: 0, psm: 6 }, { side: 2000, blur: 2, psm: 6 }, PS_O2_PLAN_ADAPT];
+const PS_O2_PLAN = [{ side: 1600, blur: 0, psm: 6 }, { side: 1280, blur: 2, paper: true, psm: 11 }, PS_O2_PLAN_ADAPT];
 const PS_O2_PLAN_LIGHT = { side: 1200, blur: 1, psm: 6 };
 // v55.227: Moiré (Streifen beim Foto vom Monitor): ungeglaettet wird daraus Zeichensalat (viele "Woerter", nichts zuordenbar) -> leicht geglaettet, gross
 const PS_O2_PLAN_MOIRE = { side: 2000, blur: 1, psm: 6 };
@@ -13239,7 +13240,7 @@ async function psO2Pass(job, src, v, T, left, say, hooks) {
   job.inRecog = false;
   chk();
   const data = r && r.data ? r.data : {};
-  return { text: data.text || '', words: psO2WordsOf(data), ms: Date.now() - t0 };
+  return { sparse: v.psm === 11, text: data.text || '', words: psO2WordsOf(data), ms: Date.now() - t0 };
 }
 const psO2Esc = s => String(s || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 // Digitale Angebotskarte (HTML, scharf im PDF) aus den gepruefen Werten
@@ -13399,7 +13400,7 @@ function psO2WordsOf(data) {
   }
   return out;
 }
-function psO2WordsToText(words) {
+function psO2WordsToText(words, sparse) {
   if (!words || words.length < 8) return '';
   const byLn = new Map();
   words.forEach(w => { if (!byLn.has(w.ln)) byLn.set(w.ln, []); byLn.get(w.ln).push(w); });
@@ -13414,6 +13415,41 @@ function psO2WordsToText(words) {
   const mean = v => v.reduce((s, x) => s + x, 0) / v.length;
   const isE = t => /^\W*\w{0,3}mal[iıl1|]g\W*$/i.test(t), isM = t => /^\W*\w{0,2}onatl[iıl1|]ch\W*$/i.test(t);
   const reE = /(Einmalige|alige)\s*Kosten/i, reM = /(Monatliche|natliche)\s*Kosten/i;
+  // Sparse OCR liefert Beschriftungen und Beträge als getrennte Zeilen. Die
+  // Überschriften liefern Spalten und Neigung unabhängig von der Bildgröße.
+  if (sparse) {
+    const e = words.find(w => isE(w.t));
+    let m = e && words.find(w => isM(w.t) && Math.abs(w.y0 - e.y0) < 2 * medH);
+    if (e && !m) {
+      // Unlesbarer Monatsspaltenkopf: bestätige seine Lage durch wiederholte Beträge darunter.
+      m = words.find(w => w.x0 > e.x1 + 3 * medH && Math.abs(w.y0 - e.y0) < 2 * medH &&
+        words.filter(v => AMT.test(v.t) && v.y0 > w.y1 && Math.abs(v.x1 - w.x1) < Math.min((w.x0 - e.x0) / 2, 6 * medH)).length >= 2);
+    }
+    if (e && m && m.x0 - e.x0 > 4 * medH && Math.abs(m.y0 - e.y0) < 2 * medH) {
+      const span = m.x0 - e.x0;
+      const slope = Math.max(-0.08, Math.min(0.08, (m.y0 - e.y0) / span));
+      const anchors = lines.filter(ws => ws[0].x0 < e.x0 - span &&
+        (Object.values(PS_O2_NAME).some(re => re.test(txt(ws))) ||
+        /Rabatt|Anschluss|Grundgeb|Einmalige Kosten|Monatliche Kosten|Vorteil|Gutschrift/i.test(txt(ws))));
+      const joined = new Set();
+      const eLine = lines.find(row => row.includes(e)), mLine = lines.find(row => row.includes(m));
+      if (!isM(m.t)) mLine[mLine.indexOf(m)] = Object.assign({}, m, { t: 'monatlich' });
+      if (eLine !== mLine) { eLine.push(...mLine); joined.add(mLine); }
+      for (const ws of lines) {
+        if (ws[0].x0 < e.x0 - span || !/^[-−–+ ]*\d[\d.,]*\s*[€£*]*$/.test(txt(ws)) || !AMT.test(txt(ws))) continue;
+        let target, best = 1.65 * medH;
+        for (const row of anchors) {
+          const dy = Math.abs(yc(ws) - yc(row.filter(w => w.x0 < e.x0 - span)) - slope * (ws[0].x0 - row[0].x0));
+          if (dy < best) { best = dy; target = row; }
+        }
+        if (target) { target.push(...ws); joined.add(ws); }
+      }
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (joined.has(lines[i])) lines.splice(i, 1);
+        else lines[i].sort((a, b) => a.x0 - b.x0);
+      }
+    }
+  }
   const firstHead = lines.findIndex(ws => psO2HeadKind(txt(ws)));
   const costIdx = lines.findIndex(ws => reE.test(txt(ws)) || reM.test(txt(ws)));
   // Rechter Rand jedes Preises (Betrag samt "€"/"*" dahinter) – Preise stehen rechtsbuendig in ihrer Spalte
@@ -13616,7 +13652,24 @@ function psO2Combine(res) {
     res.forEach(x => { if (x[f] && cnt[x[f]] > n) { best = x[f]; n = cnt[x[f]]; } });
     return best;
   };
-  const fill = kind => psO2FillPrices(pick(kind), res, kind);
+  const kinds = ['geraete', 'tarife', 'internet'];
+  const chosen = Object.fromEntries(kinds.map(k => [k, pick(k)]));
+  const einmalig = vote('einmalig'), monatlich = vote('monatlich');
+  // Ein Durchgang mit beiden exakt passenden Summen liefert zusammengehörige
+  // Preise und Rabatte. Lesbarere Namen können aus den übrigen Läufen stammen.
+  const verified = res.find(x => {
+    if (!einmalig || !monatlich || x.einmalig !== einmalig || x.monatlich !== monatlich ||
+        !kinds.every(k => x[k].length === chosen[k].length)) return false;
+    const c = psO2Check(x);
+    return c && [c.e, c.m].every(v => v && v.calc.includes(v.val));
+  });
+  const fill = kind => {
+    if (!verified) return psO2FillPrices(chosen[kind], res, kind);
+    return verified[kind].map((ref, i) => {
+      const it = chosen[kind][i];
+      return psO2Similar(it.name, ref.name) ? Object.assign({}, it, { am: ref.am, rb: ref.rb }) : ref;
+    });
+  };
   const hdr = { tarife: 0, geraete: 0, internet: 0 };
   res.forEach(x => { if (x.hdr) Object.keys(hdr).forEach(k => { hdr[k] = Math.max(hdr[k], x.hdr[k] || 0); }); });
   return { tarife: fill('tarife'), geraete: fill('geraete'), internet: fill('internet'), hdr, einmalig: vote('einmalig'), monatlich: (() => { const e = vote('einmalig'), m = vote('monatlich'); if (!e || m !== e) return m; const alt = res.map(x => x.monatlich).filter(v => v && v !== e); return alt.length ? alt[0] : m; })(), hinweis: vote('hinweis'), mixed: res.length > 1 };
@@ -13691,7 +13744,7 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
   const take = o => {
     say('Produkte und Tarife werden zugeordnet …');
     rawAll += '\n' + (o.text || '');
-    const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
+    const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words, o.sparse), pos = pt ? psO2Parse(pt) : null;
     psO2PlaceItems(cls, o.words); psO2PlaceItems(pos, o.words);
     const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
     // Nur der untere Teil des Belegs im Bild: die Spaltenzuordnung nach Position kann die Summen vertauschen -> dann gelten die Summen der Zeilenauswertung
@@ -13720,7 +13773,7 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
         const o = await psO2Pass(job, src, plan[k], T, left(), say, H);
         lastMs = o.ms; take(o);
         // v55.227: Zeichensalat im 1. Durchgang = Moiré oder Spiegelung: bei Spiegelung zuerst lokaler Schwellwert, sonst zuerst geglaettet (Moiré)
-        if (k === 0 && psO2Score(r) <= 0 && o.words.length > 350 && plan.length > 2) plan.splice(1, plan.length, ...(src.glare ? [PS_O2_PLAN_ADAPT] : [PS_O2_PLAN_MOIRE, PS_O2_PLAN_ADAPT, PS_O2_PLAN[1]]));
+        if (k === 0 && psO2Score(r) <= 0 && o.words.length > 350 && plan.length > 2) plan.splice(1, plan.length, PS_O2_PLAN[1], src.glare ? PS_O2_PLAN_ADAPT : PS_O2_PLAN_MOIRE);
       } catch (e) {
         if (e && e.psCancel) { fail = 'cancelled'; break; }
         const kind = (e && e.psKind) || 'engine';
@@ -15043,6 +15096,9 @@ function PsO2Import({ onApply, onClose, initial }) {
         h('button', { onClick: () => blockMode ? openBlocks('kosten') : pick(stage, false), disabled: !!busy, className: sBtn }, label),
         blockMode ? null : h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
     body);
+  const photoActions = more => h('div', { className: 'grid grid-cols-2 gap-2 mt-2' },
+    h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' py-3' }, more ? '📷 Weiteres Foto' : '📷 Vorschlag fotografieren'),
+    h('button', { onClick: () => pick('ganz', true), disabled: !!busy, className: gBtn + ' py-3' }, 'Foto hochladen'));
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
   // v55.215: Tippen neben das Fenster schliesst NICHT mehr (Fotos gingen verloren) – nur "Abbrechen" (mit Rueckfrage) oder "Uebernehmen"
   return h('div', { className: 'fixed inset-0 flex items-center justify-center p-3', style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' } },
@@ -15069,7 +15125,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         : blockMode
         ? 'Je Block ein Foto (Tarif, Handy, Internet@Home), zuletzt der Kostenblock. Die Kamera bleibt offen, bis du „Fertig“ tippst. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'
         : 'Den Vorschlag gerade von vorne fotografieren, so groß wie möglich im Rahmen. Geht er über mehrere Seiten: weiterblättern und noch ein Foto. Karte 1 = Tarif 1 + Handy 1 · Karte 2 = alle weiteren · Karte 3 = Internet@Home.'),
-      !quick && !any ? h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📷 Vorschlag fotografieren') : null,
+      !quick && !any ? photoActions(false) : null,
       !quick && any && !busy ? (() => {
         // Stand nach dem Foto: Kostenblock da und Summen stimmig -> "Fertig" gross; sonst "Weiteres Foto" gross
         const c = psO2Check(d), hasK = !!(d.einmalig && d.monatlich), okS = !!c && [c.e, c.m].every(x => !x || x.ok), done2 = hasK && (okS || !c);
@@ -15078,8 +15134,8 @@ function PsO2Import({ onApply, onClose, initial }) {
         const msg = !d.einmalig && !d.monatlich ? 'Gesamtkosten fehlen noch – Kostenblock fotografieren (Liste am PC weiterscrollen) oder unten eintragen.' : !hasK ? 'Nur die ' + (d.einmalig ? 'einmaligen' : 'monatlichen') + ' Gesamtkosten gelesen – die ' + (d.einmalig ? 'monatlichen' : 'einmaligen') + ' bitte ergänzen.' : okS ? '✓ Summen stimmen – fertig.' : inc ? '⚠ Einige Angaben benötigen eine Kontrolle: bei einem Tarif fehlt der Einzelpreis, die gelesene Summe bleibt stehen.' : more ? '⚠ Es fehlen noch Einträge (Summe höher als gelesen) – Liste am PC weiterscrollen und weiteres Foto machen.' : c ? '⚠ Summen passen noch nicht – bitte unten prüfen.' : 'Kostenblock gelesen – bitte kurz prüfen.';
         return h('div', { className: 'mt-3 rounded-xl border-2 p-3 ' + (done2 && okS ? 'border-green-500 bg-green-50' : 'border-blue-300 bg-blue-50') },
           h('div', { className: 'text-sm font-black ' + (done2 && okS ? 'text-green-800' : 'text-slate-800') }, msg),
+          photoActions(true),
           h('div', { className: 'flex gap-2 mt-2' },
-            h('button', { onClick: () => pick('ganz', false), className: (done2 ? gBtn : sBtn) + ' flex-1 py-3 text-base' }, '📷 Weiteres Foto'),
             h('button', { onClick: () => onApply(d), className: (done2 ? sBtn : gBtn) + ' flex-1 py-3 text-base' }, '✓ Fertig – übernehmen')));
       })() : null,
       snipMode && any ? h('button', { onClick: sendQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, '📲 QR-Code fürs Tablet') : null,
@@ -15116,8 +15172,8 @@ function PsO2Import({ onApply, onClose, initial }) {
       sec('INTERNET@HOME', d.internet.length, 'internet', d.internet.length ? '📷 + Internet@Home' : '📷 Internet@Home', d.internet.length >= PS_O2_MAX.internet, groups('internet').map(g => item('internet', g, 'Internet@Home')), PS_O2_MAX.internet),
       sec('KOSTENBLOCK', 0, 'kosten', '📷 Kosten', false, h('div', null,
         h('div', { className: 'flex gap-3 mt-2' },
-          h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIGE KOSTEN (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), '0,00', true)),
-          h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICHE KOSTEN (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), '0,00', true))),
+          h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'EINMALIGE KOSTEN (€)'), inp(d.einmalig, v => setD(p => ({ ...p, einmalig: money(v) })), 'Offen', true)),
+          h('div', { className: 'flex-1' }, h('div', { className: 'text-[11px] font-black text-slate-500 mb-1' }, 'MONATLICHE KOSTEN (€)'), inp(d.monatlich, v => setD(p => ({ ...p, monatlich: money(v) })), 'Offen', true))),
         (() => {
           const sg = psO2Suggest(d);
           return sg ? h('div', { className: 'mt-2 flex flex-wrap items-center gap-1 text-xs font-bold text-amber-800' },
