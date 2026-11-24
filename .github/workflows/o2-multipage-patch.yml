@@ -1,0 +1,38 @@
+name: O2 multipage targeted frontend patch
+on:
+  push:
+    branches:
+      - fix/o2-multipage-costs-20261124
+    paths:
+      - 'scripts/patch-o2-multipage.cjs'
+      - 'scripts/test-o2-multipage.cjs'
+      - '.github/workflows/o2-multipage-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply targeted edits to monolithic HTML
+        run: node scripts/patch-o2-multipage.cjs
+      - name: Test multi-page parsing and total validation
+        run: node --test scripts/test-o2-multipage.cjs
+      - name: Check whitespace
+        run: git diff --check
+      - name: Commit index.html and service worker only on the feature branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          if ! git diff --cached --quiet; then
+            git commit -m "fix(o2-ui): correct multi-page internet continuation and totals"
+            git push origin HEAD:fix/o2-multipage-costs-20261124
+          fi
