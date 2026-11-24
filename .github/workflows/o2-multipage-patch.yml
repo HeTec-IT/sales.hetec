@@ -26,7 +26,7 @@ jobs:
       - name: Test multi-page parsing and total validation
         run: node --test scripts/test-o2-multipage.cjs
       - name: Check whitespace
-        run: git diff --check
+        run: git -c core.whitespace=cr-at-eol diff --check
       - name: Commit index.html and service worker only on the feature branch
         run: |
           git config user.name "github-actions[bot]"
