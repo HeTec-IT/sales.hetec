@@ -175,3 +175,26 @@ test('v55.227: Preise und Rabatte werden aus anderen Durchgaengen ergaenzt (auch
   assert.deepEqual(plain(f[0].am), ['39,99', '29,99']);
   assert.equal(f[0].rb.m, -1500);
 });
+
+test('Monitorfoto: getrennte Textblöcke an beiden Preisüberschriften ausrichten', () => {
+  const words = [];
+  function block(t, x, y, width) {
+    words.push({ t, x0: x, y0: y, x1: x + width, y1: y + 18, ln: words.length });
+  }
+  block('einmalig', 800, 40, 70);
+  block('monatlich', 1000, 42, 80);
+  block('TARIF', 90, 120, 55);
+  block('O2 Mobile M Plus (2026)', 90, 160, 220);
+  block('39,99', 820, 166, 50);
+  block('29,99', 1020, 168, 60);
+  block('Plus-Rabatt auf die monatliche Grundgebühr', 90, 230, 340);
+  block('15,00', 1020, 240, 60);
+  block('Einmalige Kosten', 60, 320, 165);
+  block('39,99', 820, 327, 50);
+  block('Monatliche Kosten', 60, 395, 175);
+  block('14,99', 1020, 408, 60);
+  const r = X.psO2Parse(X.psO2WordsToText(words, true));
+  assert.deepEqual(plain(r.tarife[0].am), ['39,99', '29,99']);
+  assert.equal(r.tarife[0].rb.m, -1500);
+  assert.equal(r.monatlich, '14,99');
+});
