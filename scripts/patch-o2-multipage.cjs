@@ -40,7 +40,7 @@ const helpers = [
   '  if (!r || (stage !== "ganz" && stage !== "scan")) return false;',
   '  const cats = ["tarife", "geraete", "internet"].filter(k => (r[k] || []).length).length;',
   '  const priceMissing = ["tarife", "internet"].some(k => (r[k] || []).some(it => !it.am || it.am[0] == null || it.am[1] == null));',
-  '  const continuation = previous && previous.internet && previous.internet.length && !r.internet.length && (r.einmalig || r.monatlich);',
+  '  const continuation = !!(previous && previous.internet && previous.internet.length && !r.internet.length && (r.einmalig || r.monatlich));',
   '  return psO2SuspectTotals(r) || priceMissing || continuation || (cats < 2 && !(r.einmalig || r.monatlich));',
   '}',
   'function psO2JoinDetails(oldText, additions) {',
