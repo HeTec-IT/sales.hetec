@@ -5,6 +5,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const indexPath = path.join(__dirname, '../index.html');
 let s = fs.readFileSync(indexPath, 'utf8');
+// Release version: update the actual UI indicator (not just comments), even when the OCR patch is already present.
+const versionAnchor = "window.APP_VERSION = '55.229';";
+const versionUpdated = "window.APP_VERSION = '55.230';";
+if (s.includes(versionAnchor)) {
+  if (s.indexOf(versionAnchor) !== s.lastIndexOf(versionAnchor)) throw new Error('Duplicate version declaration');
+  s = s.replace(versionAnchor, versionUpdated);
+  fs.writeFileSync(indexPath, s, 'utf8');
+  console.log('Updated user-facing version to 55.230.');
+} else if (!s.includes(versionUpdated)) {
+  throw new Error('Unexpected application version; aborting release');
+}
 if (s.includes('function psO2Page2InternetDetails(txt) {')) {
   // Follow-up fix: page 1 has no total block, but prices can still be missing.
   // Keep retrying a targeted local pass instead of accepting empty S/Home prices.
