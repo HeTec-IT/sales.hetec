@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.226';
+    window.APP_VERSION = '55.227';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12513,6 +12513,24 @@ function psO2FixWords(s) {
     return best ? (/[A-ZÄÖÜ]/.test(w[0]) ? best[0].toUpperCase() : best[0].toLowerCase()) + best.slice(1) : w;
   });
 }
+// v55.227: haeufige Inhaltszeilen der o2-Vorschlaege: verlesener Anfang wird korrigiert ("Witemational Voice Standard"),
+// Muell dahinter abgeschnitten ("Roaming Standard Bat"); nur Zahlenangaben dahinter bleiben ("Inklusiv Datenvolumen 50 GB")
+const PS_O2_DETAIL_KNOWN = ['International Voice Standard', 'International Voice Premium', 'Inklusiv Datenvolumen', 'Roaming Standard', 'Roaming Premium', 'Analog Option', 'O2 Installationsservice', 'O2 my Data unlimited'];
+function psO2DetailKnown(s) {
+  const w = String(s || '').split(' ').filter(Boolean);
+  for (const p of PS_O2_DETAIL_KNOWN) {
+    const n = p.split(' ').length;
+    if (w.length < n) continue;
+    const a = w.slice(0, n).join(' ').toLowerCase(), b = p.toLowerCase();
+    if (psO2Dist(a, b) > Math.max(1, Math.round(b.length * 0.2))) continue;
+    let rest = w.slice(n);
+    if (/unlimited$/.test(b)) { const m = /^\(?\s*[1Il|]\s?M\s*\)?$/.exec(rest[0] || ''); return p + (m ? ' (1M)' : ''); }
+    const num = [];
+    for (const t of rest) { if (/^\d+([.,]\d+)?$/.test(t) || /^(GB|MB|TB|MBit\/s|Min\.?)$/i.test(t)) num.push(t); else break; }
+    return (p + ' ' + num.join(' ')).trim();
+  }
+  return '';
+}
 // Preisspalten einer Zeile: [einmalig, monatlich]; "-" bedeutet kein Betrag. Nicht eindeutig lesbar -> undefined.
 function psO2Cols(raw) {
   raw = String(raw || '');
@@ -12533,11 +12551,17 @@ function psO2Cents(v) {
 function psO2Fmt(c) { return (c / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 // Rabatt-/Vorteilszeilen eines Produkts (negative Betraege je Spalte). bad = Betrag vorhanden, aber nicht lesbar -> keine Gegenprobe.
 function psO2Adjust(lines, from) {
-  const o = { e: 0, m: 0, bad: false };
+  const o = { e: 0, m: 0, bad: false, base: { e: null, m: null } };
   for (let k = from; k < Math.min(lines.length, from + 16); k++) {
     const l = lines[k];
     if (psO2HeadKind(l) || /(Einmalige|alige|Monatliche|natliche)\s*Kosten/i.test(l) || /Seite\s*(\d+\s*)?von|Telef[oó]nica|Brauchle/i.test(l)) break;
-    if (!/Rabatt|Vortei|Gutschrift|Bonus|Nachlass|Kombi/i.test(l)) continue;
+    // v55.227: Grundpreis-Zeilen ohne Rabatt ("Einmaliger Anschlusspreis 49,99 €", "Grundgebühr 44,99 €") merken
+    if (!/Rabatt|Vortei|Gutschrift|Bonus|Nachlass|Kombi/i.test(l)) {
+      const ba = psO2Amounts(l);
+      if (ba.length && /Anschlusspreis|Aktivierung|Bereitstell/i.test(l) && o.base.e == null) o.base.e = psO2Cents(ba[ba.length - 1]);
+      else if (ba.length && /Grundgeb|Grundpreis/i.test(l) && o.base.m == null) o.base.m = psO2Cents(ba[ba.length - 1]);
+      continue;
+    }
     const a = psO2Amounts(l);
     if (!a.length) { if (/\d/.test(l.replace(/\b\d+\s*EUR\b/gi, ''))) o.bad = true; continue; }
     let col;
@@ -12628,7 +12652,11 @@ function psO2Detail(line) {
   // Lesemuell (z. B. Werbebanner neben der Karte): viele kurze Woerter, keine Ziffer
   const tt = s.split(' ');
   if (tt.length >= 4 && !/\d/.test(s) && tt.filter(w => w.replace(/[^A-Za-zÄÖÜäöüß]/g, '').length <= 3).length >= tt.length * 0.6) return '';
-  return psO2FixWords(s).replace(/^inklusiv\b/, 'Inklusiv');
+  const fx = psO2FixWords(s).replace(/^inklusiv\b/, 'Inklusiv'), kn = psO2DetailKnown(fx);
+  if (kn) return kn;
+  // v55.227: drei oder mehr Woerter, davon die meisten mit hoechstens 3 Buchstaben, keine Ziffer ("Kom WE rer") = Lesemuell
+  if (tt.length >= 3 && !/\d/.test(fx) && tt.filter(w => w.replace(/[^A-Za-zÄÖÜäöüß]/g, '').length <= 3).length >= tt.length * 2 / 3) return '';
+  return fx;
 }
 // Inhalte unter einer Namenszeile einsammeln (bis zum naechsten Bereich bzw. den Summenzeilen)
 function psO2Collect(lines, from) {
@@ -12675,7 +12703,11 @@ function psO2Parse(text) {
     let cols = psO2Cols(raw);
     if (!cols && kind === 'geraete') for (let k = from; k < Math.min(lines.length, from + 3) && !cols; k++) if (/MyHandy|Monate/i.test(lines[k])) cols = psO2Cols(lines[k].replace(/Gesamtpreis.*?€/i, ''));
     if (!cols && hdr) cols = psO2Cols(hdr); // v55.193: bei o2 steht der Preis oft in der Kopfzeile (TARIF 29,99 €)
-    out[kind].push({ name, idx: i, yf: lines.length ? i / lines.length : 0, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', am: cols, rb: psO2Adjust(lines, from), details: psO2Collect(lines, from) });
+    const rb = psO2Adjust(lines, from);
+    // v55.227: Rabatt schon im Preis enthalten? ("Einmaliger Anschlusspreis 49,99" + "Rabatt -40,00" = 9,99 in der Kopfzeile) -> nicht nochmal abziehen
+    if (cols && rb.base) ['e', 'm'].forEach((c, ci) => { const hp = psO2Cents(cols[ci]); if (rb[c] && rb.base[c] != null && hp != null && rb.base[c] + rb[c] === hp) rb[c] = 0; });
+    delete rb.base;
+    out[kind].push({ name, idx: i, yf: lines.length ? i / lines.length : 0, art: am ? am[1].replace(/a(?=ngerung)/, 'ä') : '', am: cols, rb, details: psO2Collect(lines, from) });
   };
   lines.forEach((l, i) => {
     const kind = psO2HeadKind(l);
@@ -12848,6 +12880,9 @@ let __psO2CloudOff = false;
 // v55.225: Bild fuer den Dienst: nur der helle Bildschirm-Ausschnitt (ohne schwarze Raender/Bedienelemente), EXIF-Drehung, hoechstens 1800 px,
 // JPEG. Der Dienst lehnt Bilder ueber 6 MB (Base64) mit 400 ab -> die Groesse wird vorher geprueft und notfalls stufenweise verkleinert.
 const PS_O2_CLOUD_MAXB64 = 4500000;
+// v55.227: Cloud-Dienst (Gemini, europe-west3) fuer alle einschalten, sobald htr-function mit kind 'o2' deployed ist: auf true setzen.
+// Bis dahin nur aktiv, wenn am Geraet ps_htr_url / window.PS_HTR_URL gesetzt ist.
+const PS_O2_CLOUD_ON = false;
 async function psO2CloudImage(file) {
   let bmp;
   try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { bmp = await createImageBitmap(file); }
@@ -12960,6 +12995,15 @@ async function psO2Quality(file) {
   const m = cnt ? s1 / cnt : 0;
   return { sharp: cnt ? s2 / cnt - m * m : 0, hell: sum / n };
 }
+// v55.227: Spiegelung (Lampe/Fenster auf dem Monitor) = ueberstrahlte Flaeche: >1 % fast weisser Pixel. Moiré-Fotos haben keine.
+function psO2Glare(bmp) {
+  const sc = Math.min(1, 400 / Math.max(bmp.width, bmp.height)), W = Math.max(3, Math.round(bmp.width * sc)), H = Math.max(3, Math.round(bmp.height * sc));
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0, W, H);
+  const d = x.getImageData(0, 0, W, H).data; let n = 0;
+  for (let p = 0; p < d.length; p += 4) if (0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2] >= 245) n++;
+  return n / (W * H) > 0.01;
+}
 // Foto vorbereiten: verkleinern (Tempo auf dem iPad), Graustufen, Kontrast spreizen (Bildschirmfotos sind oft flau)
 // Den hellen Bereich des Fotos finden (Bildschirm oder Blatt vor dunklem Raum). Null, wenn das ganze Bild hell ist.
 function psO2BrightBox(bmp) {
@@ -13034,10 +13078,11 @@ async function psO2Bitmap(file) {
 }
 async function psO2Source(file) {
   const bmp = await psO2Bitmap(file);
-  let bb;
+  let bb, gl;
   return {
     bmp,
     get bb() { if (bb === undefined) { try { bb = psO2BrightBox(bmp); } catch (e) { bb = null; } } return bb; },
+    get glare() { if (gl === undefined) { try { gl = psO2Glare(bmp); } catch (e) { gl = false; } } return gl; },
     close() { try { if (bmp.close) bmp.close(); } catch (e) {} }
   };
 }
@@ -13109,6 +13154,8 @@ const PS_O2_T = { script: 15000, workerCold: 30000, workerWarm: 12000, pass: 250
 const PS_O2_PLAN_ADAPT = { side: 1600, blur: 1, adapt: true, psm: 6 }; // entrauscht + lokaler Schwellwert: rettet Spiegelungen/Reflexe, an denen die globale Binarisierung scheitert
 const PS_O2_PLAN = [{ side: 1600, blur: 0, psm: 6 }, { side: 2000, blur: 2, psm: 6 }, PS_O2_PLAN_ADAPT];
 const PS_O2_PLAN_LIGHT = { side: 1200, blur: 1, psm: 6 };
+// v55.227: Moiré (Streifen beim Foto vom Monitor): ungeglaettet wird daraus Zeichensalat (viele "Woerter", nichts zuordenbar) -> leicht geglaettet, gross
+const PS_O2_PLAN_MOIRE = { side: 2000, blur: 1, psm: 6 };
 const psO2Tick = () => new Promise(r => setTimeout(r, 0));
 function psO2WithTimeout(p, ms, tag) {
   let t;
@@ -13417,17 +13464,43 @@ function psO2WordsToText(words) {
     const chrome = /Activate|Bestandskunde|Neue\s+Beratung|Beratung\s+öffnen|Verwaltete|Favoriten|VO:/i;
     for (let i = 0; i < lines.length && (firstAmt < 0 || i < firstAmt); i++) if (chrome.test(txt(lines[i]))) topIdx = i;
   }
+  // v55.227: schraeg/perspektivisch fotografiert -> die Spalten laufen mit der Zeilenhoehe nach links/rechts (gemessen: ~10 % Neigung).
+  // Spaltenlage je Hoehe als Gerade x = a + b*y aus den Betraegen selbst schaetzen (Kopfzeile "einmalig/monatlich" zaehlt mit).
+  const colPts = [];
+  lines.forEach(ws => { if (/Gesamtpreis|Ersparnis/i.test(txt(ws))) return; const y = yc(ws); ws.forEach((w, i) => { if (isAmt(w)) colPts.push({ x: edgeOf(ws, i), y }); }); });
+  const fitCol = (x0, anchor, other, b0) => {
+    const y0 = anchor ? (anchor.y0 + anchor.y1) / 2 : 0;
+    let b = b0 || 0, a = x0;
+    for (let it = 0; it < 3; it++) {
+      const P = colPts.filter(p => { const dd = Math.abs(p.x - (a + b * (p.y - y0))); return dd <= 3.5 * medH && (!other || dd <= Math.abs(p.x - other(p.y))); });
+      if (anchor) P.push({ x: x0, y: y0 });
+      if (P.length < 3) break;
+      const ys = P.map(p => p.y), my = mean(ys), mx = mean(P.map(p => p.x)), vy = ys.reduce((q, y) => q + (y - my) * (y - my), 0);
+      if (vy < 9 * medH * medH * P.length) break; // Betraege muessen ueber die Hoehe verteilt sein, sonst keine Neigung schaetzen
+      b = Math.max(-0.25, Math.min(0.25, P.reduce((q, p) => q + (p.y - my) * (p.x - mx), 0) / vy));
+      a = mx + b * (y0 - my);
+    }
+    return { a, b, y0 };
+  };
+  let EL = null, ML = null;
+  const EcolX = y => EL ? EL.a + EL.b * (y - EL.y0) : Ex1, McolX = y => ML ? ML.a + ML.b * (y - ML.y0) : Mx1;
+  // Beide Spalten haben (fast) dieselbe Neigung: hat eine Spalte zu wenige Betraege, uebernimmt sie die Neigung der anderen
+  if (colPts.length >= 3) {
+    if (Ex1 != null) { EL = fitCol(Ex1, hE, McolX); ML = fitCol(Mx1, hM, EcolX, EL.b); EL = fitCol(Ex1, hE, McolX, ML.b || EL.b); }
+    else ML = fitCol(Mx1, hM, null);
+  }
   const cutX = Mx1 + 1.5 * medH;
   const botIdx = costIdx > -1 ? lines.findIndex((ws, i) => i > costIdx && /Auftragsstatus|Bestellen\b|E-?\s?Mail\s?senden|Ausdruck/i.test(txt(ws))) : -1;
-  const colOf = x => {
-    if (Ex1 != null) { const dm = Math.abs(x - Mx1), de = Math.abs(x - Ex1); return Math.min(dm, de) > 3.5 * medH ? '' : dm <= de ? 'm' : 'e'; }
-    const d = Mx1 - x;
+  const colOf = (x, y) => {
+    const mX = y == null ? Mx1 : McolX(y), eX = y == null ? Ex1 : EcolX(y);
+    if (Ex1 != null) { const dm = Math.abs(x - mX), de = Math.abs(x - eX); return Math.min(dm, de) > 3.5 * medH ? '' : dm <= de ? 'm' : 'e'; }
+    const d = mX - x;
     return d >= -1.5 * medH && d <= 3 * medH ? 'm' : d >= 4 * medH && d <= 14 * medH ? 'e' : '';
   };
   const kept = [];
   lines.forEach((ws, idx) => {
     if (idx <= topIdx || (botIdx > -1 && idx >= botIdx)) return;
-    const w2 = ws.filter(w => w.x0 <= cutX);
+    const w2 = ws.filter(w => w.x0 <= Math.max(cutX, McolX(yc(ws)) + 1.5 * medH));
     if (w2.length) kept.push({ idx, ws: w2, y: yc(w2), t: txt(w2) });
   });
   // Kostenblock: die Summen stehen rechtsbuendig in ihrer Spalte, aber oft eine Zeile versetzt zu ihrer Beschriftung.
@@ -13443,7 +13516,7 @@ function psO2WordsToText(words) {
   // v55.198: PDF-Seite "Einmalige/Monatliche Kosten": beide Summen stehen untereinander in EINER Spalte, je neben ihrer Beschriftung -> nach Zeile zuordnen
   if (lE && lM) {
     const za = [];
-    kept.forEach(k => { if (k.y < zTop || k.y > zBot) return; k.ws.forEach((w, i) => { if (!isAmt(w)) return; const c = colOf(edgeOf(k.ws, i)); if (c) za.push({ y: k.y, c, v: norm(w.t.match(AMT)[0]) }); }); });
+    kept.forEach(k => { if (k.y < zTop || k.y > zBot) return; k.ws.forEach((w, i) => { if (!isAmt(w)) return; const c = colOf(edgeOf(k.ws, i), k.y); if (c) za.push({ y: k.y, c, v: norm(w.t.match(AMT)[0]) }); }); });
     if (za.length >= 2 && za.every(a => a.c === 'm')) {
       const near = L => za.slice().sort((a, b) => Math.abs(a.y - L.y) - Math.abs(b.y - L.y))[0];
       const ae = near(lE), am = near(lM);
@@ -13458,7 +13531,7 @@ function psO2WordsToText(words) {
     for (let i = 0; i < k.ws.length; i++) {
       const w = k.ws[i];
       if (isAmt(w)) {
-        const c = colOf(edgeOf(k.ws, i)), eu = k.ws[i + 1] && /^[€*£]+$/.test(k.ws[i + 1].t);
+        const c = colOf(edgeOf(k.ws, i), k.y), eu = k.ws[i + 1] && /^[€*£]+$/.test(k.ws[i + 1].t);
         if (c && inZone) {
           // Kostenblock: erster Betrag je Spalte (von oben) = Summe; weitere Betraege in der Spalte (z. B. Ersparnis) verwerfen
           if (c === 'e' && E == null) E = norm(w.t.match(AMT)[0]);
@@ -13554,17 +13627,34 @@ function psO2FillPrices(list, res, kind) {
   if (!list || !list.length || res.length < 2) return list;
   const ord = it => { let n = 0; for (const x of list) { if (x === it) return n; if (psO2Similar(x.name, it.name)) n++; } return n; };
   return list.map(it => {
-    if (!it.am || (it.am[0] != null && it.am[1] != null)) return it;
-    const am = it.am.slice(), n = ord(it);
+    const rb0 = it.rb || { e: 0, m: 0, bad: false };
+    if (it.am && it.am[0] != null && it.am[1] != null && rb0.e && rb0.m) return it;
+    const am = it.am ? it.am.slice() : [null, null], rb = Object.assign({}, rb0), n = ord(it); // v55.227: auch Eintraege ganz ohne Preis und fehlende Rabatte ergaenzen
     for (const o of res) {
       const arr = o[kind] || [];
       if (arr === list) continue;
-      const same = arr.filter(x => x.am && psO2Similar(x.name, it.name)), cand = same[n] || same[0];
+      const same = arr.filter(x => (x.am || x.rb) && psO2Similar(x.name, it.name)), cand = same[n] || same[0];
       if (!cand) continue;
-      [0, 1].forEach(c => { if (am[c] == null && cand.am[c] != null && (c === 0 || kind !== 'geraete')) am[c] = cand.am[c]; });
+      if (cand.am) [0, 1].forEach(c => { if (am[c] == null && cand.am[c] != null && (c === 0 || kind !== 'geraete')) am[c] = cand.am[c]; });
+      if (cand.rb) ['e', 'm'].forEach(c => { if (!rb[c] && cand.rb[c] && !cand.rb.bad) rb[c] = cand.rb[c]; });
     }
-    return am[0] === it.am[0] && am[1] === it.am[1] ? it : Object.assign({}, it, { am });
+    const same0 = it.am ? am[0] === it.am[0] && am[1] === it.am[1] : am[0] == null && am[1] == null;
+    if (same0 && rb.e === rb0.e && rb.m === rb0.m) return it;
+    return Object.assign({}, it, { am: am[0] == null && am[1] == null ? it.am : am, rb });
   });
+}
+// v55.227: enthaelt gelesener Text Spuren eines o2-Vorschlags (Bereichsueberschriften, Kostenzeilen, mind. 2 Betraege)?
+function psO2Signal(t) {
+  t = String(t || '');
+  const n = (/INTERNET\s?@\s?HOME|\bHANDY\b|\bTARIF\b/i.test(t) ? 1 : 0) + (/(Einmalige|Monatliche)\s*Kosten|einmalig|monatlich/i.test(t) ? 1 : 0) + ((t.match(/\d{1,3}(?:\.\d{3})*,\d{2}/g) || []).length >= 2 ? 1 : 0);
+  return n >= 2;
+}
+// v55.227: wie viele Einzelpreise/Rabatte/Summen gelesen sind (Fortschritt eines weiteren Durchgangs)
+function psO2Filled(r) {
+  if (!r) return 0;
+  let n = (r.einmalig ? 1 : 0) + (r.monatlich ? 1 : 0);
+  ['tarife', 'geraete', 'internet'].forEach(k => (r[k] || []).forEach(it => { if (it.am) n += (it.am[0] != null ? 1 : 0) + (it.am[1] != null ? 1 : 0); if (it.rb) n += (it.rb.e ? 1 : 0) + (it.rb.m ? 1 : 0); }));
+  return n;
 }
 // v55.209: Lage jedes Eintrags im Foto (0 = oben, 1 = unten) aus den Wortpositionen – fuer die Ueberschneidung beim Scannen
 function psO2PlaceItems(r, words) {
@@ -13594,12 +13684,13 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
   const T = Object.assign({}, PS_O2_T, opts.t || {}), H = opts.hooks || {};
   const job = opts.job || psO2NewJob();
   const t0 = Date.now(), res = [];
-  let txt = '', r = null, fail = '', timedOut = false, lastMs = 0, tries = 0, src = null, prevScore = -99;
+  let txt = '', r = null, fail = '', timedOut = false, lastMs = 0, tries = 0, src = null, prevScore = -99, prevFill = -1, rawAll = '';
   const left = () => T.budget - (Date.now() - t0);
   const say = k => { if (!onMsg) return; onMsg(k === 'prep' ? 'Foto wird vorbereitet …' : k === 'read' ? (tries > 1 ? 'Text wird erkannt – weiterer Durchgang …' : 'Text wird erkannt …') : k); };
   const empty = () => ({ tarife: [], geraete: [], internet: [], einmalig: '', monatlich: '', hinweis: '', hdr: { tarife: 0, geraete: 0, internet: 0 } });
   const take = o => {
     say('Produkte und Tarife werden zugeordnet …');
+    rawAll += '\n' + (o.text || '');
     const cls = psO2Parse(o.text), pt = psO2WordsToText(o.words), pos = pt ? psO2Parse(pt) : null;
     psO2PlaceItems(cls, o.words); psO2PlaceItems(pos, o.words);
     const usePos = !!pos && psO2Score(pos) >= psO2Score(cls) - 1;
@@ -13619,14 +13710,17 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
     let plan = PS_O2_PLAN.slice();
     for (let k = 0; src && k < plan.length; k++) {
       if (job.cancelled) { fail = 'cancelled'; break; }
-      if (k > 0 && psO2Score(r) <= 0 && lastMs > 8000) break; // langsam UND nichts Brauchbares = Rauschen: kein zweiter langer Durchgang
+      // langsam UND nichts Brauchbares = Rauschen: kein zweiter langer Durchgang. v55.227: ausser der Text zeigt Spuren eines Vorschlags
+      // (Ueberschriften, Betraege) - dann ist es Moiré/Spiegelung, und der geglaettete Durchgang liest meist fast alles.
+      if (k > 0 && psO2Score(r) <= 0 && lastMs > 8000 && !psO2Signal(txt + rawAll) && !src.glare) break;
       // Restzeit reicht fuer keinen weiteren Durchgang (ohne Ergebnis darf er knapper sein: der entrauschte 2. Durchgang ist meist schneller)
       if (k > 0 && left() < Math.max(T.minPass, lastMs * (r && psO2Score(r) > 0 ? 1.2 : 0.5))) break;
       tries++;
       try {
         const o = await psO2Pass(job, src, plan[k], T, left(), say, H);
         lastMs = o.ms; take(o);
-        if (k === 0 && psO2Score(r) <= 0 && o.words.length > 350 && plan.length > 2) { const tp = plan[1]; plan[1] = plan[2]; plan[2] = tp; }
+        // v55.227: Zeichensalat im 1. Durchgang = Moiré oder Spiegelung: bei Spiegelung zuerst lokaler Schwellwert, sonst zuerst geglaettet (Moiré)
+        if (k === 0 && psO2Score(r) <= 0 && o.words.length > 350 && plan.length > 2) plan.splice(1, plan.length, ...(src.glare ? [PS_O2_PLAN_ADAPT] : [PS_O2_PLAN_MOIRE, PS_O2_PLAN_ADAPT, PS_O2_PLAN[1]]));
       } catch (e) {
         if (e && e.psCancel) { fail = 'cancelled'; break; }
         const kind = (e && e.psKind) || 'engine';
@@ -13640,8 +13734,9 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
         break; // Foto nicht lesbar / Texterkennung nicht verfuegbar: weitere Versuche bringen nichts
       }
       fail = ''; // etwas gelesen: ein frueherer Timeout ist kein Gesamtfehler mehr
-      const sc = psO2Score(r), improved = sc > prevScore;
-      prevScore = Math.max(prevScore, sc);
+      // v55.227: auch neu gelesene Einzelpreise/Rabatte zaehlen als Fortschritt (nicht nur mehr Eintraege)
+      const sc = psO2Score(r), fl = psO2Filled(r), improved = sc > prevScore || fl > prevFill;
+      prevScore = Math.max(prevScore, sc); prevFill = Math.max(prevFill, fl);
       if (!hard() && (k >= 1 || !soft())) break;
       if (k >= 1 && !improved && sc > 0) break; // etwas gelesen, aber der weitere Durchgang hat nichts Neues gebracht -> aufhoeren statt Zeit zu verbrennen
     }
@@ -14738,7 +14833,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       const got = q => !!(q && (q.tarife.length || q.geraete.length || q.internet.length || q.einmalig || q.monatlich));
       let txt = pre ? pre.txt : '', r = pre ? pre.r : null, cloudThin = false, locFail = '', locCancelled = false, cloudFail = '';
       // 1. Weg: der Dienst (liest Fotos vom Bildschirm am besten). Geht er nicht, merkt die App sich das für diese Sitzung.
-      if (!pre && !(__psO2CloudOff > Date.now()) && psHtrConfigured()) {
+      if (!pre && !(__psO2CloudOff > Date.now()) && (psHtrConfigured() || PS_O2_CLOUD_ON)) {
         try {
           const cd = await psO2CloudRead(file, m => { if (live()) setBusy(m); }, { job });
           if (!live()) return sum;
@@ -14931,6 +15026,12 @@ function PsO2Import({ onApply, onClose, initial }) {
       h('button', { onClick: () => setItemG(key, idxs, 'ak', !it.ak), className: 'px-3 py-1.5 rounded-full text-xs font-black border ' + (it.ak ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-slate-300 text-slate-500') }, (it.ak ? '✓ ' : '') + 'Aktionskarte'),
       it.ak ? h('span', { className: 'text-xs font-bold text-amber-700' }, 'erscheint bei Tarif 1 als „inkl. Aktionskarte' + (psO2AkGb(it) ? ' ' + psO2AkGb(it) : '') + '“ – Preis zählt weiter') : null) : null,
     it.art ? h('div', { className: 'mt-1' }, inp(it.art, v => setItemG(key, idxs, 'art', v), 'Vertragsart')) : null,
+    // v55.227: Einzelpreise sichtbar und korrigierbar (fehlt einer, sieht man es hier sofort; die Summenpruefung rechnet live mit)
+    h('div', { className: 'flex items-center gap-2 mt-1' }, [0, 1].map(c => h('label', { key: c, className: 'flex-1 flex items-center gap-1 text-[11px] font-black text-slate-400' }, c ? 'MTL.' : 'EINM.',
+      h('input', { value: (it.am && it.am[c]) || '', placeholder: '–', inputMode: 'decimal', 'aria-label': (c ? 'Monatlicher' : 'Einmaliger') + ' Preis ' + ph,
+        onChange: e => { const v = money(e.target.value), am = it.am ? it.am.slice() : [null, null]; am[c] = v || null; setItemG(key, idxs, 'am', am[0] == null && am[1] == null ? undefined : am); },
+        className: 'w-full px-2 py-1.5 rounded-lg border text-slate-900 ' + ((it.am && it.am[c]) || (c === 1 && key === 'geraete') ? 'border-slate-300' : 'border-amber-300 bg-amber-50'), style: { fontSize: 15, fontWeight: 700 } }), '€')),
+      it.rb && (it.rb.e || it.rb.m) ? h('span', { className: 'text-[11px] font-bold text-emerald-700 whitespace-nowrap' }, 'Rabatt ' + [it.rb.e ? psO2Fmt(it.rb.e) + ' einm.' : '', it.rb.m ? psO2Fmt(it.rb.m) + ' mtl.' : ''].filter(Boolean).join(' / ')) : null),
     h('textarea', { value: it.det || '', placeholder: 'Inhalte – eine Zeile pro Punkt', rows: Math.min(6, Math.max(2, String(it.det || '').split('\n').length)), onChange: e => setItemG(key, idxs, 'det', e.target.value), className: 'w-full mt-1 px-3 py-2 rounded-lg border border-slate-300 text-slate-900', style: { fontSize: 14, fontWeight: 500 } }));
   };
   const sBtn = 'px-3 py-2 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50';

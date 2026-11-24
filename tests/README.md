@@ -14,6 +14,7 @@ Die App hat keinen Build. Die Tests laden den OCR-/Dialog-Teil direkt aus `index
 * `offer.test.mjs` – (v55.225) Angebot B (Internet + Handy + Tarif mit Plus-Rabatt, 2.438,98 € / 69,98 €, „Ersparnis“ ist keine Position,
   Rabatt nicht doppelt), Angebotskennzeichen (Beratungs-ID / Erstellzeit), Preise nur ergänzen, Dienst-Anfrage mit Attrappe für `fetch`:
   Zeitlimit, Abbruch durch den Benutzer, verspätete Antwort, Dienstfehler, fehlende Anmeldung.
+  (v55.227) Schräg fotografiert (Spalten nach Position mit Neigung), Rabatt schon im Preis, Inhaltszeilen-Korrektur, Ergänzen aus Durchgängen.
 
 ## 2. Browser-Test mit echter Texterkennung (optional, braucht ein eigenes Testfoto)
 
