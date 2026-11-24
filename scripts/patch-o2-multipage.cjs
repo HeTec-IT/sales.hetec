@@ -6,7 +6,20 @@ const path = require('node:path');
 const indexPath = path.join(__dirname, '../index.html');
 let s = fs.readFileSync(indexPath, 'utf8');
 if (s.includes('function psO2Page2InternetDetails(txt) {')) {
-  console.log('o2 multipage fix already applied');
+  // Follow-up fix: page 1 has no total block, but prices can still be missing.
+  // Keep retrying a targeted local pass instead of accepting empty S/Home prices.
+  const original = "  if (!c && (r.einmalig || r.monatlich) && ([].concat(r.tarife || [], r.geraete || []).some(it => !it.am) || (r.tarife || []).some(t => t.am[1] == null))) g.push('einzelpreise');";
+  const improved = "  if ((r.tarife || []).some(it => !it.am || it.am[1] == null) || (r.internet || []).some(it => !it.am || it.am[1] == null) ||" +
+    "\r\n      (!c && (r.einmalig || r.monatlich) && (r.geraete || []).some(it => !it.am))) g.push('einzelpreise');";
+  if (s.includes(original)) {
+    s = s.replace(original, improved);
+    const jsStart = s.indexOf('const PS_O2_AMT'), jsEnd = s.indexOf('// === v55.176 (Beta)', jsStart);
+    new Function(s.slice(jsStart, jsEnd));
+    fs.writeFileSync(indexPath, s, 'utf8');
+    console.log('Applied additional missing-price retry for first page.');
+  } else if (!s.includes("(!c && (r.einmalig || r.monatlich) && (r.geraete || []).some(it => !it.am))")) {
+    throw new Error('Missing price-gap anchor unexpectedly changed');
+  }
   process.exit(0);
 }
 const NL = s.includes('\r\n') ? '\r\n' : '\n';
