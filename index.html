@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.228';
+    window.APP_VERSION = '55.229';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -28410,13 +28410,11 @@ const psEmpPreis = n => n.toLocaleString('de-DE', {
   minimumFractionDigits: n % 1 ? 2 : 0,
   maximumFractionDigits: 2
 }) + ' €';
-const PS_EMP_ANZAHLUNG = 1; // einmalige Anzahlung laut o2 Shop
 const PS_EMP_RATEN = 36; // Laufzeit für die angezeigte Monatsrate
 const psEmpGeld = n => n.toLocaleString('de-DE', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 }) + ' €';
-const psEmpRate = (preis, monate) => Math.round((preis - PS_EMP_ANZAHLUNG) / monate * 100) / 100;
 // Gerät im Stil der o2-Produktseite: Bild, Speicher, Monatsrate, einmalige Anzahlung
 const psGeraetBlock = (g, gross) => psH("div", {
   style: {
@@ -28472,7 +28470,7 @@ const psGeraetBlock = (g, gross) => psH("div", {
     fontWeight: 900,
     color: '#0f172a'
   }
-}, psEmpGeld(psEmpRate(g.preis, PS_EMP_RATEN))), psH("span", {
+}, psEmpGeld(g.rate)), psH("span", {
   style: {
     fontSize: '13px',
     fontWeight: 700,
@@ -28484,12 +28482,12 @@ const psGeraetBlock = (g, gross) => psH("div", {
     fontWeight: 700,
     color: '#0f766e'
   }
-}, 'Einmalig ' + psEmpGeld(PS_EMP_ANZAHLUNG) + ' Anzahlung'), psH("div", {
+}, 'Einmalig ' + psEmpGeld(g.anzahlung) + ' Anzahlung'), psH("div", {
   style: {
     fontSize: '11px',
     color: '#64748b'
   }
-}, 'Gerätepreis ' + psEmpGeld(g.preis) + ' · 24 Monate: ' + psEmpGeld(psEmpRate(g.preis, 24)) + ' / Monat')));
+}, 'Gerätepreis ' + psEmpGeld(g.preis) + (Number.isFinite(g.rate24) ? ' · 24 Monate: ' + psEmpGeld(g.rate24) + ' / Monat + ' + psEmpGeld(g.anzahlung24) + ' einmalig' : ''))));
 const psEmpText = g => g.name + (g.speicher ? ' ' + g.speicher : '');
 // Zeile "Übernehmen in: Angebot 1 | 2 | 3": Gerät als Text ins gewählte Angebot, Anzahlung zu "Einmalig" (Monatlich bleibt frei)
 const psUebernehmenZeile = (td, onUebernehmen, g) => psH("div", {
@@ -28596,7 +28594,7 @@ const psEmpfehlungBerechnen = (td, kat) => {
   if (daten === '< 10 GB') plus('a', 1);
   if (kost === '< 30 €') plus('a', 3, 'Günstiger Einstieg');
   if (kost === '> 80 €') plus('pro', 1);
-  const geraete = ((kat && kat.geraete) || []).filter(g => g && g.preis > 0 && g.stufe && g.stufe !== 'fold');
+  const geraete = ((kat && kat.geraete) || []).filter(g => g && g.preis > 0 && Number.isFinite(g.rate) && Number.isFinite(g.anzahlung) && g.stufe && g.stufe !== 'fold');
   const vorhanden = geraete.length ? PS_EMP_REIHE.filter(s => geraete.some(g => g.stufe === s)) : PS_EMP_REIHE;
   const sortiert = vorhanden.slice().sort((a, b) => pt[b] - pt[a] || PS_EMP_REIHE.indexOf(a) - PS_EMP_REIHE.indexOf(b));
   const geraetFuer = s => {
@@ -28877,7 +28875,7 @@ const PsEmpfehlungDetail = ({
       fontSize: '12px',
       color: '#64748b'
     }
-  }, "Gerätepreis laut o2 Shop (ohne Tarif). Monatsrate errechnet: (Gerätepreis − 1 € Anzahlung) ÷ 36 Monate. Verbindlich ist der Preis im Vertrag bzw. in Opus."))), document.body);
+  }, "Gerätepreis laut o2 Shop (ohne Tarif). Monatsrate und Anzahlung laut Shop für die angegebene Laufzeit. Verbindlich ist der Preis im Vertrag bzw. in Opus."))), document.body);
 };
 // ═══ TV-Empfehlung über Angebot 3: erscheint automatisch, wenn auf Seite 1 TV und ein TV-Wunsch (Netflix, Disney+ …) gewählt sind ═══
 const PS_TV_HEIMAT = 'o2';
@@ -39844,9 +39842,9 @@ function App() {
     try {
       digitalTouchedRef.current[sk] = true;
     } catch (err) {}
-    const neu = psParseEuro((packagePrices[offerKey] || {}).einmalig) + PS_EMP_ANZAHLUNG;
+    const neu = psParseEuro((packagePrices[offerKey] || {}).einmalig) + g.anzahlung;
     setPackagePriceField(offerKey, 'einmalig', neu.toFixed(2).replace('.', ','));
-    triggerToast(text + ' in Angebot ' + offerKey.slice(-1) + ' übernommen · Anzahlung ' + psEmpGeld(PS_EMP_ANZAHLUNG) + ' bei Einmalig');
+    triggerToast(text + ' in Angebot ' + offerKey.slice(-1) + ' übernommen · Anzahlung ' + psEmpGeld(g.anzahlung) + ' bei Einmalig');
   };
   // TV-Empfehlung -> Angebot: Paket als Text, Monatspreis zu "Monatlich" addiert
   const psTvUebernehmen = (offerKey, text, preis) => {

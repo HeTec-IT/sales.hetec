@@ -5,6 +5,7 @@ on:
     - cron: '5 11 * * *'   # 12:05 Uhr (Winterzeit), in der Sommerzeit 13:05 Uhr
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'scripts/pixel-geraete.mjs'
       - '.github/workflows/pixel-geraete.yml'
@@ -25,10 +26,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Browser installieren
-        run: |
-          npm install --no-save playwright
-          npx playwright install --with-deps chromium
       - name: Pixel-Geräte vom o2 Shop holen
         run: node scripts/pixel-geraete.mjs
         # Bei Problemen testweise PIXEL_DEBUG: '1' als env setzen -> Diagnose landet in pixel-debug.txt

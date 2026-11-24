@@ -1,7 +1,4 @@
-// Holt die Google-Pixel-Handys (ohne Tarif) aus dem o2 Shop und schreibt pixel-geraete.json.
-// Läuft per GitHub Action täglich (ca. 12 Uhr). Die Shop-Seite baut ihre Geräteliste per JavaScript auf,
-// darum wird ein echter Browser (Playwright) benutzt. Nur lesen, genau ein Seitenaufruf pro Lauf.
-// Bei Fehler/unplausiblen Werten: Abbruch, die alte Datei bleibt. Die Diagnose steht dann in pixel-debug.txt.
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 
 export const QUELLE = 'https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden';
@@ -27,156 +24,13 @@ export function modellAusText(text) {
 }
 
 export function speicherAusText(text) {
-  const re = /(\d{2,4})\s?(GB|TB)(?!\s*RAM)/gi;
+  const re = /(\d{1,4})\s?(GB|TB)(?!\s*RAM)/gi;
   let m;
   while ((m = re.exec(String(text || '')))) {
     const gb = m[2].toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1]);
     if (gb >= 64) return { speicher: `${m[1]} ${m[2].toUpperCase()}`, speicherGb: gb };
   }
   return null;
-}
-
-// "1.099,00 €" -> 1099 ; Raten ("29,99 € mtl.") werden ausgelassen
-export function preiseAusText(text) {
-  const re = /(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?\s*€(\s*\*{0,3}\s*(?:mtl\.?|monatlich|\/\s*Monat|pro\s+Monat))?/gi;
-  const out = [];
-  let m;
-  while ((m = re.exec(String(text || '')))) {
-    if (m[3]) continue;
-    const wert = Number(`${m[1].replace(/\./g, '')}.${m[2] || '00'}`);
-    if (wert >= PREIS_MIN && wert <= PREIS_MAX) out.push(wert);
-  }
-  return out;
-}
-
-function absolut(u) {
-  if (!u || typeof u !== 'string') return '';
-  if (/^https?:\/\//i.test(u)) return u;
-  if (u.startsWith('//')) return 'https:' + u;
-  if (u.startsWith('/')) return BASIS + u;
-  return '';
-}
-
-function bauen(modell, extra) {
-  return {
-    name: `Google ${modell.modell}`,
-    modell: modell.modell,
-    gen: modell.gen,
-    stufe: modell.stufe,
-    speicher: extra.speicher || '',
-    speicherGb: extra.speicherGb || 0,
-    preis: extra.preis || 0,
-    url: extra.url || '',
-    bild: extra.bild || '',
-  };
-}
-
-// Speicher steht im Produktlink: .../google-pixel-11-256gb-frost-details
-export function speicherAusUrl(url) {
-  const m = /[-_](\d{2,4})(gb|tb)(?=[-_.?/]|$)/i.exec(String(url || ''));
-  return m ? speicherAusText(`${m[1]} ${m[2]}`) : null;
-}
-
-// Bundles ("Pixel 11 mit Pixel Buds Pro 2") werden nicht einzeln empfohlen
-const BUNDLE_RE = /Pixel\s+\d{1,2}(?:\s*(?:Pro\s*Fold|Pro\s*XL|Pro|XL|Fold|a))?\s+(?:mit|\+|und|plus)\s/i;
-
-// Eine Kachel aus dem sichtbaren Seitentext (Name + Gerätepreis + Speicher)
-export function kandidatAusKartentext(text, url = '', bild = '') {
-  if (BUNDLE_RE.test(String(text || '')) || /-mit-/i.test(String(url || ''))) return null;
-  const modell = modellAusText(text);
-  if (!modell) return null;
-  // Kachel-Text: "... 24 Monatsraten zu 0% Gerätepreis: 991,00 €" -> der Gerätepreis ist maßgeblich
-  const gp = /Ger(?:ä|ae)tepreis:?\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?\s*€/i.exec(String(text));
-  const preise = gp ? [Number(`${gp[1].replace(/\./g, '')}.${gp[2] || '00'}`)] : preiseAusText(text);
-  if (!preise.length) return null;
-  const link = /\.pdf(\?|$)/i.test(String(url || '')) ? '' : url;
-  return bauen(modell, { ...(speicherAusUrl(url) || {}), ...(speicherAusText(text) || {}), preis: Math.min(...preise), url: absolut(link), bild: absolut(bild) });
-}
-
-// Fallback: den ganzen Seitentext in Abschnitte je "Pixel NN" zerlegen
-export function kandidatenAusSeitentext(text) {
-  const t = String(text || '').replace(/\s+/g, ' ');
-  const re = /Google\s+Pixel\s+\d/gi;
-  const starts = [];
-  let m;
-  while ((m = re.exec(t))) starts.push(m.index);
-  const out = [];
-  starts.forEach((s, i) => {
-    const ende = Math.min(starts[i + 1] ?? t.length, s + 320);
-    const k = kandidatAusKartentext(t.slice(s, ende));
-    if (k) out.push(k);
-  });
-  return out;
-}
-
-// JSON-Antworten der Shop-Seite: jedes Objekt mit "Pixel NN" im Text und einem plausiblen Preis
-export function kandidatenAusJson(wurzel) {
-  const out = [];
-  const preisSchluessel = /price|preis|amount|brutto|gross|einmal|cash|value/i;
-  const urlSchluessel = /url|href|link|path|slug/i;
-  const bildSchluessel = /image|img|bild|thumb|src/i;
-
-  const blaetter = (o, pfad, fn, tiefe = 0) => {
-    if (o == null || tiefe > 6) return;
-    if (typeof o !== 'object') return fn(pfad, o);
-    Object.entries(o).forEach(([k, v]) => blaetter(v, k, fn, tiefe + 1));
-  };
-
-  const ausObjekt = o => {
-    const texte = Object.values(o).filter(v => typeof v === 'string' && v.length < 200);
-    const name = texte.find(t => /Pixel\s+\d/.test(t));
-    if (!name) return null;
-    const modell = modellAusText(name);
-    if (!modell) return null;
-    const preise = [];
-    const addPreis = n => { if (n >= PREIS_MIN && n <= PREIS_MAX) preise.push(n); };
-    let url = '';
-    let bild = '';
-    let speicher = speicherAusText(name);
-    blaetter(o, '', (k, v) => {
-      if (typeof v === 'number' && preisSchluessel.test(k)) addPreis(v);
-      if (typeof v === 'string') {
-        if (preisSchluessel.test(k) && /^\d{2,4}([.,]\d{1,2})?$/.test(v.trim())) addPreis(Number(v.trim().replace(',', '.')));
-        if (v.includes('€')) preiseAusText(v).forEach(addPreis);
-        if (!url && urlSchluessel.test(k) && /^(https?:\/\/|\/)/.test(v)) url = v;
-        if (!bild && bildSchluessel.test(k) && /\.(png|jpe?g|webp)(\?|$)/i.test(v)) bild = v;
-        if (!speicher) speicher = speicherAusText(v);
-      }
-    });
-    if (!preise.length) return null;
-    return bauen(modell, { ...(speicher || {}), preis: Math.min(...preise), url: absolut(url), bild: absolut(bild) });
-  };
-
-  const besuche = (o, tiefe) => {
-    if (o == null || typeof o !== 'object' || tiefe > 14) return;
-    if (Array.isArray(o)) return o.forEach(x => besuche(x, tiefe + 1));
-    const k = ausObjekt(o);
-    if (k) return void out.push(k);
-    Object.values(o).forEach(v => besuche(v, tiefe + 1));
-  };
-  besuche(wurzel, 0);
-  return out;
-}
-
-// Gleiche Geräte (Modell + Speicher) zusammenführen, früheste Quelle gewinnt, fehlende Felder werden ergänzt
-export function zusammenfuehren(liste) {
-  const map = new Map();
-  for (const k of liste) {
-    if (!k || !k.modell) continue;
-    const key = `${k.modell}|${k.speicherGb || 0}`;
-    const alt = map.get(key);
-    if (!alt) map.set(key, { ...k });
-    else for (const f of ['preis', 'url', 'bild', 'speicher']) if (!alt[f] && k[f]) alt[f] = k[f];
-  }
-  let geraete = [...map.values()].filter(g => g.preis >= PREIS_MIN && g.preis <= PREIS_MAX);
-  // Gibt es ein Modell mit Speicherangabe, fliegen die Einträge ohne Speicher raus (Doppelte)
-  const mitSpeicher = new Set(geraete.filter(g => g.speicherGb).map(g => g.modell));
-  geraete = geraete.filter(g => g.speicherGb || !mitSpeicher.has(g.modell));
-  geraete.sort((a, b) =>
-    b.gen - a.gen ||
-    STUFEN_REIHE.indexOf(a.stufe) - STUFEN_REIHE.indexOf(b.stufe) ||
-    (a.speicherGb || 0) - (b.speicherGb || 0));
-  return geraete;
 }
 
 export function pruefen(geraete, alt) {
@@ -194,131 +48,69 @@ const jetzt = () => {
   return { datum, stand: `${datum} ${zeit}` };
 };
 
-// ── Browser-Teil ─────────────────────────────────────────────────────────────
-async function seiteLesen() {
-  const { chromium } = await import('playwright');
-  const browser = await chromium.launch();
-  try {
-    const ctx = await browser.newContext({
-      locale: 'de-DE',
-      timezoneId: 'Europe/Berlin',
-      userAgent: UA,
-      viewport: { width: 1366, height: 900 },
-    });
-    const page = await ctx.newPage();
-    const jsons = [];
-    page.on('response', async r => {
-      try {
-        if (!(r.headers()['content-type'] || '').includes('json')) return;
-        const text = await r.text();
-        jsons.push({ url: r.url(), status: r.status(), laenge: text.length, text: text.length < 3_000_000 ? text : '' });
-      } catch { /* Antwort nicht lesbar – egal */ }
-    });
-    const resp = await page.goto(QUELLE, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
-    for (let i = 0; i < 6; i++) { // Lazy-Laden der Kacheln
-      await page.mouse.wheel(0, 1500);
-      await page.waitForTimeout(700);
+// Der Shop liefert den Katalog im JSON-Skript pageValue bereits im HTML.
+export function leseKatalog(html, monate) {
+  const script = html.match(/<script\b(?=[^>]*\bid=["']pageValue["'])[^>]*>([\s\S]*?)<\/script>/i);
+  if (!script) throw new Error('o2-Produktkatalog fehlt');
+  const result = new Map();
+  for (const tab of JSON.parse(script[1]).tabs || []) {
+    for (const h of tab.hwCatalogValue?.hardware || []) {
+      const attr = h.ecommerceProductValue?.attributes;
+      const modell = modellAusText(attr?.dimension164);
+      if (!modell || attr.dimension165 !== 'Google' || attr.category !== 'hw-only_smartphone' ||
+          attr.dimension164 !== modell.modell || !h.externalId) continue;
+      const link = h.detailWwwAbsoluteCall?.constantPayload?.link?.uri;
+      if (!link) continue;
+      const url = new URL(link, BASIS);
+      const slug = 'google-' + modell.modell.toLowerCase().replaceAll(' ', '-');
+      const prefix = '/e-shop/google/' + slug + '-';
+      const variant = url.pathname.slice(prefix.length);
+      if (url.origin !== BASIS || !url.pathname.startsWith(prefix) ||
+          !/^\d{1,4}(?:gb|tb)-[a-z0-9-]+-details$/i.test(variant) || variant.includes('-mit-') ||
+          url.searchParams.get('ohne-tarif') !== 'ja' || url.searchParams.get('ratenzahlung') !== String(monate) ||
+          !new RegExp('^' + monate + '\\s*Monate$').test(h.rateDurationValue)) continue;
+      const speicher = speicherAusText(variant);
+      const p = h.price;
+      if (!speicher || !p) continue;
+      const preis = p.promotionActive ? p.promotionTotalPrice : p.totalPrice;
+      const rate = p.promotionActive ? p.promotionMonthlyPrice : p.monthlyPrice;
+      const anzahlung = p.promotionActive ? p.promotionOneTimePrice : p.oneTimePrice;
+      if (![preis, rate, anzahlung].every(Number.isFinite) || preis < PREIS_MIN || preis > PREIS_MAX ||
+          rate <= 0 || anzahlung < 0 || Math.round(preis * 100) !== monate * Math.round(rate * 100) + Math.round(anzahlung * 100)) continue;
+      const bild = h.imageUrl && !/samsung|galaxy|iphone|xiaomi/i.test(h.imageUrl) ? h.imageUrl : '';
+      result.set(h.externalId, { ...modell, ...speicher, name: 'Google ' + modell.modell, preis, rate, anzahlung, url: url.href, bild });
     }
-    await page.waitForTimeout(2500);
-    const karten = await page.evaluate(() => {
-      const norm = s => (s || '').replace(/\s+/g, ' ').trim();
-      const out = [];
-      const gesehen = new Set();
-      for (const a of document.querySelectorAll('a[href]')) {
-        const href = a.href || '';
-        if (!/pixel/i.test(href + ' ' + norm(a.innerText || a.getAttribute('aria-label')))) continue;
-        let el = a;
-        let karte = null;
-        for (let i = 0; i < 7 && el; i++, el = el.parentElement) {
-          const t = norm(el.innerText);
-          if (t.length > 900) break;
-          if (t.includes('€') && /pixel\s+\d/i.test(t)) { karte = el; break; }
-        }
-        if (!karte) continue;
-        const t = norm(karte.innerText);
-        if (gesehen.has(t)) continue;
-        gesehen.add(t);
-        const img = karte.querySelector('img');
-        // Produktlink der Kachel (nicht das Energielabel-PDF)
-        const produkt = [...karte.querySelectorAll('a[href]')].map(x => x.href).find(h => /\/e-shop\/google\//.test(h) && !/\.pdf/i.test(h));
-        out.push({ text: t, href: produkt || href, bild: img ? (img.currentSrc || img.src) : '' });
-      }
-      return out;
-    });
-    const text = await page.evaluate(() => document.body.innerText || '');
-    return { status: resp?.status(), url: page.url(), titel: await page.title(), karten, text, jsons };
-  } finally {
-    await browser.close();
   }
+  return result;
 }
 
-function kandidatenSammeln(s) {
-  const karten = s.karten.map(k => kandidatAusKartentext(k.text, k.href, k.bild)).filter(Boolean);
-  const json = [];
-  for (const j of s.jsons) {
-    if (!/Pixel/.test(j.text)) continue;
-    try { json.push(...kandidatenAusJson(JSON.parse(j.text))); } catch { /* kein gültiges JSON */ }
-  }
-  let alle = [...karten, ...json];
-  if (zusammenfuehren(alle).length < 2) alle = [...alle, ...kandidatenAusSeitentext(s.text)];
-  return { karten, json, alle };
-}
-
-function debugText(s, k, fehler, geraete) {
-  const z = [];
-  z.push(fehler ? `Pixel-Abruf fehlgeschlagen: ${fehler}` : 'Pixel-Abruf OK (Diagnose eingeschaltet)', `Zeit: ${jetzt().stand}`, `Quelle: ${QUELLE}`);
-  const zeile = c => `- ${c.modell} | ${c.speicher || 'ohne Speicher'} | ${c.preis} € | ${c.url || 'ohne Link'}`;
-  if (k) {
-    z.push('', `Aus Kacheln (${k.karten.length}):`, ...k.karten.map(zeile));
-    z.push('', `Aus JSON (${k.json.length}):`, ...k.json.slice(0, 40).map(zeile));
-  }
-  if (geraete) z.push('', `Ergebnis (${geraete.length}):`, ...geraete.map(zeile));
-  if (s) {
-    z.push(`HTTP: ${s.status}  Endadresse: ${s.url}`, `Titel: ${s.titel}`);
-    z.push('', `Kacheln (Links mit Pixel): ${s.karten.length}`);
-    s.karten.slice(0, 6).forEach(c => z.push(`- ${c.text.slice(0, 300)}  [${c.href}]`));
-    z.push('', `JSON-Antworten: ${s.jsons.length}`);
-    s.jsons.slice(0, 40).forEach(j => z.push(`- ${j.status} ${j.laenge} ${j.url.slice(0, 200)}${/Pixel/.test(j.text) ? '  <- enthält Pixel' : ''}`));
-    s.jsons.filter(j => /Pixel/.test(j.text)).slice(0, 2).forEach(j => {
-      const i = j.text.indexOf('Pixel');
-      z.push('', `Ausschnitt ${j.url.slice(0, 120)}:`, j.text.slice(Math.max(0, i - 600), i + 900));
-    });
-    z.push('', 'Zeilen mit Pixel im Seitentext:');
-    s.text.split('\n').filter(l => /Pixel/i.test(l)).slice(0, 40).forEach(l => z.push('  ' + l.trim().slice(0, 200)));
-    z.push('', 'Seitentext (Anfang):', s.text.replace(/\n{2,}/g, '\n').slice(0, 2500));
-  }
-  if (k) z.push('', `Kandidaten: Kacheln ${k.karten.length}, JSON ${k.json.length}, gesamt ${k.alle.length}`);
-  return z.join('\n') + '\n';
+export function kombiniere(liste36, liste24) {
+  return [...liste36].map(([id, g]) => {
+    const kurz = liste24.get(id);
+    if (kurz?.modell === g.modell && kurz.speicherGb === g.speicherGb && kurz.preis === g.preis)
+      return { ...g, rate24: kurz.rate, anzahlung24: kurz.anzahlung };
+    return g;
+  }).sort((a, b) => b.gen - a.gen || STUFEN_REIHE.indexOf(a.stufe) - STUFEN_REIHE.indexOf(b.stufe) || a.speicherGb - b.speicherGb);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  let seite;
-  let kand;
   try {
-    seite = await seiteLesen();
-    kand = kandidatenSammeln(seite);
-    const geraete = zusammenfuehren(kand.alle);
-
-    let alt = {};
-    try { alt = JSON.parse(await readFile(DATEI, 'utf8')); } catch { /* erste Ausführung */ }
+    const abruf = monate => {
+      const html = execFileSync('curl', ['--fail', '--silent', '--show-error', '--location', '--retry', '2',
+        '--max-time', '45', '--user-agent', UA, QUELLE + '&ratenzahlung=' + monate], { encoding: 'utf8', maxBuffer: 8000000 });
+      return leseKatalog(html, monate);
+    };
+    const geraete = kombiniere(abruf(36), abruf(24));
+    const alt = JSON.parse(await readFile(DATEI, 'utf8'));
     pruefen(geraete, alt);
-
     const { datum, stand } = jetzt();
-    const geaendert = JSON.stringify(alt.geraete) !== JSON.stringify(geraete);
-    await writeFile(DATEI, JSON.stringify({
-      quelle: QUELLE,
-      geprueft: datum,
-      stand,
-      geaendertAm: geaendert ? datum : (alt.geaendertAm || datum),
-      geraete,
-    }, null, 2) + '\n');
-    if (process.env.PIXEL_DEBUG) await writeFile(DEBUG, debugText(seite, kand, null, geraete));
-    else await rm(DEBUG, { force: true });
-    console.log(geaendert ? 'PIXEL-GERÄTE GEÄNDERT:' : 'unverändert:', geraete.map(g => `${g.modell} ${g.speicher} ${g.preis} €`).join(' | '));
+    const geaendertAm = JSON.stringify(alt.geraete) === JSON.stringify(geraete) ? alt.geaendertAm : datum;
+    await writeFile(DATEI, JSON.stringify({ quelle: QUELLE, geprueft: datum, stand, geaendertAm, geraete }, null, 2) + '\n');
+    await rm(DEBUG, { force: true });
+    console.log(geraete.length + ' Geräte aktualisiert');
   } catch (e) {
-    await writeFile(DEBUG, debugText(seite, kand, e.message));
-    console.error('FEHLER:', e.message);
+    await writeFile(DEBUG, 'Pixel-Abruf fehlgeschlagen: ' + e.message + '\n');
+    console.error(e.message);
     process.exitCode = 1;
   }
 }
