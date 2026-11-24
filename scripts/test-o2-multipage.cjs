@@ -9,7 +9,7 @@ const start = html.indexOf('const PS_O2_AMT');
 const end = html.indexOf('// === v55.176 (Beta)', start);
 assert.ok(start >= 0 && end > start, 'OCR module exists');
 const api = vm.runInNewContext(html.slice(start, end) +
-  '\n({psO2Parse,psO2CloudShape,psO2CloudNeedsLocal,psO2SuspectTotals,psO2Page2InternetDetails,psO2JoinDetails});',
+  '\n({psO2Parse,psO2CloudShape,psO2CloudNeedsLocal,psO2SuspectTotals,psO2Page2InternetDetails,psO2JoinDetails,psO2Gaps});',
   { console, window: {} }, { timeout: 10000 });
 
 test('page 1 keeps the Internet@Home header and its separate prices', () => {
@@ -64,4 +64,11 @@ test('same high amount in both total fields is suspicious', () => {
   assert.equal(api.psO2SuspectTotals({einmalig:'1.858,96',monatlich:'139,96'}), false);
   assert.equal(api.psO2CloudNeedsLocal({ tarife:[],geraete:[],internet:[],einmalig:'1.858,96',monatlich:'139,96' },
     'ganz', { internet:[{name:'O2 Home XL 600'}] }), true);
+});
+
+test('first page with missing Mobile S and Home prices requires another recognition pass', () => {
+  const p = { tarife: [{ name: 'O2 Mobile S (2026)', am: null, details: [], rb: {e:0,m:0,bad:false} }],
+    geraete: [], internet: [{ name: 'O2 Home XL 600', am: null, details: [], rb: {e:0,m:0,bad:false} }],
+    einmalig: '', monatlich: '', hdr: {tarife:1,geraete:0,internet:1} };
+  assert.ok(api.psO2Gaps(p, 'TARIF O2 Mobile S (2026) INTERNET@HOME O2 Home XL 600').includes('einzelpreise'));
 });
