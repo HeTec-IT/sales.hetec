@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.225';
+    window.APP_VERSION = '55.226';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -14569,12 +14569,13 @@ function PsO2Import({ onApply, onClose, initial }) {
   // v55.199: Modus "Block-Fotos": die Kamera bleibt offen, je Block ein Foto (Block 1, Block 2 ...), zuletzt der Kostenblock.
   // Gelesen wird nacheinander im Hintergrund; "Ganzes Foto" = bisheriges Verhalten (eine Taste je Bereich).
   // v55.203: dritter Modus "Bildschirm" (nur am PC): Activate+ Fenster freigeben, Rahmen ziehen = lesen
-  const snipOk = psO2SnipSupported();
+  // v55.226: Modus "Bildschirm" entfernt; am PC (Bildschirmfreigabe vorhanden) nur noch "Foto"
+  const isPc = psO2SnipSupported(), snipOk = false;
   // v55.209: Tablet-Standard = "Scannen" (Block-Fotos und QR vom PC entfallen in der Auswahl)
   const [mode, setModeS] = React.useState(() => { try { const mv = localStorage.getItem('ps_o2_mode'); if (mv === 'ganz' || mv === 'snip' || mv === 'scan') return mv; } catch (e) {} return snipOk ? 'snip' : 'ganz'; });
   const setMode = m => { setModeS(m); try { localStorage.setItem('ps_o2_mode', m); } catch (e) {} };
   // v55.205: Tablet (ohne Bildschirmfreigabe): Knopf "Vom PC scannen" immer oben, kein eigener Modus mehr
-  const camOk = psO2CamSupported(), eff = mode === 'snip' && !snipOk ? 'scan' : mode;
+  const camOk = psO2CamSupported() && !isPc, eff = mode === 'snip' || (mode === 'scan' && !camOk) ? 'ganz' : mode;
   const blockMode = false, scanMode = eff === 'scan' && camOk, snipMode = eff === 'snip' && snipOk, scanOk = false, quick = scanMode || snipMode;
   const lastRRef = React.useRef(null), scanPrevRef = React.useRef(null), droppedRef = React.useRef([]);
   // v55.211: Beim Zusammensetzen mehrerer Fotos als "schon da" verworfene Eintraege: passen die Summen zum Kostenblock erst,
