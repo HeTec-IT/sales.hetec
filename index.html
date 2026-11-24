@@ -13649,7 +13649,8 @@ function psO2Gaps(r, txt) {
   const c = psO2Check(r);
   if (c && [c.e, c.m].some(x => x && !x.ok)) g.push('summen');
   // Summen gelesen, aber Einzelpreise nicht vollstaendig -> Pruefung unmoeglich; ein weiterer (entrauschter) Durchgang findet oft den fehlenden Tarif/Preis
-  if (!c && (r.einmalig || r.monatlich) && ([].concat(r.tarife || [], r.geraete || []).some(it => !it.am) || (r.tarife || []).some(t => t.am[1] == null))) g.push('einzelpreise');
+  if ((r.tarife || []).some(it => !it.am || it.am[1] == null) || (r.internet || []).some(it => !it.am || it.am[1] == null) ||
+      (!c && (r.einmalig || r.monatlich) && (r.geraete || []).some(it => !it.am))) g.push('einzelpreise');
   return g;
 }
 // Wie "echt" ist ein gelesener Produktname? Anteil der Woerter, die zu Geraeten/Tarifen/Farben passen (Lesemuell wie "Goc Igle" faellt auf).
