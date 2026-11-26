@@ -2,26 +2,29 @@
 
 Lauf: 2026-11-26, `node scripts/run-tests.mjs` (Gesamtlauf nach Behebung der Review-Befunde) (Ergebnisdatei `tests/.out/test-summary.json`, nicht versioniert).
 Umgebung: Linux-Build-Server, Node 22, PHP 8.2, MariaDB 10.11, Playwright Chromium headless.
+**Zusätzlich GitHub Actions (CI) mit Chromium UND WebKit (Safari-Engine, Desktop):** 185 bestanden, 0 fehlgeschlagen (Commit c151bcb).
 Alle Testdaten synthetisch (keine echten Kunden-/Mitarbeiterdaten).
 
 ## Ergebnis
 
 | Suite | bestanden | fehlgeschlagen | übersprungen | Dauer |
 |---|---:|---:|---:|---:|
-| OCR-Logik (Parser, Engine, Mehrseiten, Smart Scan) | 65 | 0 | 0 | 75 s |
+| OCR-Logik (Parser, Engine, Mehrseiten, Smart Scan) | 66 | 0 | 0 | 75 s |
 | Preisdaten + Preis-Schutz | 7 | 0 | 0 | 0 s |
 | Backend-API, Auth (Entra-Mock), Rechte, Statistik, Flow-Weiterleitung | 48 | 0 | 0 | 3 s |
 | Firestore-Migration (synthetisch) | 6 | 0 | 0 | 1 s |
 | Release-Artefakt | 7 | 0 | 0 | 4 s |
-| Browser: Smart-Scan-Dialog (12 Abläufe) | 11 | 0 | 0 | 66 s |
+| Browser: Smart-Scan-Dialog (12 Abläufe) | 12 | 0 | 0 | 67 s |
 | Browser: echte lokale OCR – Tesseract | 15 | 0 | 0 | 67 s |
 | Browser: echte lokale OCR – PaddleOCR/ONNX | 15 | 0 | 0 | 109 s |
+| Browser: Firebase-Betrieb (GitHub-Pages-Beta, Firebase-Testersatz) | 1 | 0 | 0 | 4 s |
 | Browser: Verwaltung (admin/) | 2 | 0 | 0 | 6 s |
 | Browser: Release Ende-zu-Ende (Login, Offline, Sync, Update, CSP) | 6 | 0 | 0 | 23 s |
-| **Gesamt** | **182** | **0** | **0** | |
+| **Gesamt** | **185** | **0** | **0** | |
 
-Nicht ausgeführte Suiten: **WebKit/Safari** (alle Browser-Suiten) – Browser-Download im Build-Netz gesperrt.
-In `.github/workflows/ci.yml` konfiguriert (`PS_BROWSERS=chromium,webkit`); Ergebnis steht erst nach dem ersten CI-Lauf fest.
+WebKit lokal nicht installierbar, aber in der CI ausgeführt (Dialog, OCR beider Engines, Firebase-Betrieb): bestanden.
+Befund aus der CI (behoben): Neuronale OCR las bei leicht unscharfem Foto auf anderer Hardware eine Ziffer der Summe falsch
+(2.468,96 statt 2.468,98) → neue Regel: Summe, die in genau einer Ziffer von den Einzelpreisen abweicht, bleibt leer.
 Keine Tests deaktiviert. Die 3 Python-Tests wurden durch gleichwertige JS-Tests ersetzt (Cloud-OCR-Fälle durch lokale).
 
 ## Abdeckung (Auszug)
@@ -67,7 +70,7 @@ Auf Galaxy Tab S9 FE / iPads ist mit 2–4× längeren Zeiten zu rechnen → **a
 |---|---|---|
 | Echte Microsoft-Anmeldung | keine App-Registrierung (Freigabe nötig) | MICROSOFT-ENTRA-SETUP.md, Abschnitt „Abnahme“ |
 | Hetzner-Hosting | kein Konto/Zugang (Freigabe nötig) | HETZNER-DEPLOYMENT.md, „Rauchtest“ |
-| Safari/WebKit, iPadOS | Browser nicht installierbar | CI-Lauf + echte iPads |
+| iPadOS-Safari (echtes Gerät) | WebKit nur als Desktop-Engine in der CI getestet | echte iPads |
 | Galaxy Tab S9 FE, Android-Kamera | kein Gerät | Kamera, Smart Scan, Offline, Update auf Gerät |
 | Power-Automate-Flows (Archiv, Folgetermin) | produktive Flows nicht angefasst | nach Flow-Anpassung mit Testshop |
 | Preis-Bots gegen Live-Websites | Netzwerk gesperrt | GitHub-Actions-Lauf (manuell auslösen) |
