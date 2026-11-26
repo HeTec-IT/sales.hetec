@@ -141,6 +141,8 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
     r = res.length === 1 ? res[0] : psO2Combine(res);
     // v57: unplausible (vertauschte) Summen eines Einzeldurchgangs verwerfen → weiterer Durchgang bzw. Eingabe von Hand
     if (r && !psO2TotalsPlausible(r, [r])) r = Object.assign({}, r, { einmalig: '', monatlich: '' });
+    // v57: eine Ziffer falsch gelesen (Summe ≠ Einzelpreise in genau einer Stelle) → diese Summe leer lassen
+    if (r) { const slip = psO2TotalsDigitSlip(r); if (slip.length) { r = Object.assign({}, r); slip.forEach(f => { r[f] = ''; }); } }
   };
   const hard = () => (isDone && !isDone(r)) || psO2Gaps(r, txt).length > 0 || psO2Score(r) <= 0;
   // Namen, die nach Lesemuell aussehen ("ECT 34"): ein zweiter Durchgang lohnt sich (hoechstens dieser eine)

@@ -13,7 +13,7 @@ Alle Testdaten synthetisch (keine echten Kunden-/Mitarbeiterdaten).
 | Backend-API, Auth (Entra-Mock), Rechte, Statistik, Flow-Weiterleitung | 48 | 0 | 0 | 3 s |
 | Firestore-Migration (synthetisch) | 6 | 0 | 0 | 1 s |
 | Release-Artefakt | 7 | 0 | 0 | 4 s |
-| Browser: Smart-Scan-Dialog (11 Abläufe) | 11 | 0 | 0 | 66 s |
+| Browser: Smart-Scan-Dialog (12 Abläufe) | 11 | 0 | 0 | 66 s |
 | Browser: echte lokale OCR – Tesseract | 15 | 0 | 0 | 67 s |
 | Browser: echte lokale OCR – PaddleOCR/ONNX | 15 | 0 | 0 | 109 s |
 | Browser: Verwaltung (admin/) | 2 | 0 | 0 | 6 s |

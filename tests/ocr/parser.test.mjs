@@ -127,3 +127,15 @@ test('Combine: fehlender Preis wird aus anderem Durchgang ergaenzt, nichts doppe
   assert.deepEqual(plain(c.tarife[1].am), ['39,99', '34,99']);
   assert.equal(c.geraete.length, 1);
 });
+
+test('Summe mit genau einer falsch gelesenen Ziffer wird nicht übernommen (leer statt falsch)', () => {
+  const ok = X.psO2Parse(BELEG);
+  assert.deepEqual([...X.psO2TotalsDigitSlip(ok)], [], 'korrekte Summen bleiben');
+  const slip = X.psO2Parse(BELEG.replace('2.468,98', '2.468,96'));
+  assert.equal(slip.einmalig, '2.468,96');
+  assert.deepEqual([...X.psO2TotalsDigitSlip(slip)], ['einmalig']);
+  const m = X.psO2Parse(BELEG.replace(/69,98(?![\d])/g, '69,93'));
+  if (m.monatlich === '69,93') assert.deepEqual([...X.psO2TotalsDigitSlip(m)], ['monatlich']);
+  const far = X.psO2Parse(BELEG.replace('2.468,98', '3.999,00'));
+  assert.deepEqual([...X.psO2TotalsDigitSlip(far)], [], 'größere Abweichung (z. B. fehlende Position) → bisherige Warnung, kein Leeren');
+});

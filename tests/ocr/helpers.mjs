@@ -13,7 +13,7 @@ export function ocrSource() {
 }
 
 const NAMES = ['psO2Parse', 'psO2WordsToText', 'psO2Score', 'psO2Check', 'psO2Suggest', 'psO2Verdict', 'psO2Gaps', 'psO2Combine',
-  'psO2Pretty', 'psO2ReadLocal', 'psO2NewJob', 'psO2Release', 'psO2Worker', 'psO2ResetEngine', 'psO2WithTimeout', 'psO2Cents', 'psO2Fmt', 'PS_O2_T', 'PS_O2_PLAN', 'psO2OfferTs', 'psO2OfferCmp', 'psO2FillAm', 'psO2CleanName'];
+  'psO2Pretty', 'psO2ReadLocal', 'psO2NewJob', 'psO2Release', 'psO2Worker', 'psO2ResetEngine', 'psO2WithTimeout', 'psO2Cents', 'psO2Fmt', 'PS_O2_T', 'PS_O2_PLAN', 'psO2OfferTs', 'psO2OfferCmp', 'psO2FillAm', 'psO2CleanName', 'psO2TotalsDigitSlip'];
 
 // tess = Attrappe fuer window.Tesseract (siehe fakeTesseract), sonst keine
 export function loadOcr(tess) {

@@ -16,7 +16,7 @@ let env, list = [];
 before(async () => {
   if (skip) return;
   env = await startEnv({ releaseDir: REL });
-  list = (await browsers()).filter(x => x.name === 'chromium');  // Service Worker + Offline in Chromium (WebKit separat)
+  list = await browsers(['chromium']);  // Service Worker + Offline in Chromium (WebKit separat)
 });
 after(async () => { for (const { b } of list) await b.close(); if (env) await env.stop(); });
 

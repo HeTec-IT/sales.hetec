@@ -20,7 +20,7 @@ const suites = [
   { name: 'Backend-API, Auth (Entra-Mock), Rechte, Statistik', files: ['tests/backend/*.test.mjs'], need: php && 'PHP+MariaDB', serial: true },
   { name: 'Firestore-Migration (synthetisch)', files: ['tests/migration/*.test.mjs'], need: php && 'PHP+MariaDB', serial: true },
   { name: 'Release-Artefakt', files: ['tests/release/*.test.mjs'], need: php && 'PHP' },
-  { name: 'Browser: Smart-Scan-Dialog (11 Abläufe)', files: ['tests/e2e/smart-scan-dialog.test.mjs'], need: pw && 'Playwright' },
+  { name: 'Browser: Smart-Scan-Dialog (12 Abläufe)', files: ['tests/e2e/smart-scan-dialog.test.mjs'], need: pw && 'Playwright' },
   { name: 'Browser: echte lokale OCR – Tesseract', files: ['tests/e2e/ocr-real.test.mjs'], need: pw && !quick && 'Playwright', env: { PS_OCR_ENGINES: 'tesseract' } },
   { name: 'Browser: echte lokale OCR – PaddleOCR/ONNX', files: ['tests/e2e/ocr-real.test.mjs'], need: pw && !quick && 'Playwright', env: { PS_OCR_ENGINES: 'neural' } },
   { name: 'Browser: Firebase-Betrieb (GitHub-Pages-Beta, Firebase-Testersatz)', files: ['tests/e2e/firebase-mode.test.mjs'], need: pw && 'Playwright', serial: true },
@@ -34,6 +34,8 @@ const glob = p => {
   return fs.readdirSync(path.join(ROOT, dir)).filter(f => re.test(f)).map(f => path.join(dir, f));
 };
 const results = [];
+// Hängende Suite (z. B. offener Browser) darf den Gesamtlauf nicht blockieren → nach Frist abbrechen und als Fehler werten
+const SUITE_TIMEOUT_MS = Number(process.env.PS_SUITE_TIMEOUT_MS || 25 * 60 * 1000);
 for (const s of suites) {
   if (s.need === false || s.need === '' || s.need === 0) {
     results.push({ suite: s.name, status: 'nicht ausgeführt', reason: 'Voraussetzung fehlt', pass: 0, fail: 0, skipped: 0 });
@@ -43,14 +45,16 @@ for (const s of suites) {
   if (s.prepare === 'release') execFileSync(process.execPath, [path.join(ROOT, 'scripts/build-release.mjs')], { stdio: 'inherit' });
   const files = s.files.flatMap(glob);
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, ['--test', ...(s.serial ? ['--test-concurrency=1'] : []), ...files], { cwd: ROOT, env: { ...process.env, ...(s.env || {}) }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(process.execPath, ['--test', ...(s.serial ? ['--test-concurrency=1'] : []), ...files], { cwd: ROOT, env: { ...process.env, ...(s.env || {}) }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: SUITE_TIMEOUT_MS, killSignal: 'SIGKILL' });
   const out = (r.stdout || '') + (r.stderr || '');
   const num = k => Number((out.match(new RegExp('^# ' + k + ' (\\d+)', 'm')) || [])[1] || 0);
   const res = { suite: s.name, pass: num('pass'), fail: num('fail'), skipped: num('skipped') + num('todo'), cancelled: num('cancelled'), seconds: Math.round((Date.now() - t0) / 1000) };
+  if (r.error && r.error.code === 'ETIMEDOUT') { res.timedOut = true; res.fail = res.fail || 1; }
   res.status = res.fail || res.cancelled || r.status ? 'fehlgeschlagen' : 'bestanden';
   if (res.status !== 'bestanden') res.failures = out.split('\n').filter(l => /^not ok|^\s+error:/.test(l)).slice(0, 30);
   results.push(res);
   console.log(`${res.status === 'bestanden' ? '✅' : '❌'} ${s.name}: ${res.pass} bestanden, ${res.fail} fehlgeschlagen, ${res.skipped} übersprungen (${res.seconds} s)`);
+  if (res.timedOut) console.log('   Abgebrochen: Zeitlimit ' + Math.round(SUITE_TIMEOUT_MS / 60000) + ' min überschritten');
   if (res.failures) console.log(res.failures.join('\n'));
 }
 const total = results.reduce((a, r) => ({ pass: a.pass + r.pass, fail: a.fail + r.fail, skipped: a.skipped + r.skipped }), { pass: 0, fail: 0, skipped: 0 });

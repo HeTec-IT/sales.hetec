@@ -6,7 +6,7 @@ import { browsers } from './lib.mjs';
 
 const skip = !phpAvailable() && 'PHP fehlt';
 let env, list = [];
-before(async () => { if (skip) return; env = await startEnv(); list = (await browsers()).filter(x => x.name === 'chromium'); });
+before(async () => { if (skip) return; env = await startEnv(); list = await browsers(['chromium']); });
 after(async () => { for (const { b } of list) await b.close(); if (env) await env.stop(); });
 
 async function devLogin(ctx, email) {
