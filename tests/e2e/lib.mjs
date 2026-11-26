@@ -19,7 +19,8 @@ export async function browsers(only) {
   if (!p) return [];
   const out = [];
   for (const name of (process.env.PS_BROWSERS || 'chromium,webkit').split(',').filter(n => !only || only.includes(n))) {
-    try { const b = await p[name].launch({ args: name === 'chromium' ? ['--no-sandbox'] : [] }); out.push({ name, b }); } catch (e) { if (process.env.PS_REQUIRE_BROWSERS) throw e; }
+    // PW_CHROME: optional eigener Chromium/Chrome (z. B. auf Rechnern ohne „npx playwright install“)
+    try { const b = await p[name].launch({ args: name === 'chromium' ? ['--no-sandbox'] : [], ...(name === 'chromium' && process.env.PW_CHROME ? { executablePath: process.env.PW_CHROME } : {}) }); out.push({ name, b }); } catch (e) { if (process.env.PS_REQUIRE_BROWSERS) throw e; }
   }
   return out;
 }

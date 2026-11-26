@@ -44,7 +44,7 @@ test('index.html enthält Smart Scan nicht mehr inline, lädt aber alle Module',
   const h = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.ok(!h.includes('function PsO2Import('));
   assert.ok(!h.includes('function psO2Parse('));
-  for (const f of ['config.js', 'parser.js', 'preprocess.js', 'neural.js', 'engine.js', 'transfer.js', 'camera.js', 'snip.js', 'qr-transfer.js', 'ui-crop.js', 'ui-dialog.js']) {
+  for (const f of ['config.js', 'parser.js', 'preprocess.js', 'neural.js', 'engine.js', 'transfer.js', 'camera.js', 'snip.js', 'qr-transfer.js', 'hsc-protocol.js', 'hsc-import.js', 'ui-crop.js', 'ui-dialog.js']) {
     assert.ok(h.includes(`src="frontend/smart-scan/${f}"`), f);
   }
 });

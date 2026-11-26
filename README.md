@@ -15,6 +15,7 @@ Microsoft-Anmeldung (@hetec-gmbh.de), lokale OCR, kein Firebase, keine Google-Di
 | Microsoft Entra einrichten (IT) | [docs/MICROSOFT-ENTRA-SETUP.md](docs/MICROSOFT-ENTRA-SETUP.md) |
 | Hetzner/SFTP-Deployment, Rollback | [docs/HETZNER-DEPLOYMENT.md](docs/HETZNER-DEPLOYMENT.md) |
 | Firebase-Datenmigration | [docs/FIREBASE-MIGRATION.md](docs/FIREBASE-MIGRATION.md) |
+| Smart Capture QR-Import | [docs/SMART-CAPTURE.md](docs/SMART-CAPTURE.md) |
 | Testergebnisse | [docs/TEST-REPORT.md](docs/TEST-REPORT.md) |
 | Stand / Übergabe | [docs/MIGRATION-STATUS.md](docs/MIGRATION-STATUS.md) |
 | Änderungen | [CHANGELOG.md](CHANGELOG.md) |
