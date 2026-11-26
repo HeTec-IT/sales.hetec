@@ -23,6 +23,7 @@ const suites = [
   { name: 'Browser: Smart-Scan-Dialog (11 Abläufe)', files: ['tests/e2e/smart-scan-dialog.test.mjs'], need: pw && 'Playwright' },
   { name: 'Browser: echte lokale OCR – Tesseract', files: ['tests/e2e/ocr-real.test.mjs'], need: pw && !quick && 'Playwright', env: { PS_OCR_ENGINES: 'tesseract' } },
   { name: 'Browser: echte lokale OCR – PaddleOCR/ONNX', files: ['tests/e2e/ocr-real.test.mjs'], need: pw && !quick && 'Playwright', env: { PS_OCR_ENGINES: 'neural' } },
+  { name: 'Browser: Firebase-Betrieb (GitHub-Pages-Beta, Firebase-Testersatz)', files: ['tests/e2e/firebase-mode.test.mjs'], need: pw && 'Playwright', serial: true },
   { name: 'Browser: Verwaltung (admin/)', files: ['tests/e2e/admin.test.mjs'], need: pw && php && 'Playwright+PHP', serial: true },
   { name: 'Browser: Release Ende-zu-Ende (Login, Offline, Sync, Update, CSP)', files: ['tests/e2e/app-release.test.mjs'], need: pw && php && 'Playwright+PHP', serial: true, prepare: 'release' },
 ];

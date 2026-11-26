@@ -2,7 +2,7 @@
 node_modules/
 backend/vendor/
 backend/composer.lock
-release/
+/release/
 dist/
 .cache/
 
