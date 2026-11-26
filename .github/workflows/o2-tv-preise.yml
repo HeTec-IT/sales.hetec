@@ -17,10 +17,10 @@ jobs:
         with:
           node-version: 20
       - name: Preise von o2online.de holen
-        run: node scripts/tv-preise.mjs
+        run: node scripts/o2-tv-preise.mjs
       - name: Speichern
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
-          git add tv-preise.json
+          git add tv-preise.json price-status/tv-preise.json
           git diff --cached --quiet || (git commit -m "TV-Preise aktualisiert" && git push)

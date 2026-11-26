@@ -36,7 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
-          git add disney-preise.json
+          git add disney-preise.json price-status/disney-preise.json
           if [ -e disney-debug.txt ]; then git add disney-debug.txt; else git rm -q --cached --ignore-unmatch disney-debug.txt; fi
           git diff --cached --quiet && exit 0
           git commit -m "Netflix-Preise aktualisiert"

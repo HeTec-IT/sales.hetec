@@ -83,6 +83,9 @@ self.addEventListener('fetch', function (e) {
 
   if (MANIFEST) {
     // Navigation: immer die App-Hülle DIESER Version (konsistent mit ihren Skripten), Updates kommen über den SW-Zyklus
+    var scopePath = new URL(self.registration.scope).pathname;
+    var isShell = url.pathname === scopePath || url.pathname === scopePath + MANIFEST.entry;
+    if (req.mode === 'navigate' && !isShell) return;      // andere Seiten (z. B. /admin/) immer vom Server
     if (req.mode === 'navigate') {
       e.respondWith(fromCache(CACHE, scopeUrl(MANIFEST.entry)).then(function (hit) {
         return hit || fetch(req);

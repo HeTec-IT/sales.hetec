@@ -22,7 +22,9 @@ if ($uri === '/frontend/config/app-config.js' && getenv('PS_FRONTEND_BACKEND') =
     return true;
 }
 $file = realpath($root . $uri);
-if ($uri === '/' || $file === false || is_dir($file)) {
+if ($file !== false && is_dir($file) && is_file($file . '/index.html')) {
+    $file = $file . '/index.html';
+} elseif ($uri === '/' || $file === false || is_dir($file)) {
     $file = realpath($root . '/index.html');
 }
 if ($file === false || !str_starts_with($file, realpath($root) . DIRECTORY_SEPARATOR) || !is_file($file)) {

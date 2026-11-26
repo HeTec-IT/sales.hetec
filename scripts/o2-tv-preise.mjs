@@ -1,5 +1,6 @@
 // Holt die aktuellen o2-TV-Preise (24 Monate) von o2online.de und schreibt tv-preise.json.
 // Läuft per GitHub Action täglich. Bei Fehler/unplausiblen Werten: Abbruch, alte Datei bleibt.
+import { geschuetztSchreiben } from './lib/price-guard.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const QUELLE = 'https://www.o2online.de/extras/o2-tv/';
@@ -89,6 +90,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       quelle: QUELLE,
     },
   };
-  await writeFile(DATEI, JSON.stringify(neu, null, 2) + '\n');
+  const erg = await geschuetztSchreiben(DATEI, neu, { name: 'tv-preise.json' });
+  if (!erg.geschrieben) console.log('Nicht übernommen:', erg.grund, erg.spruenge ? JSON.stringify(erg.spruenge) : '');
   console.log(geaendert ? 'PREISE GEÄNDERT:' : 'unverändert:', JSON.stringify(preise));
 }

@@ -1,6 +1,7 @@
 // Liest die Netflix-Preise für Deutschland von der Netflix-Hilfeseite und schreibt netflix-preise.json.
 // Läuft per GitHub Action täglich. Nur lesen, ein Seitenaufruf pro Lauf (erst einfach, bei Bedarf mit echtem Browser).
 // Bei Fehler/unplausiblen Werten: Abbruch OHNE Änderung, die alte Datei bleibt (Exit 0). Diagnose steht dann in netflix-debug.txt.
+import { geschuetztSchreiben } from './lib/price-guard.mjs';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 
 // Die Hilfeseite zeigt je nach Standort des Servers das Land (Runner = USA). Mit Ländercode am Ende gibt es die deutschen Preise.
@@ -151,7 +152,8 @@ async function main() {
   neu.geprueft = heute();
   delete neu.hinweis;
   if (geaendert) neu.geaendertAm = heute();
-  await writeFile(DATEI, JSON.stringify(neu, null, 2) + '\n');
+  const erg = await geschuetztSchreiben(DATEI, neu, { name: 'netflix-preise.json' });
+  if (!erg.geschrieben) console.log('Nicht übernommen:', erg.grund, erg.spruenge ? JSON.stringify(erg.spruenge) : '');
   console.log(geaendert ? 'Preise geändert.' : 'Preise unverändert, Prüfdatum aktualisiert.');
 }
 

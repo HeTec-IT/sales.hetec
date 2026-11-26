@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
-          git add vodafone-tv-preise.json
+          git add vodafone-tv-preise.json price-status/vodafone-tv-preise.json
           if [ -e vodafone-tv-debug.txt ]; then git add vodafone-tv-debug.txt; else git rm -q --cached --ignore-unmatch vodafone-tv-debug.txt; fi
           git diff --cached --quiet && exit 0
           git commit -m "Vodafone-TV-Preise aktualisiert"

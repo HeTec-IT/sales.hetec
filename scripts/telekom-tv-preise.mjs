@@ -1,6 +1,7 @@
 // Liest die MagentaTV-Preise (nach den 6 Gratis-Monaten, 24 Monate Laufzeit) von telekom.de und schreibt telekom-tv-preise.json.
 // Tarife: Smart, SmartStream, MegaStream. Läuft per GitHub Action täglich. Nur lesen. Erst einfacher Abruf, bei Bedarf mit echtem Browser.
 // Bei Fehler/unplausiblen Werten: Abbruch OHNE Änderung, die alte Datei bleibt (Exit 0). Diagnose steht dann in telekom-tv-debug.txt.
+import { geschuetztSchreiben } from './lib/price-guard.mjs';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { UA, textAusHtml, zahl, heute, mitBrowser, ausschnitte } from './tv-helfer.mjs';
 
@@ -101,7 +102,8 @@ async function main() {
   neu.geprueft = heute();
   delete neu.hinweis;
   if (geaendert) neu.geaendertAm = heute();
-  await writeFile(DATEI, JSON.stringify(neu, null, 2) + '\n');
+  const erg = await geschuetztSchreiben(DATEI, neu, { name: 'telekom-tv-preise.json' });
+  if (!erg.geschrieben) console.log('Nicht übernommen:', erg.grund, erg.spruenge ? JSON.stringify(erg.spruenge) : '');
   console.log(geaendert ? 'Preise geändert.' : 'Preise unverändert, Prüfdatum aktualisiert.');
 }
 

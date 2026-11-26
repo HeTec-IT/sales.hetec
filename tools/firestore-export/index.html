@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pencil Selling – Firestore-Export (Migration)</title>
+<style>body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;color:#0f172a}input,button{font:inherit;padding:8px 10px;margin:4px 0;width:100%;box-sizing:border-box}button{background:#1d4ed8;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer}pre{background:#f1f5f9;padding:10px;border-radius:8px;white-space:pre-wrap}.warn{background:#fef3c7;padding:10px;border-radius:8px}</style>
+</head><body>
+<h1>Firestore-Export für die Migration</h1>
+<p class="warn"><b>Nur nach ausdrücklicher Freigabe</b> und erst, wenn die neue Infrastruktur bereitsteht (docs/FIREBASE-MIGRATION.md).
+Die Exportdatei enthält Kunden- und Mitarbeiterdaten: nur verschlüsselt/intern übertragen, nach dem Import löschen.
+Dieses Werkzeug liegt nicht im Release und wird nach der Migration gelöscht.</p>
+<p>Anmeldung mit dem bisherigen Pencil-Selling-Administratorkonto (Firebase). Lesen erfolgt mit den Rechten dieses Kontos.</p>
+<input id="email" type="email" placeholder="Admin-E-Mail"><input id="pw" type="password" placeholder="Passwort">
+<button id="go">Anmelden und exportieren</button>
+<pre id="log"></pre>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script>
+const MAIN = { apiKey: "AIzaSyD0z1CX9vcdRQPtIo9pCjZ7Xs1h6dLl_8w", authDomain: "o2-pencil-selling.firebaseapp.com", projectId: "o2-pencil-selling", storageBucket: "o2-pencil-selling.firebasestorage.app", messagingSenderId: "347119579425", appId: "1:347119579425:web:afbb0b60fe6a266627ce60" };
+const AM = { apiKey: "AIzaSyCjYCn-X694K1xoUULAin_zDta1r-dSh7Y", authDomain: "verkaufsmappe-7d917.firebaseapp.com", projectId: "verkaufsmappe-7d917", storageBucket: "verkaufsmappe-7d917.firebasestorage.app", messagingSenderId: "916375365270", appId: "1:916375365270:web:5b6bfbc37a4d0be1a004b7" };
+const COLLECTIONS = ['users', 'analytics', 'saved_offers', 'skip_limits', 'tool_usage', 'news', 'pdf_index'];
+const log = t => { document.getElementById('log').textContent += t + '\n'; };
+function plain(v) {
+  if (v && typeof v.toMillis === 'function') return { _seconds: Math.floor(v.toMillis() / 1000), _nanoseconds: (v.toMillis() % 1000) * 1e6 };
+  if (Array.isArray(v)) return v.map(plain);
+  if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = plain(v[k]); return o; }
+  return v;
+}
+async function dump(db, name) {
+  const out = {}; let last = null, n = 0;
+  for (;;) {
+    let q = db.collection(name).orderBy(firebase.firestore.FieldPath.documentId()).limit(500);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    snap.forEach(d => { out[d.id] = plain(d.data()); n++; });
+    if (snap.size < 500) break;
+    last = snap.docs[snap.docs.length - 1];
+  }
+  log(name + ': ' + n + ' Dokumente');
+  return out;
+}
+document.getElementById('go').onclick = async () => {
+  try {
+    const app = firebase.initializeApp(MAIN, 'export');
+    await app.auth().signInWithEmailAndPassword(document.getElementById('email').value.trim(), document.getElementById('pw').value);
+    const db = app.firestore();
+    const collections = {};
+    for (const c of COLLECTIONS) { try { collections[c] = await dump(db, c); } catch (e) { log(c + ': FEHLER ' + e.code); } }
+    try { const am = firebase.initializeApp(AM, 'am').firestore(); const g = await am.collection('aktionsmappe').doc('global').get(); collections.aktionsmappe = g.exists ? { global: plain(g.data()) } : {}; log('aktionsmappe: ' + (g.exists ? 1 : 0)); } catch (e) { log('aktionsmappe: FEHLER ' + e.code); }
+    const blob = new Blob([JSON.stringify({ meta: { project: MAIN.projectId, exportedAt: new Date().toISOString(), tool: 'tools/firestore-export' }, collections })], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'firestore-export-' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+    log('Fertig. Datei sicher übertragen und nach dem Import löschen.');
+    await app.auth().signOut();
+  } catch (e) { log('Abbruch: ' + (e.message || e)); }
+};
+</script>
+</body></html>

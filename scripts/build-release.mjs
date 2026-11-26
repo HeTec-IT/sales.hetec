@@ -49,6 +49,14 @@ function walk(dir, out = []) {
   return out;
 }
 
+// Preisdaten müssen gültig sein, bevor sie ausgeliefert werden
+try {
+  execFileSync(process.execPath, ['--test', path.join(ROOT, 'tests/prices/validate.test.mjs')], { stdio: 'pipe' });
+} catch (e) {
+  console.error('Preisdaten ungültig – Release abgebrochen:\n' + (e.stdout || '').toString().split('\n').filter(l => /not ok|error|expected|actual/.test(l)).join('\n'));
+  process.exit(1);
+}
+
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(PUB, { recursive: true });
 
@@ -58,6 +66,7 @@ copy(path.join(ROOT, 'frontend'), path.join(PUB, 'frontend'), s => !EXCLUDE_FRON
 copy(path.join(ROOT, 'vendor'), path.join(PUB, 'vendor'));
 copy(path.join(ROOT, 'ocr', 'generated'), path.join(PUB, 'ocr', 'generated'));
 copy(path.join(ROOT, 'admin'), path.join(PUB, 'admin'));
+if (fs.existsSync(path.join(ROOT, 'bilder'))) copy(path.join(ROOT, 'bilder'), path.join(PUB, 'bilder'), s => !s.endsWith('.gitkeep'));
 for (const f of ['icon-192.png', 'icon-512.png', 'sw.js']) copy(path.join(ROOT, f), path.join(PUB, f));
 for (const f of fs.readdirSync(ROOT).filter(f => /-preise\.json$|^pixel-geraete\.json$|^tv-preise\.json$/.test(f))) copy(path.join(ROOT, f), path.join(PUB, f));
 copy(path.join(ROOT, 'backend', 'public', 'api'), path.join(PUB, 'api'));
@@ -106,7 +115,7 @@ for (const f of walk(PUB)) {
 }
 precache.push({ url: 'index.html', hash: sha(fs.readFileSync(path.join(PUB, 'index.html'))).slice(0, 10) });
 const ocrFiles = walk(path.join(PUB, 'ocr', 'generated')).map(f => sha(fs.readFileSync(f))).sort().join('');
-const swManifest = { version: VERSION + '-' + sha(JSON.stringify(precache)).slice(0, 8), ocrVersion: sha(ocrFiles).slice(0, 12), entry: 'index.html', files: precache };
+const swManifest = { version: VERSION + '-' + sha(JSON.stringify(precache) + fs.readFileSync(path.join(PUB, 'sw.js'), 'utf8')).slice(0, 8), ocrVersion: sha(ocrFiles).slice(0, 12), entry: 'index.html', files: precache };
 fs.writeFileSync(path.join(PUB, 'sw-manifest.js'), '/* erzeugt von scripts/build-release.mjs */\nself.__PS_PRECACHE = ' + JSON.stringify(swManifest) + ';\n');
 // sw.js mit Versionsstempel → Browser erkennen jede neue Version zuverlässig (byteweiser Vergleich)
 fs.writeFileSync(path.join(PUB, 'sw.js'), `/* Release ${swManifest.version} */\n` + fs.readFileSync(path.join(PUB, 'sw.js'), 'utf8'));

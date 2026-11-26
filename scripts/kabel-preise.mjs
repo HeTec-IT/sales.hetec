@@ -2,6 +2,7 @@
 // Quelle: FAQ "Was kostet TV bei Vodafone pro Monat?" – "Der TV-Anschluss über Kabel kostet in der Regel zwischen X € und Y € pro Monat."
 // Es gilt der obere Wert (Y). Läuft per GitHub Action täglich. Nur lesen. Erst einfacher Abruf, bei Bedarf mit echtem Browser.
 // Bei Fehler/unplausiblen Werten: Abbruch OHNE Änderung, die alte Datei bleibt (Exit 0). Diagnose steht dann in kabel-debug.txt.
+import { geschuetztSchreiben } from './lib/price-guard.mjs';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 
 const QUELLEN = [
@@ -124,7 +125,8 @@ async function main() {
   neu.geprueft = heute();
   delete neu.hinweis;
   if (geaendert) neu.geaendertAm = heute();
-  await writeFile(DATEI, JSON.stringify(neu, null, 2) + '\n');
+  const erg = await geschuetztSchreiben(DATEI, neu, { name: 'kabel-preise.json' });
+  if (!erg.geschrieben) console.log('Nicht übernommen:', erg.grund, erg.spruenge ? JSON.stringify(erg.spruenge) : '');
   console.log(geaendert ? 'Preis geändert.' : 'Preis unverändert, Prüfdatum aktualisiert.');
 }
 

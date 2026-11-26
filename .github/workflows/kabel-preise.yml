@@ -36,7 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
-          git add kabel-preise.json
+          git add kabel-preise.json price-status/kabel-preise.json
           if [ -e kabel-debug.txt ]; then git add kabel-debug.txt; else git rm -q --cached --ignore-unmatch kabel-debug.txt; fi
           git diff --cached --quiet && exit 0
           git commit -m "Kabel-TV-Preis aktualisiert"
