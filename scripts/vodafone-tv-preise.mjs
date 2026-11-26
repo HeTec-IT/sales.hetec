@@ -5,6 +5,7 @@
 //  - Netflix über Vodafone (Angebotspreise Mit Werbung / Standard / Premium, streaming-angebote.html – nur im gerenderten Text, der einfache Abruf zeigt dort falsche Preise)
 // Läuft per GitHub Action täglich. Nur lesen. Erst einfacher Abruf, bei Bedarf mit echtem Browser.
 // Bei Fehler/unplausiblen Werten: Abbruch OHNE Änderung, die alte Datei bleibt (Exit 0). Diagnose steht dann in vodafone-tv-debug.txt.
+import { geschuetztSchreiben } from './lib/price-guard.mjs';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import { UA, textAusHtml, zahl, heute, mitBrowser, ausschnitte } from './tv-helfer.mjs';
 
@@ -161,7 +162,8 @@ async function main() {
   neu.geprueft = heute();
   delete neu.hinweis;
   if (JSON.stringify(neu.preise) !== vorher) neu.geaendertAm = heute();
-  await writeFile(DATEI, JSON.stringify(neu, null, 2) + '\n');
+  const erg = await geschuetztSchreiben(DATEI, neu, { name: 'vodafone-tv-preise.json' });
+  if (!erg.geschrieben) console.log('Nicht übernommen:', erg.grund, erg.spruenge ? JSON.stringify(erg.spruenge) : '');
   console.log(JSON.stringify(neu.preise) !== vorher ? 'Preise geändert.' : 'Preise unverändert, Prüfdatum aktualisiert.');
 }
 

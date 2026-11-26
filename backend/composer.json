@@ -1,0 +1,36 @@
+{
+    "name": "hetec/pencil-selling-backend",
+    "description": "HeTec Backend Core – eigene REST-API für Pencil Selling (PHP, MariaDB, Microsoft Entra ID)",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-json": "*",
+        "ext-curl": "*",
+        "ext-openssl": "*",
+        "ext-sodium": "*",
+        "ext-mbstring": "*",
+        "jumbojett/openid-connect-php": "1.0.2",
+        "phpseclib/phpseclib": "3.0.59",
+        "paragonie/constant_time_encoding": "3.1.5"
+    },
+    "provide": {
+        "paragonie/random_compat": "9.99.99"
+    },
+    "repositories": [
+        { "packagist.org": false },
+        { "type": "path", "url": "third_party/openid-connect-php", "options": { "symlink": false, "versions": { "jumbojett/openid-connect-php": "1.0.2" } } },
+        { "type": "path", "url": "third_party/phpseclib", "options": { "symlink": false, "versions": { "phpseclib/phpseclib": "3.0.59" } } },
+        { "type": "path", "url": "third_party/constant_time_encoding", "options": { "symlink": false, "versions": { "paragonie/constant_time_encoding": "3.1.5" } } }
+    ],
+    "autoload": {
+        "psr-4": { "HeTec\\PS\\": "src/" }
+    },
+    "config": {
+        "platform": { "php": "8.2.0" },
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

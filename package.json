@@ -1,0 +1,36 @@
+{
+  "name": "pencil-selling",
+  "version": "57.0.0-beta.1",
+  "private": true,
+  "description": "Pencil Selling – HeTec Independent Architecture (PWA + eigenes PHP-Backend). Node.js nur als Entwicklungswerkzeug, kein Python.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor-sync.mjs",
+    "css": "tailwindcss -c tailwind.config.cjs -i frontend/styles/tailwind.src.css -o vendor/tailwind/tailwind.css --minify",
+    "dev": "node scripts/dev.mjs",
+    "test": "node scripts/run-tests.mjs",
+    "test:ocr": "node --test tests/ocr/*.test.mjs scripts/test-smart-scan.mjs",
+    "test:backend": "node --test --test-concurrency=1 tests/backend/*.test.mjs",
+    "test:frontend": "node --test tests/frontend/*.test.mjs",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/*.test.mjs",
+    "test:release": "node --test tests/release/*.test.mjs",
+    "release": "node scripts/build-release.mjs",
+    "migrate:firestore": "node scripts/firestore-migration/convert.mjs"
+  },
+  "devDependencies": {
+    "@tesseract.js-data/deu": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "html2pdf.js": "0.10.1",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "2.16.105",
+    "playwright": "1.63.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tailwindcss": "3.4.19",
+    "tesseract.js": "5.1.1",
+    "tesseract.js-core": "5.1.1"
+  }
+}

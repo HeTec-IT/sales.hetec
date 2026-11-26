@@ -1,25 +1,61 @@
-<!doctype html><meta charset="utf-8"><title>PsO2Import Testseite</title>
-<!-- Testseite: laedt NUR den OCR-/Dialog-Teil der echten index.html (aus dem Repo-Stamm) mit React und lokaler Texterkennung. -->
-<script src="/node_modules/react/umd/react.development.js"></script>
-<script src="/node_modules/react-dom/umd/react-dom.development.js"></script>
-<script src="/node_modules/tesseract.js/dist/tesseract.min.js"></script>
+<!doctype html><meta charset="utf-8"><base href="/"><title>Smart Scan – Testseite</title>
+<!-- Testseite: lädt NUR Smart Scan (frontend/smart-scan) mit React und der selbst gehosteten Texterkennung.
+     Kein Firebase, kein Backend, keine Kundendaten. Wird von tests/e2e/*.test.mjs verwendet. -->
+<link rel="stylesheet" href="/vendor/tailwind/tailwind.css">
+<link rel="stylesheet" href="/frontend/styles/smart-scan.css">
 <script>
-function psPortLoadScript() { return Promise.resolve(); }
-function psHtrConfigured() { try { return !!localStorage.getItem('ps_htr_url'); } catch (e) { return false; } }
-function psHtrUrl() { return localStorage.getItem('ps_htr_url'); }
-(function () {
-  const orig = Tesseract.createWorker;
-  Tesseract.createWorker = (l, o, opt) => orig(l, o, Object.assign({ workerPath: '/node_modules/tesseract.js/dist/worker.min.js', corePath: '/node_modules/tesseract.js-core/', langPath: '/node_modules/@tesseract.js-data/deu/4.0.0', cacheMethod: 'none' }, opt || {}));
-})();
-window.__applied = null; window.__closed = false;
-fetch('/index.html').then(r => r.text()).then(t => {
-  const L = t.replace(/\r\n/g, '\n').split('\n');
-  const a = L.findIndex(l => l.includes('o2-VORSCHLAG EINLESEN'));
-  const s = L.findIndex(l => l.startsWith('function PsO2Import('));
-  const b = L.findIndex((l, i) => i > s && l === '}');
-  const el = document.createElement('script'); el.textContent = L.slice(a, b + 1).join('\n'); document.body.appendChild(el);
-  window.__ready = true;
-});
-window.mountUi = initial => ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(PsO2Import, { onApply: d => { window.__applied = JSON.parse(JSON.stringify(d)); }, onClose: () => { window.__closed = true; }, initial: initial || null }));
+  // Testschalter: ?neural=0 → nur Tesseract; ?fake=1 → Attrappe für Tesseract (Texte aus window.__ocr)
+  var q = new URLSearchParams(location.search);
+  window.PS_SMART_SCAN_OVERRIDE = { neural: q.get('neural') === '1' };
+  if (q.get('fake') === '1') {
+    window.__ocr = { text: '', delay: 0, hang: false, calls: 0, created: 0, terminated: 0 };
+    window.Tesseract = {
+      createWorker: async function () {
+        window.__ocr.created++;
+        return {
+          setParameters: async function () {},
+          recognize: function () {
+            var o = window.__ocr; o.calls++;
+            var spec = { text: o.text, delay: o.delay, hang: o.hang };
+            if (spec.hang) return new Promise(function () {});
+            return new Promise(function (r) { setTimeout(function () { r({ data: { text: spec.text || '', blocks: [] } }); }, spec.delay || 0); });
+          },
+          terminate: async function () { window.__ocr.terminated++; }
+        };
+      }
+    };
+  }
+</script>
+<script src="/vendor/react/react.production.min.js"></script>
+<script src="/vendor/react/react-dom.production.min.js"></script>
+<script src="/frontend/core/vendor-paths.js"></script>
+<script>
+function psPortLoadScript(src) {
+  return new Promise(function (res, rej) {
+    if (window.Tesseract && /tesseract/.test(src)) return res();
+    var s = document.createElement('script'); s.src = src; s.onload = function () { res(); }; s.onerror = rej; document.head.appendChild(s);
+  });
+}
+</script>
+<script src="/frontend/smart-scan/config.js"></script>
+<script src="/frontend/smart-scan/parser.js"></script>
+<script src="/frontend/smart-scan/preprocess.js"></script>
+<script src="/frontend/smart-scan/neural.js"></script>
+<script src="/frontend/smart-scan/engine.js"></script>
+<script src="/frontend/smart-scan/transfer.js"></script>
+<script src="/frontend/smart-scan/camera.js"></script>
+<script src="/frontend/smart-scan/snip.js"></script>
+<script src="/frontend/smart-scan/qr-transfer.js"></script>
+<script src="/frontend/smart-scan/ui-crop.js"></script>
+<script src="/frontend/smart-scan/ui-dialog.js"></script>
+<script>
+window.__applied = null; window.__closed = false; window.__ready = true;
+window.mountUi = function (initial) {
+  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(PsO2Import, {
+    onApply: function (d) { window.__applied = JSON.parse(JSON.stringify(d)); },
+    onClose: function () { window.__closed = true; },
+    initial: initial || null
+  }));
+};
 </script>
 <div id="root"></div>

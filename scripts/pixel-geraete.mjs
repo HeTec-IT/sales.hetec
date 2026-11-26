@@ -93,6 +93,27 @@ export function kombiniere(liste36, liste24) {
   }).sort((a, b) => b.gen - a.gen || STUFEN_REIHE.indexOf(a.stufe) - STUFEN_REIHE.indexOf(b.stufe) || a.speicherGb - b.speicherGb);
 }
 
+// Produktbilder selbst hosten (bilder/pixel/), damit die App keine fremden Server aufruft (CSP: nur eigene Domain).
+// Nur Bilder von o2-Servern; schlägt der Download fehl, bleibt das Feld leer (die App blendet das Bild dann aus).
+export async function bilderLokal(geraete, dir = new URL('../bilder/pixel/', import.meta.url)) {
+  const { mkdir } = await import('node:fs/promises');
+  await mkdir(dir, { recursive: true });
+  for (const g of geraete) {
+    if (!g.bild || g.bild.startsWith('bilder/')) continue;
+    let u;
+    try { u = new URL(g.bild); } catch { g.bild = ''; continue; }
+    if (u.protocol !== 'https:' || !/(^|\.)(o9\.de|o2online\.de)$/.test(u.hostname)) { g.bild = ''; continue; }
+    const ext = (/\.(png|jpe?g|webp)$/i.exec(u.pathname) || [, 'png'])[1].toLowerCase().replace('jpeg', 'jpg');
+    const name = ('google-' + g.modell + '-' + g.speicher).toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.' + ext;
+    try {
+      execFileSync('curl', ['--fail', '--silent', '--location', '--max-time', '30', '--max-filesize', '3000000', '-o', new URL(name, dir).pathname, u.href]);
+      g.bildQuelle = u.href;
+      g.bild = 'bilder/pixel/' + name;
+    } catch { g.bild = ''; }
+  }
+  return geraete;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const abruf = monate => {
@@ -100,12 +121,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         '--max-time', '45', '--user-agent', UA, QUELLE + '&ratenzahlung=' + monate], { encoding: 'utf8', maxBuffer: 8000000 });
       return leseKatalog(html, monate);
     };
-    const geraete = kombiniere(abruf(36), abruf(24));
+    const geraete = await bilderLokal(kombiniere(abruf(36), abruf(24)));
     const alt = JSON.parse(await readFile(DATEI, 'utf8'));
     pruefen(geraete, alt);
     const { datum, stand } = jetzt();
     const geaendertAm = JSON.stringify(alt.geraete) === JSON.stringify(geraete) ? alt.geaendertAm : datum;
-    await writeFile(DATEI, JSON.stringify({ quelle: QUELLE, geprueft: datum, stand, geaendertAm, geraete }, null, 2) + '\n');
+    const erg = await geschuetztSchreiben(DATEI, { quelle: QUELLE, geprueft: datum, stand, geaendertAm, geraete }, { name: 'pixel-geraete.json', pruefe: d => pruefen(d.geraete, alt) });
+    if (!erg.geschrieben) console.log('Nicht übernommen:', erg.grund, erg.spruenge ? JSON.stringify(erg.spruenge) : '');
     await rm(DEBUG, { force: true });
     console.log(geraete.length + ' Geräte aktualisiert');
   } catch (e) {
