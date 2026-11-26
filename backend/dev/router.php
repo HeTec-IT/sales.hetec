@@ -14,6 +14,13 @@ if (str_starts_with($uri, '/api/')) {
     return true;
 }
 $root = (string) ($_SERVER['DOCUMENT_ROOT'] ?? getcwd());
+// Lokale Entwicklung im Zielmodus: Laufzeitkonfiguration auf das HeTec-Backend umstellen (Repository-Datei bleibt 'firebase').
+if ($uri === '/frontend/config/app-config.js' && getenv('PS_FRONTEND_BACKEND') === 'hetec') {
+    header('Content-Type: text/javascript; charset=utf-8');
+    header('Cache-Control: no-cache');
+    echo "window.PS_CONFIG = Object.freeze({ backend: 'hetec', apiBase: 'api/v1', allowExternalTranslation: false, allowExternalQr: false, iosServiceWorker: true });\n";
+    return true;
+}
 $file = realpath($root . $uri);
 if ($uri === '/' || $file === false || is_dir($file)) {
     $file = realpath($root . '/index.html');
