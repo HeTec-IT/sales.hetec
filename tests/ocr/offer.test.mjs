@@ -1,7 +1,7 @@
 // Angebot B (Rabatte, Internet), Angebotskennzeichen, Dienst-Anfrage (Timeout, Abbruch, verspaetete Antwort)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadOcr, BELEG, BELEG_B, CLOUD_A, CLOUD_B, plain } from './helpers.mjs';
+import { loadOcr, BELEG, BELEG_B, plain, fakeTesseract, hooks } from './helpers.mjs';
 
 const X = loadOcr();
 
@@ -56,72 +56,87 @@ test('Preise werden nur ergaenzt, nie ueberschrieben', () => {
   assert.equal(X.psO2FillAm(null, ['1,00', null])[0], '1,00');
 });
 
-test('Dienst-Antwort: readable, Kennzeichen, gleiche Tarife getrennt, Rabatt als Rabatt', () => {
-  const a = X.psO2CloudShape(CLOUD_A.data);
+// v57: Die Cloud-Erkennung (Gemini) ist entfernt. Die gleichwertigen Prüfungen laufen jetzt gegen die lokale Erkennung.
+const FAST = { workerCold: 1500, workerWarm: 1500, pass: 2000, budget: 6000, minPass: 500, script: 1000 };
+const readLocal = (Y, o = {}) => Y.psO2ReadLocal({}, null, () => true, { t: o.t || FAST, hooks: hooks(o), job: o.job });
+
+test('Lokale Erkennung: Kennzeichen, gleiche Tarife getrennt, Rabatt als Rabatt (ersetzt Dienst-Antwort)', () => {
+  const a = X.psO2Parse(BELEG);
   assert.equal(a.tarife.length, 2);
-  assert.equal(a.offerTs, '23.11.2026 17:15');
-  assert.equal(a.beratungsId, '4711');
-  const b = X.psO2CloudShape(CLOUD_B.data);
-  assert.equal(b.tarife[0].rb.m, -1500);
+  assert.equal(a.tarife[0].name, a.tarife[1].name, 'zwei gleiche Tarife bleiben zwei Positionen');
+  assert.equal(X.psO2OfferTs(BELEG), '23.11.2026 17:15');
+  const b = X.psO2Parse(BELEG_B);
+  assert.equal(b.tarife[0].rb.m, -1500, 'Plus-Rabatt als Rabatt');
   assert.ok(b.internet[0].rb.e === 0, 'kein zweiter Rabattabzug beim Internet-Anschlusspreis');
   assert.ok(X.psO2Check(b).e.ok && X.psO2Check(b).m.ok);
   assert.ok(X.psO2Check(a).e.ok && X.psO2Check(a).m.ok);
 });
 
-const mkFetch = (spec, st) => (url, init) => new Promise((resolve, reject) => {
-  st.calls = (st.calls || 0) + 1;
-  init.signal.addEventListener('abort', () => { st.aborted = true; reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })); });
-  if (spec.never) return;
-  setTimeout(() => { if (st.aborted) return; st.delivered = true; resolve({ ok: (spec.status || 200) < 300, status: spec.status || 200, json: async () => spec.body }); }, spec.delay || 0);
-});
-function setup(spec, cloudMs = 600) {
-  const Y = loadOcr(), st = {};
-  Y.peek('PS_O2_T.cloud = ' + cloudMs);
-  Y.peek('psO2CloudImage = async () => "AAAA"');
-  Y.setFetch(mkFetch(spec, st));
-  return { Y, st };
-}
-
-test('Dienst haengt: Zeitlimit, Anfrage wird abgebrochen (kein 60-s-Warten)', async () => {
-  const { Y, st } = setup({ never: true }, 400);
+test('Lokale Erkennung haengt: Zeitlimit greift, Arbeiter wird beendet (kein 60-s-Warten)', async () => {
+  const T = fakeTesseract([{ hang: true }]);
+  const Y = loadOcr(T);
   const t0 = Date.now();
-  await assert.rejects(Y.psO2CloudRead({}, null, {}), e => e.psKind === 'timeout');
-  assert.ok(Date.now() - t0 < 1500);
-  assert.equal(st.aborted, true);
+  const o = await readLocal(Y);
+  assert.ok(Date.now() - t0 < 9000, 'Dauer ' + (Date.now() - t0));
+  assert.ok(o.fail === 'timeout' || o.timedOut, JSON.stringify({ fail: o.fail, t: o.timedOut }));
+  assert.ok(T.terminated.length >= 1, 'haengender Arbeiter beendet');
+  Y.psO2Release();
 });
 
-test('Abbruch durch den Benutzer bricht die Anfrage sofort ab', async () => {
-  const { Y, st } = setup({ never: true }, 5000);
+test('Abbruch durch den Benutzer beendet die lokale Erkennung sofort', async () => {
+  const T = fakeTesseract([{ hang: true }]);
+  const Y = loadOcr(T);
   const job = Y.psO2NewJob();
-  const p = Y.psO2CloudRead({}, null, { job });
-  await new Promise(r => setTimeout(r, 100));
+  const p = readLocal(Y, { job });
+  await new Promise(r => setTimeout(r, 150));
   const t0 = Date.now(); job.cancel('user');
-  await assert.rejects(p, e => e.psCancel === true);
-  assert.ok(Date.now() - t0 < 300);
-  assert.equal(st.aborted, true);
+  const o = await p;
+  assert.ok(Date.now() - t0 < 500, 'Abbruch in ' + (Date.now() - t0) + ' ms');
+  assert.equal(o.cancelled, true);
+  Y.psO2Release();
 });
 
-test('Verspaetete Antwort nach Timeout aendert nichts mehr', async () => {
-  const { Y, st } = setup({ delay: 700, body: CLOUD_A }, 300);
-  await assert.rejects(Y.psO2CloudRead({}, null, {}), e => e.psKind === 'timeout');
+test('Verspaetetes Ergebnis nach Abbruch aendert nichts mehr', async () => {
+  const T = fakeTesseract([{ text: BELEG_B, delay: 700 }]);
+  const Y = loadOcr(T);
+  const job = Y.psO2NewJob();
+  const p = readLocal(Y, { job });
+  await new Promise(r => setTimeout(r, 100));
+  job.cancel('user');
+  const o = await p;
   await new Promise(r => setTimeout(r, 900));
-  assert.notEqual(st.delivered, true, 'abgebrochene Anfrage wird gar nicht erst beantwortet');
+  assert.equal(o.cancelled, true);
+  assert.ok(!o.r || (!o.r.einmalig && !o.r.tarife.length), 'kein Ergebnis aus dem abgebrochenen Lauf');
+  Y.psO2Release();
 });
 
-test('Erfolg: Antwort wird in Eintraege umgewandelt', async () => {
-  const { Y } = setup({ delay: 50, body: CLOUD_B }, 2000);
-  const r = await Y.psO2CloudRead({}, null, {});
-  assert.equal(r.internet.length + r.tarife.length + r.geraete.length, 3);
-  assert.equal(r.einmalig, '2.438,98');
+test('Erfolg: lokaler Text wird in Eintraege umgewandelt (Angebot B)', async () => {
+  const Y = loadOcr(fakeTesseract([{ text: BELEG_B }]));
+  const o = await readLocal(Y);
+  assert.equal(o.r.internet.length + o.r.tarife.length + o.r.geraete.length, 3);
+  assert.equal(o.r.einmalig, '2.438,98');
+  assert.equal(o.r.monatlich, '69,98');
+  Y.psO2Release();
 });
 
-test('Dienstfehler (HTTP 400/502) und fehlende Anmeldung sind klar unterscheidbar', async () => {
-  for (const status of [400, 502]) {
-    const { Y } = setup({ status, body: { ok: false } }, 2000);
-    await assert.rejects(Y.psO2CloudRead({}, null, {}), e => e.psKind === 'service');
-  }
-  const Y = loadOcr(); Y.peek('window.__betaAuth = { currentUser: null }');
-  await assert.rejects(Y.psO2CloudRead({}, null, {}), e => e.psKind === 'auth');
+test('Fehlerarten sind klar unterscheidbar: Texterkennung nicht startbar vs. Foto nicht lesbar', async () => {
+  const Y1 = loadOcr(fakeTesseract([{ text: BELEG }], { failCreate: true }));
+  const a = await readLocal(Y1);
+  assert.equal(a.fail, 'engine');
+  Y1.psO2Release();
+  const Y2 = loadOcr(fakeTesseract([{ text: BELEG }]));
+  const b = await readLocal(Y2, { badImage: true });
+  assert.equal(b.fail, 'image');
+  Y2.psO2Release();
+});
+
+test('Keine Netzwerkzugriffe in der lokalen Erkennung (kein versteckter Cloud-Rueckfall)', async () => {
+  const Y = loadOcr(fakeTesseract([{ text: BELEG }]));
+  let calls = 0;
+  Y.setFetch(() => { calls++; return Promise.reject(new Error('Netz')); });
+  await readLocal(Y);
+  assert.equal(calls, 0);
+  Y.psO2Release();
 });
 
 test('Verirrter Punkt hinter der Tarifgroesse wird entfernt (Mobile L. (2026))', () => {

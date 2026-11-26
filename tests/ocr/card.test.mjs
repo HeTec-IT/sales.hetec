@@ -7,8 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadOcr } from './helpers.mjs';
 
-const HTML = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'index.html');
-const src = fs.readFileSync(HTML, 'utf8').replace(/\r\n/g, '\n');
+// psO2CardText liegt in der Smart-Scan-Oberfläche (frontend/smart-scan/ui-dialog.js)
+const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'frontend', 'smart-scan', 'ui-dialog.js');
+const src = fs.readFileSync(UI, 'utf8').replace(/\r\n/g, '\n');
 const a = src.indexOf('function psO2CardText(');
 assert.ok(a > 0, 'psO2CardText nicht gefunden');
 const fn = src.slice(a, src.indexOf('\n}\n', a) + 2);

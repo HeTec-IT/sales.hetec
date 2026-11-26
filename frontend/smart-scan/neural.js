@@ -1,3 +1,10 @@
+/*
+ * Smart Scan – neural.js
+ * Neuronale OCR (PaddleOCR PP-OCRv6 tiny über ONNX Runtime Web, WebAssembly) in einem eigenen, abbrechbaren Web Worker.
+ *
+ * Klassisches Skript (globale Funktionen wie bisher in index.html), geladen vor der App.
+ * Ausgelagert aus index.html (v56.0-beta.4) ohne inhaltliche Änderung; Cloud-OCR entfernt.
+ */
 // Smart Scan 2: local neural OCR; a dedicated worker can be terminated on cancel or timeout.
 let __psSmart=null, __psSmartCooldown=0, __psSmartId=0;
 function psSmartStop(reason){
@@ -8,12 +15,12 @@ function psSmartStop(reason){
 }
 function psSmartRequest(type,image){
   if(!__psSmart){
-    const worker=new Worker(new URL('./ocr/generated/smart-scan-worker.mjs',location.href),{type:'module'});
+    const worker=new Worker(new URL((window.PS_SMART_SCAN && window.PS_SMART_SCAN.neuralWorker) || './ocr/generated/smart-scan-worker.mjs',document.baseURI),{type:'module'});
     const s={worker,pending:new Map(),warm:null,ready:false};__psSmart=s;
     worker.onmessage=e=>{
       if(__psSmart!==s)return;
       const d=e.data||{},p=s.pending.get(d.id);if(!p)return;
-      s.pending.delete(d.id);d.ok?p.resolve(d.items):p.reject(Error('neural OCR unavailable'));
+      s.pending.delete(d.id);if(!d.ok)window.__psSmartLastError=String(d.error||'unbekannt');d.ok?p.resolve(d.items):p.reject(Error('neural OCR unavailable'+(d.error?': '+d.error:'')));
     };
     worker.onerror=worker.onmessageerror=()=>{if(__psSmart===s){__psSmartCooldown=Date.now()+60000;psSmartStop('worker error');}};
   }
@@ -71,3 +78,4 @@ function psSmartCostRegion(o,c){
   const y=Math.max(0,Math.floor(Math.min(...hits.map(b=>b.y0))-pad)),end=Math.min(c.height,Math.ceil(Math.max(...hits.map(b=>b.y1))+pad*2));
   return end-y>=20&&end-y<=c.height*.55?{left:0,top:y,width:c.width,height:end-y}:null;
 }
+
