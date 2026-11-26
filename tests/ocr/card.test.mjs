@@ -27,8 +27,8 @@ test('Tarif: Datenvolumen + monatlicher Rabatt', () => {
   assert.equal(r.sub, '60 GB · 15,00 € monatlicher Rabatt');
 });
 
-test('Tarif mit Aktionskarte und einmaligem Rabatt', () => {
-  assert.equal(card('tarife', { name: 'O2 Mobile S', det: '', rb: { e: -1000, m: 0 }, ak: true }).sub, '10,00 € einmaliger Rabatt · Aktionskarte');
+test('Tarif mit einmaligem Rabatt; Aktionskarte steht als eigenes Kennzeichen, nicht im Untertext', () => {
+  assert.equal(card('tarife', { name: 'O2 Mobile S', det: '', rb: { e: -1000, m: 0 }, ak: true }).sub, '10,00 € einmaliger Rabatt');
 });
 
 test('Internet@Home: Vertragsart + erste Inhaltszeilen (max. 2)', () => {
@@ -39,4 +39,18 @@ test('Leerer Name bekommt einen Platzhalter, nichts bricht', () => {
   assert.equal(card('geraete', {}).title, 'Handy');
   assert.equal(card('tarife', { name: '' }).title, 'Tarif');
   assert.equal(card('internet', { name: '  ' }).sub, '');
+});
+
+test('Aktionskarte (SIM-Knopf): ein Haupttarif + eine markierte Aktionskarte -> Zeile bei Tarif 1, nur ein Tarif bleibt', () => {
+  const merge = X.peek('psO2AkMerge');
+  const t = { name: 'O2 Mobile M Plus (2026)', det: 'Inklusiv Datenvolumen 50 GB', am: ['39,99', '29,99'] };
+  const r = JSON.parse(JSON.stringify(merge([{ ...t }, { ...t, ak: true }], [])));
+  assert.equal(r.tar.length, 1);
+  assert.match(r.tar[0].det, /inkl\. Aktionskarte 50 GB/);
+});
+
+test('Alle Tarife als Aktionskarte markiert: ohne Wirkung (es muss ein Haupttarif bleiben)', () => {
+  const merge = X.peek('psO2AkMerge');
+  const t = { name: 'O2 Mobile M Plus (2026)', det: '', am: ['39,99', '29,99'], ak: true };
+  assert.equal(merge([{ ...t }, { ...t }], []).tar.length, 2);
 });
