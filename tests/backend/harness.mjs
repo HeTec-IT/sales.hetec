@@ -20,7 +20,7 @@ export function phpAvailable() {
   try { execFileSync(PHP, ['-r', 'exit(extension_loaded("pdo_mysql") && extension_loaded("sodium") ? 0 : 1);']); return true; } catch { return false; }
 }
 
-export async function startEnv({ seed = true, archiveFlowUrl = '' } = {}) {
+export async function startEnv({ seed = true, archiveFlowUrl = '', releaseDir = '' } = {}) {
   const port = await freePort();
   const mock = await startMockEntra({ tenantId: TENANT, clientId: CLIENT_ID, clientSecret: SECRET });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ps-test-'));
@@ -45,7 +45,10 @@ export async function startEnv({ seed = true, archiveFlowUrl = '' } = {}) {
   run('dev/reset-db.php');
   run('bin/migrate.php');
   if (seed) run('dev/seed.php');
-  const srv = spawn(PHP, ['-S', `127.0.0.1:${port}`, '-t', ROOT, path.join(ROOT, 'backend/dev/router.php')], { env, stdio: ['ignore', 'ignore', 'pipe'] });
+  // Release-Modus: Server auf release/…/public mit dem Backend aus release/…/app (ohne backend/dev → kein Test-Login)
+  const srvEnv = releaseDir ? { ...env, PS_APP_ROOT: path.join(releaseDir, 'app') } : { ...env, PS_FRONTEND_BACKEND: 'hetec' };
+  const srvArgs = releaseDir ? ['-S', `127.0.0.1:${port}`, '-t', path.join(releaseDir, 'public'), path.join(ROOT, 'tests/release/router.php')] : ['-S', `127.0.0.1:${port}`, '-t', ROOT, path.join(ROOT, 'backend/dev/router.php')];
+  const srv = spawn(PHP, srvArgs, { env: srvEnv, stdio: ['ignore', 'ignore', 'pipe'] });
   let log = '';
   srv.stderr.on('data', d => { log += d; });
   for (let i = 0; i < 100; i++) {

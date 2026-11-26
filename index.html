@@ -7,6 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="frontend/config/app-config.js"></script>
 <script src="frontend/services/download-page.js"></script>
+<script src="frontend/services/download-page-firebase.js"></script>
+<script src="frontend/core/pwa-update.js"></script>
     <!-- ══════════════════════════════════════════════════════════════════════
          KEIN HTML-CACHE  (v55.17-startfix-audit)
          Android/Chrome hielt diese Datei sonst tagelang im Cache: nach einem
@@ -233,6 +235,11 @@
             document.head.appendChild(appleStatusBar);
 
             window.__PENCIL_SHORTCUT_URL = window.location.href;
+            // HeTec-Betrieb: Identität aus der Sitzung statt aus der URL → Service Worker (Offline) auch auf iPad
+            if (window.PS_CONFIG && window.PS_CONFIG.iosServiceWorker && window.PSPwa) {
+                window.addEventListener('load', function () { window.PSPwa.register(); });
+                return;
+            }
 
             // Falls zuvor die alte PWA-Version auf diesem Pfad geoeffnet wurde,
             // nur unseren eigenen sw.js abmelden. Andere Apps derselben Domain
@@ -265,15 +272,12 @@
 
         var manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
-        manifestLink.href = 'manifest.webmanifest?v=55.118';
+        manifestLink.href = 'manifest.webmanifest';
         document.head.appendChild(manifestLink);
 
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js?v=55.118').catch(function (e) {
-                    console.warn('SW-Registrierung fehlgeschlagen:', e);
-                });
-            });
+        if (window.PSPwa) {
+            // Registrierung + Update-Steuerung: frontend/core/pwa-update.js (keine Unterbrechung laufender Beratungen)
+            window.addEventListener('load', function () { window.PSPwa.register(); });
         }
     })();
     </script>
@@ -1073,7 +1077,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '56.0-beta.4';
+    window.APP_VERSION = '57.0.0-beta.1';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -9502,7 +9506,7 @@ const pushRowToFirebase = async row => {
     await PSBackend.analytics.write(normalized);
     return true;
   } catch (e) {
-    console.warn('Firebase push failed:', e);
+    console.warn('Statistik senden fehlgeschlagen:', e);
     const key = analyticsPendingKey(normalized.userUid || currentUid);
     const pending = readPendingAnalytics(key);
     if (!pending.some(x => x && x.id === normalized.id)) pending.push(normalized);
@@ -9602,17 +9606,17 @@ const clearAnalyticsRows = async () => {
     if (!PS_IS_ADMIN()) throw new Error('Nur Administratoren dürfen Analytics löschen.');
     return await PSBackend.analytics.clearAll();
   } catch (e) {
-    console.warn('Firebase clear failed:', e);
+    console.warn('Statistik löschen fehlgeschlagen:', e);
     return false;
   }
 };
 
 // ─── Activity thresholds (anti-manipulation) ─────────────────────────
-// Freitext-Übersetzung (mymemory.translated.net, extern). Im HeTec-Betrieb gesperrt: keine Kundendaten an Dritte.
-const psTranslateFetch = (text, lang) => {
-  if (!window.PSNet || !PSNet.translationAllowed()) return Promise.resolve({ ok: false, json: async () => ({}) });
-  return fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(String(text).slice(0, 480)) + '&langpair=de|' + lang);
-};
+// Freitext-Übersetzung über einen externen Dienst – nur im Firebase-Übergangsbetrieb (PSBackend.translate).
+// Im HeTec-Betrieb gesperrt: keine Kundendaten an Dritte.
+const psTranslateFetch = (text, lang) => (window.PSBackend && typeof PSBackend.translate === 'function' && window.PSNet && PSNet.translationAllowed())
+  ? PSBackend.translate(text, lang)
+  : Promise.resolve({ ok: false, json: async () => ({}) });
 const ACT_SIT_MIN_CHARS = 3; // Seite 1 Kachel: mind. 3 Zeichen → "Angefragt"
 const ACT_SIT_MIN_STROKES = 2; // Seite 1 Kachel Pen: mind. 2 Strokes
 const ACT_SIT_MIN_INKPX = 40; // Seite 1 Kachel Pen: mind. 40px Tintenlänge
@@ -12260,7 +12264,7 @@ function psTidyLive(strokes) {
 // -> Ergebnis wird dem Mitarbeiter zur Kontrolle gezeigt und erst nach "Uebernehmen" als Text gespeichert.
 // Feldtyp (Name / Rufnummer / Freitext) steuert Hinweis an die KI und die Plausibilitaetspruefung.
 // Dienst-Adresse: window.PS_HTR_URL oder localStorage 'ps_htr_url' ueberschreiben den Standard.
-const PS_HTR_URL_DEFAULT = 'https://europe-west3-o2-pencil-selling.cloudfunctions.net/handwritingToText';
+const PS_HTR_URL_DEFAULT = (window.PSBackend && PSBackend.htrDefaultUrl) || ''; // Cloud-Handschrift nur im Firebase-Übergangsbetrieb
 const PS_HTR_KIND = { Kundenname: 'name', Rufnummer: 'phone' };
 // Button "Als Text" erscheint erst, wenn ein Erkennungsdienst eingetragen ist (spaeter Azure).
 const psHtrConfigured = () => {
@@ -23129,7 +23133,7 @@ const StatsModal = ({
       fontWeight: 500,
       marginTop: '1px'
     }
-  }, employeeMode ? fbLoading ? '⏳ Lade meine Daten...' : fbRows !== null ? `🔥 Deine Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Firebase-Berechtigung' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Firebase nicht erreichbar' : fbLoading ? '⏳ Lade Daten...' : fbRows !== null ? `🔥 ${rows.length} Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Firebase-Berechtigung' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Firebase nicht erreichbar'))), /*#__PURE__*/React.createElement("div", {
+  }, employeeMode ? fbLoading ? '⏳ Lade meine Daten...' : fbRows !== null ? `🔥 Deine Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Berechtigung für die Statistik' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Statistik-Server nicht erreichbar' : fbLoading ? '⏳ Lade Daten...' : fbRows !== null ? `🔥 ${rows.length} Vorgänge · Live` : fbError === 'permission-denied' ? '⚠️ Keine Berechtigung für die Statistik' : fbError === 'missing-user-uid' ? '⚠️ Anmeldung nicht vollständig' : '⚠️ Statistik-Server nicht erreichbar'))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -23363,7 +23367,7 @@ const StatsModal = ({
       fontSize: '14px',
       fontWeight: 600
     }
-  }, "⏳ Firebase Daten werden geladen..."), !fbLoading && /*#__PURE__*/React.createElement(React.Fragment, null, activeTab === 'uebersicht' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ArchivProtokollView, { heute: true, onAlle: () => setActiveTab('vorgaenge') }), React.createElement("div", {
+  }, "⏳ Statistik wird geladen..."), !fbLoading && /*#__PURE__*/React.createElement(React.Fragment, null, activeTab === 'uebersicht' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ArchivProtokollView, { heute: true, onAlle: () => setActiveTab('vorgaenge') }), React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
@@ -37061,7 +37065,7 @@ function App() {
     triggerToast(`✅ ${langName} — Beschriftungen übersetzt`);
 
     // === v45.3: GETIPPTE TEXTE kostenlos übersetzen (MyMemory API) ===
-    // api.mymemory.translated.net – gratis, kein API-Key, ~5000 Zeichen/Tag.
+    // externer Übersetzungsdienst (nur Firebase-Übergangsbetrieb) – gratis, kein API-Key, ~5000 Zeichen/Tag.
     // Namen, Rufnummern, Datum & reine Zahlen werden NICHT übersetzt.
     (async () => {
       try {
@@ -51463,7 +51467,7 @@ function __startPencilAppWhenReady(attempt = 0) {
         return;
       }
       if (rootEl) {
-        rootEl.innerHTML = '<div style="font-family:Arial,sans-serif;padding:28px;color:#0f172a;background:#f8fafc;min-height:100vh"><h2 style="margin:0 0 10px">Pencil Selling konnte nicht geladen werden</h2><p style="margin:0 0 8px">Bitte Seite neu laden. Falls es bleibt: Firebase/React Script wurde vom Browser oder Netzwerk blockiert.</p></div>';
+        rootEl.innerHTML = '<div style="font-family:Arial,sans-serif;padding:28px;color:#0f172a;background:#f8fafc;min-height:100vh"><h2 style="margin:0 0 10px">Pencil Selling konnte nicht geladen werden</h2><p style="margin:0 0 8px">Bitte Seite neu laden. Falls es bleibt: Ein Skript wurde vom Browser oder Netzwerk blockiert.</p></div>';
       }
       return;
     }
@@ -51507,7 +51511,7 @@ function __startPencilAppWhenReady(attempt = 0) {
 // (o2- und Telekom-App teilen sich die Domain). Anmeldung und lokale Daten
 // (localStorage/IndexedDB) bleiben unangetastet. Ohne Verbindung wird nichts
 // gelöscht, damit die App danach nicht leer dasteht.
-var __PS_CACHE_PREFIX = 'pencil-o2-';
+var __PS_CACHE_PREFIX = 'pencil-o2-'; // alt; neue Caches: ps-app-<version> (OCR-Cache ps-ocr-* bleibt, versioniert)
 function __psHardReload(btn) {
   if (window.__psUpdating) return;
   if (!window.confirm('Update laden? Die App wird neu gestartet.')) return;
@@ -51543,7 +51547,7 @@ function __psHardReload(btn) {
       try {
         if (window.caches && caches.keys) {
           jobs.push(caches.keys().then(function (keys) {
-            return Promise.all(keys.filter(function (k) { return k.indexOf(__PS_CACHE_PREFIX) === 0; }).map(function (k) { return caches.delete(k); }));
+            return Promise.all(keys.filter(function (k) { return k.indexOf(__PS_CACHE_PREFIX) === 0 || k.indexOf('ps-app-') === 0; }).map(function (k) { return caches.delete(k); }));
           }));
         }
       } catch (e) {}

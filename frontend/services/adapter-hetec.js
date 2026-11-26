@@ -215,7 +215,7 @@
       startAppFn();
       scheduleFlush(1500);
       setInterval(revalidate, 5 * 60 * 1000);
-      window.addEventListener('online', function () { revalidate(); scheduleFlush(500); });
+      window.addEventListener('online', function () { state.offline = false; revalidate(); scheduleFlush(500, true); });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') revalidate(); });
     }
     api('GET', 'session', undefined, { timeout: 8000 }).then(function (s) {
@@ -288,11 +288,12 @@
 
   // ─────────────────────────── Warteschlange (Statistik) ───────────────────────────
   var flushTimer = null;
-  function scheduleFlush(ms) {
+  function scheduleFlush(ms, force) {
     clearTimeout(flushTimer);
-    flushTimer = setTimeout(function () { flush().catch(function () {}); }, ms || 0);
+    flushTimer = setTimeout(function () { flush(force).catch(function () {}); }, ms || 0);
   }
-  function flush() {
+  // force=true: Wartezeit (Backoff) ignorieren – bei wiederhergestellter Verbindung oder ausdrücklichem Senden
+  function flush(force) {
     if (state.flushing) return state.flushing;
     var uid = state.user && state.user.id;
     if (!uid || state.offline && !navigator.onLine) return Promise.resolve(0);
@@ -300,7 +301,7 @@
       var sent = 0;
       try {
         await PSSyncQueue.purgeOld();
-        var items = (await PSSyncQueue.list('analytics', uid, 1000)).filter(function (x) { return !x.nextTry || x.nextTry <= Date.now(); });
+        var items = (await PSSyncQueue.list('analytics', uid, 1000)).filter(function (x) { return force || !x.nextTry || x.nextTry <= Date.now(); });
         for (var i = 0; i < items.length; i += 200) {
           var chunk = items.slice(i, i + 200);
           var res;
@@ -420,7 +421,7 @@
         return rows;
       },
       clearAll: function () { return api('DELETE', 'analytics?confirm=ALLE-STATISTIKEN-LOESCHEN').then(function () { return true; }); },
-      flush: flush,
+      flush: function () { return flush(true); },
       pendingCount: function () { return PSSyncQueue.count(state.user && state.user.id); }
     },
     skip: {

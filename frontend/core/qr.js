@@ -1,5 +1,5 @@
 /*
- * QR-Codes lokal erzeugen (statt api.qrserver.com). Kein Netzwerkzugriff, keine Daten an Dritte.
+ * QR-Codes lokal erzeugen (früher externer QR-Dienst). Kein Netzwerkzugriff, keine Daten an Dritte.
  * Nutzt vendor/qrcode.js (qrcode-generator, MIT). Ergebnis: PNG-Data-URL, synchron.
  */
 (function () {

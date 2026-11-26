@@ -760,6 +760,9 @@ const PS_IDX_COLL = 'pdf_index';
 
 const api = {
   mode: 'firebase',
+  // Nur Übergang: externe Dienste wie bisher (im HeTec-Betrieb nicht vorhanden)
+  htrDefaultUrl: 'https://europe-west3-o2-pencil-selling.cloudfunctions.net/handwritingToText',
+  translate: (text, lang) => fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(String(text).slice(0, 480)) + '&langpair=de|' + lang),
   ready: () => sdkReady.then(fbReady),
   isReady: fbReady,
   auth: {
