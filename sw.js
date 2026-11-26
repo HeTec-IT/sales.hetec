@@ -1,6 +1,6 @@
 // Pencil Selling – o2 – Service Worker
 // Beim Update NUR diese Versionsnummer hochzählen -> alte Caches werden entfernt.
-const CACHE = "pencil-o2-v33";
+const CACHE = "pencil-o2-smart-scan-2-beta1";
 const SHELL = ["./", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -27,7 +27,7 @@ function bypass(url) {
 // Nur der EIGENE Cache wird gelesen (kein caches.match über alle Caches der Domain),
 // damit sich o2- und Telekom-App nie gegenseitig beliefern.
 function fromOwnCache(request) {
-  return caches.open(CACHE).then((c) => c.match(request).then((r) => r || c.match("./")));
+  return caches.open(CACHE).then((c) => c.match(request).then((r) => r || (request.mode === "navigate" ? c.match("./") : Response.error())));
 }
 
 // Network-first mit Cache-Fallback: online immer die neueste Version, offline die letzte bekannte.
@@ -36,6 +36,14 @@ self.addEventListener("fetch", (e) => {
   let url;
   try { url = new URL(e.request.url); } catch (_) { return; }
   if (bypass(url)) return;
+  if (url.origin === self.location.origin && url.pathname.includes('/ocr/generated/')) {
+    e.respondWith(caches.open(CACHE).then(async c=>{
+      const hit=await c.match(e.request);if(hit)return hit;
+      const res=await fetch(e.request);
+      if(res.ok&&res.status!==206)await c.put(e.request,res.clone()).catch(()=>{});
+      return res;
+    }));return;
+  }
   e.respondWith(
     // Seiten (HTML) immer beim Server nachfragen -> Update kommt sofort an,
     // nicht erst nach Ablauf des GitHub-Pages-Caches (10 Min.).

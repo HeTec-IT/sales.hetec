@@ -1100,7 +1100,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '55.230';
+    window.APP_VERSION = '56.0-beta.1';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -12458,7 +12458,7 @@ function psTidyLive(strokes) {
 // === v55.170/171 (Beta): o2-VORSCHLAG EINLESEN ==================================================
 // Foto vom Bildschirm (digitaler o2-Vorschlag) -> Texterkennung lokal auf dem Geraet (Tesseract, Deutsch)
 // -> Tarif(e), Geraet(e), Einmalige und Monatliche Kosten -> Kontrolle -> EINE Angebotskarte (digital) + Preise.
-const PS_O2_AMT = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*€?/g;
+const PS_O2_AMT = /((?:\d{1,3}(?:\.\d{3})+|\d+),\d{2})(?!\d)\s*€?/g;
 // Preiserhoehung "*Ab dem 25. Monat: 84,98 €" (auch "ab dem 12. Monat"): wird bewusst ignoriert – kein Hinweis, nie eine Summe (v55.194)
 const PS_O2_AB_MONAT = /\*?\s*Ab\s*dem\s*\d{1,2}\.?\s*[^\d]{0,12}\d{1,3}(?:\.\d{3})*[.,]\d{2}\s*€?/i;
 const PS_O2_ARTEN = /(Vertragsverl[äa]ngerung|Neuvertrag|Neukunde|Tarifwechsel|Rufnummernmitnahme|Portierung|Zweitkarte|Partnerkarte)/i;
@@ -12693,7 +12693,7 @@ function psO2Parse(text) {
   const out = { internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', hdr: { tarife: 0, geraete: 0, internet: 0 } };
   const kostZ = { e: null, m: null }; // Zeilennummern der Kostenzeilen ohne Betrag
   const next = (i, re) => { for (let k = i + 1; k < Math.min(lines.length, i + 4); k++) if (re.test(lines[k])) return lines[k]; return ''; };
-  const head = l => { const a = l.search(/\d{1,3}(?:\.\d{3})*,\d{2}/); return a > 0 ? l.slice(0, a) : l; }; // Preisspalten rechts abschneiden
+  const head = l => { const a = l.search(/(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}/); return a > 0 ? l.slice(0, a) : l; }; // Preisspalten rechts abschneiden
   const add = (kind, i, raw, from, dedupe, hdr) => {
     const name = psO2CleanName(head(raw), kind);
     if (!name || name.length < 4) return;
@@ -13191,6 +13191,80 @@ const PS_O2_PLAN = [{ side: 1600, blur: 0, psm: 6 }, { side: 1280, blur: 2, pape
 const PS_O2_PLAN_LIGHT = { side: 1200, blur: 1, psm: 6 };
 // v55.227: Moiré (Streifen beim Foto vom Monitor): ungeglaettet wird daraus Zeichensalat (viele "Woerter", nichts zuordenbar) -> leicht geglaettet, gross
 const PS_O2_PLAN_MOIRE = { side: 2000, blur: 1, psm: 6 };
+// Smart Scan 2: local neural OCR; a dedicated worker can be terminated on cancel or timeout.
+let __psSmart=null, __psSmartCooldown=0, __psSmartId=0;
+function psSmartStop(reason){
+  const s=__psSmart;__psSmart=null;if(!s)return;
+  try{s.worker.terminate();}catch(_){}
+  for(const p of s.pending.values())p.reject(Error(reason||'stopped'));
+  s.pending.clear();
+}
+function psSmartRequest(type,image){
+  if(!__psSmart){
+    const worker=new Worker(new URL('./ocr/generated/smart-scan-worker.mjs',location.href),{type:'module'});
+    const s={worker,pending:new Map(),warm:null,ready:false};__psSmart=s;
+    worker.onmessage=e=>{
+      if(__psSmart!==s)return;
+      const d=e.data||{},p=s.pending.get(d.id);if(!p)return;
+      s.pending.delete(d.id);d.ok?p.resolve(d.items):p.reject(Error('neural OCR unavailable'));
+    };
+    worker.onerror=worker.onmessageerror=()=>{if(__psSmart===s){__psSmartCooldown=Date.now()+60000;psSmartStop('worker error');}};
+  }
+  const s=__psSmart,id=++__psSmartId;
+  return new Promise((resolve,reject)=>{
+    s.pending.set(id,{resolve,reject});
+    try{s.worker.postMessage({id,type,image});}catch(e){s.pending.delete(id);reject(e);}
+  });
+}
+function psSmartWarm(){
+  if(typeof Worker==='undefined'||Date.now()<__psSmartCooldown)return Promise.resolve(false);
+  if(__psSmart&&__psSmart.warm)return __psSmart.warm;
+  try{
+    const p=psSmartRequest('warm'),s=__psSmart;
+    s.warm=psO2WithTimeout(p,45000,'neural-init').then(()=>{if(__psSmart===s)s.ready=true;return __psSmart===s;},()=>{
+      if(__psSmart===s){__psSmartCooldown=Date.now()+60000;psSmartStop('init failed');}return false;
+    });
+    return s.warm;
+  }catch(_){__psSmartCooldown=Date.now()+60000;return Promise.resolve(false);}
+}
+function psSmartLayout(items){
+  const boxes=(items||[]).flatMap(it=>{
+    if(!it||typeof it.text!=='string'||!it.text.trim()||!Array.isArray(it.poly)||it.poly.length<4)return [];
+    const xs=it.poly.map(p=>Number(p[0])),ys=it.poly.map(p=>Number(p[1]));
+    if(![...xs,...ys].every(Number.isFinite))return [];
+    const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    return x1>x0&&y1>y0?[{t:it.text.trim(),x0,x1,y0,y1,cy:(y0+y1)/2,score:Number(it.score)}]:[];
+  }).sort((a,b)=>a.cy-b.cy||a.x0-b.x0);
+  const rows=[];
+  for(const b of boxes){
+    const q=rows.find(r=>Math.abs(r.cy-b.cy)<=.48*Math.min(r.h,b.y1-b.y0));
+    if(q){q.boxes.push(b);q.cy=q.boxes.reduce((n,v)=>n+v.cy,0)/q.boxes.length;}
+    else rows.push({cy:b.cy,h:b.y1-b.y0,boxes:[b]});
+  }
+  const words=[],lines=[];
+  rows.sort((a,b)=>a.cy-b.cy).forEach((r,i)=>{
+    r.boxes.sort((a,b)=>a.x0-b.x0);lines.push(r.boxes.map(b=>b.t).join(' '));
+    // Paddle gives line polygons, not word boxes. Approximate subdivisions for the old parser.
+    for(const b of r.boxes)for(const m of b.t.matchAll(/\S+/g)){
+      const w=b.x1-b.x0;
+      words.push({t:m[0],x0:b.x0+w*m.index/b.t.length,x1:b.x0+w*(m.index+m[0].length)/b.t.length,y0:b.y0,y1:b.y1,ln:i+1});
+    }
+  });
+  return {text:lines.join('\n'),words,boxes,sparse:true,low:boxes.some(b=>/\d[.,]\d{2}|Kosten|TARIF|INTERNET/i.test(b.t)&&(!Number.isFinite(b.score)||b.score<.85))};
+}
+function psSmartExact(r,txt){
+  if(!r||!r.einmalig||!r.monatlich)return false;
+  const c=psO2Check(r);
+  return !!(c&&[c.e,c.m].every(v=>v&&v.calc.includes(v.val))&&!psO2Gaps(r,txt).length&&(!r.hdr||['tarife','geraete','internet'].every(k=>(r.hdr[k]||0)<=r[k].length)));
+}
+function psSmartCostRegion(o,c){
+  const hits=o.boxes.filter(b=>/(Einmalige|Monatliche|alige|natliche)\s*Kosten/i.test(b.t));
+  if(!hits.length)return null;
+  const pad=Math.max(24,...hits.map(b=>(b.y1-b.y0)*2.5));
+  const y=Math.max(0,Math.floor(Math.min(...hits.map(b=>b.y0))-pad)),end=Math.min(c.height,Math.ceil(Math.max(...hits.map(b=>b.y1))+pad*2));
+  return end-y>=20&&end-y<=c.height*.55?{left:0,top:y,width:c.width,height:end-y}:null;
+}
+
 const psO2Tick = () => new Promise(r => setTimeout(r, 0));
 function psO2WithTimeout(p, ms, tag) {
   let t;
@@ -13201,7 +13275,7 @@ let __psO2W = null, __psO2WP = null, __psO2Gen = 0, __psO2Job = null, __psO2JobS
 function psO2Kill(w) { try { const p = w && w.terminate && w.terminate(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
 // Arbeiter verwerfen (haengt / abgestuerzt / Dialog zu): der Thread wird wirklich beendet, der naechste Zugriff baut neu auf.
 function psO2ResetEngine() { __psO2Gen++; const w = __psO2W; __psO2W = null; __psO2WP = null; psO2Kill(w); }
-function psO2Release() { if (__psO2Job && !__psO2Job.done) __psO2Job.cancel('release'); psO2ResetEngine(); }
+function psO2Release() { if (__psO2Job && !__psO2Job.done) __psO2Job.cancel('release'); psO2ResetEngine(); psSmartStop('release'); }
 function psO2LoadTess() {
   if (window.Tesseract) return Promise.resolve();
   return psO2WithTimeout(psPortLoadScript(PS_O2_TESS_SRC), PS_O2_T.script, 'script-timeout').catch(e => {
@@ -13224,7 +13298,7 @@ function psO2Worker(ms) {
   return psO2WithTimeout(__psO2WP, ms, 'worker-timeout');
 }
 // Texterkennung schon beim Oeffnen des Dialogs laden, damit das erste Foto nicht darauf wartet (Fehler sind hier egal).
-function psO2Warm() { return psO2Worker(PS_O2_T.workerCold).catch(() => null); }
+function psO2Warm() { return typeof Worker==='undefined' ? psO2Worker(PS_O2_T.workerCold).catch(()=>null) : psSmartWarm(); }
 // Eine Erkennung ("Job"). Eine neue Erkennung bricht eine noch laufende alte ab; cancel() wirkt sofort und beendet einen haengenden Arbeiter.
 function psO2NewJob() {
   if (__psO2Job && !__psO2Job.done) __psO2Job.cancel('replaced');
@@ -13235,7 +13309,8 @@ function psO2NewJob() {
     if (job.cancelled || job.done) return;
     job.cancelled = true; job.why = why || 'cancel';
     job.rej(Object.assign(new Error('cancelled'), { psCancel: true }));
-    if (job.inBuild || job.inRecog) psO2ResetEngine(); // nur wenn der Arbeiter gerade rechnet/startet: sonst bleibt er fuer das naechste Foto warm
+    if (job.inBuild || job.inRecog) psO2ResetEngine();
+    if(job.inNeural)psSmartStop('cancelled');
   };
   __psO2Job = job;
   return job;
@@ -13770,6 +13845,8 @@ function psO2PlaceItems(r, words) {
 async function psO2ReadLocal(file, onMsg, isDone, opts) {
   opts = opts || {};
   const T = Object.assign({}, PS_O2_T, opts.t || {}), H = opts.hooks || {};
+  const smart = !opts.hooks && typeof Worker!=='undefined';
+  if(smart)T.budget=Math.min(T.budget,12000);
   const job = opts.job || psO2NewJob();
   const t0 = Date.now(), res = [];
   let txt = '', r = null, fail = '', timedOut = false, lastMs = 0, tries = 0, src = null, prevScore = -99, prevFill = -1, rawAll = '';
@@ -13796,16 +13873,58 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
     try { src = await Promise.race([(H.source || psO2Source)(file), job.cancelP]); }
     catch (e) { fail = e && e.psCancel ? 'cancelled' : 'image'; }
     let plan = PS_O2_PLAN.slice();
+    if(src&&smart&&!job.cancelled){
+      let c=null;
+      try{
+        const ready=await Promise.race([psO2WithTimeout(psSmartWarm(),Math.min(1600,Math.max(1,left())),'neural-warm'),job.cancelP]);
+        if(ready&&left()>4500){
+          job.inNeural=true;say('Lokale KI liest den Vorschlag …');
+          c=await Promise.race([psO2Prepare(src,{side:1600,blur:src.glare?1:0}),job.cancelP]);
+          const blob=await Promise.race([psO2WithTimeout(new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(Error('encode')),'image/png')),Math.max(1,left()),'encode'),job.cancelP]);
+          const started=Date.now(),items=await Promise.race([psO2WithTimeout(psSmartRequest('read',blob),Math.max(1,Math.min(6000,left()-2800)),'neural-read'),job.cancelP]);
+          const o=psSmartLayout(items);o.ms=Date.now()-started;
+          if(o.text.trim()){
+            tries++;take(o);
+            if(!psSmartExact(r,txt)&&(!r.einmalig||!r.monatlich)&&!psO2Gaps(r,txt).some(g=>g!=='kosten'&&g!=='summen')&&left()>2200){
+              const rect=psSmartCostRegion(o,c);
+              if(rect){
+                psSmartStop('switch to Tesseract');
+                const cut=document.createElement('canvas');cut.width=rect.width;cut.height=rect.height;
+                cut.getContext('2d').drawImage(c,rect.left,rect.top,rect.width,rect.height,0,0,rect.width,rect.height);
+                try{
+                  job.inBuild=true;
+                  const w=await Promise.race([psO2Worker(Math.max(1,left())),job.cancelP]);
+                  job.inBuild=false;job.inRecog=true;
+                  await Promise.race([psO2WithTimeout(w.setParameters({tessedit_pageseg_mode:'6',tessedit_do_invert:'0'}),Math.max(1,left()),'roi-param'),job.cancelP]);
+                  const rr=await Promise.race([psO2WithTimeout(w.recognize(cut,{}, {text:true,blocks:false}),Math.max(1,left()),'roi-read'),job.cancelP]);
+                  const q=psO2Parse(rr.data.text);tries++;
+                  if(!r.einmalig&&q.einmalig)r.einmalig=q.einmalig;
+                  if(!r.monatlich&&q.monatlich)r.monatlich=q.monatlich;
+                  txt+='\n'+rr.data.text;
+                }catch(e){psO2ResetEngine();if(e.psCancel)throw e;}
+                finally{job.inBuild=job.inRecog=false;cut.width=cut.height=0;}
+              }
+            }
+            if(psSmartExact(r,txt)&&!o.low&&!hard()&&!soft())plan=[];
+          }
+        }
+      }catch(e){if(e&&e.psCancel)fail='cancelled';else if(job.inNeural)__psSmartCooldown=Date.now()+60000;}
+      finally{job.inNeural=false;if(c)c.width=c.height=0;}
+      if(plan.length){psSmartStop('fallback');if(left()<T.minPass)plan=[];}
+      if(job.cancelled)plan=[];
+      if(!res.length&&!plan.length&&!fail){fail='timeout';timedOut=true;}
+    }
+
     for (let k = 0; src && k < plan.length; k++) {
       if (job.cancelled) { fail = 'cancelled'; break; }
       // langsam UND nichts Brauchbares = Rauschen: kein zweiter langer Durchgang. v55.227: ausser der Text zeigt Spuren eines Vorschlags
       // (Ueberschriften, Betraege) - dann ist es Moiré/Spiegelung, und der geglaettete Durchgang liest meist fast alles.
       if (k > 0 && psO2Score(r) <= 0 && lastMs > 8000 && !psO2Signal(txt + rawAll) && !src.glare) break;
       // Restzeit reicht fuer keinen weiteren Durchgang (ohne Ergebnis darf er knapper sein: der entrauschte 2. Durchgang ist meist schneller)
-      if (k > 0 && left() < Math.max(T.minPass, lastMs * (r && psO2Score(r) > 0 ? 1.2 : 0.5))) break;
+      if ((smart&&left()<=0)||(k > 0 && left() < Math.max(T.minPass, lastMs * (r && psO2Score(r) > 0 ? 1.2 : 0.5)))) break;
       tries++;
       try {
-        const o = await psO2Pass(job, src, plan[k], T, left(), say, H);
+        const o = await (smart ? psO2WithTimeout(psO2Pass(job,src,plan[k],T,left(),say,H),Math.max(1,left()),'total-deadline').catch(e=>{if(e.psTimeout){job.cancel('deadline');throw psO2Err('timeout','total-deadline');}throw e;}) : psO2Pass(job,src,plan[k],T,left(),say,H));
         lastMs = o.ms; take(o);
         // v55.227: Zeichensalat im 1. Durchgang = Moiré oder Spiegelung: bei Spiegelung zuerst lokaler Schwellwert, sonst zuerst geglaettet (Moiré)
         if (k === 0 && psO2Score(r) <= 0 && o.words.length > 350 && plan.length > 2) plan.splice(1, plan.length, PS_O2_PLAN[1], src.glare ? PS_O2_PLAN_ADAPT : PS_O2_PLAN_MOIRE);
@@ -13815,6 +13934,7 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
         if (kind === 'timeout') {
           timedOut = true; lastMs = 0;
           if (!res.length) fail = 'timeout';
+          if(smart&&left()<=0)break;
           if (plan[k] !== PS_O2_PLAN_LIGHT) plan.splice(k + 1, plan.length, PS_O2_PLAN_LIGHT); // leichtere Variante statt gleichem Aufwand
           continue;
         }
@@ -13833,7 +13953,7 @@ async function psO2ReadLocal(file, onMsg, isDone, opts) {
     job.done = true;
   }
   if (!r) r = empty();
-  return { r, txt, fail, timedOut, ms: Date.now() - t0, tries, cancelled: job.cancelled };
+  return { r, txt, fail, timedOut, ms: Date.now() - t0, tries, cancelled: job.cancelled&&job.why!=='deadline' };
 }
 
 // === v55.176 (Beta): FOTO ZUSCHNEIDEN + ENTZERREN ========================================================
@@ -14920,25 +15040,7 @@ function PsO2Import({ onApply, onClose, initial }) {
       const missOf = q => stage === 'tarife' ? !q.tarife.length : stage === 'geraete' ? !q.geraete.length : stage === 'internet' ? !q.internet.length : stage === 'kosten' ? !(q.einmalig || q.monatlich) : false;
       const got = q => !!(q && (q.tarife.length || q.geraete.length || q.internet.length || q.einmalig || q.monatlich));
       let txt = pre ? pre.txt : '', r = pre ? pre.r : null, cloudThin = false, locFail = '', locCancelled = false, cloudFail = '';
-      // 1. Weg: der Dienst (liest Fotos vom Bildschirm am besten). Geht er nicht, merkt die App sich das für diese Sitzung.
-      if (!pre && !(__psO2CloudOff > Date.now()) && (psHtrConfigured() || PS_O2_CLOUD_ON)) {
-        try {
-          const cd = await psO2CloudRead(file, m => { if (live()) setBusy(m); }, { job });
-          if (!live()) return sum;
-          if (got(cd)) {
-            r = cd;
-            // v55.221: Bei "ganze Seite"/Scannen gilt schon EIN gefundenes Feld als "etwas gefunden" - dann
-            // lief die bessere Texterkennung auf dem Geraet gar nicht mehr mit, selbst wenn der Dienst wegen
-            // einer ungewohnten Bildschirm-Aufloesung (anderer Shop/Gerät) nur einen Bruchteil erkannt hat.
-            // Deshalb bei duennem Ergebnis zusaetzlich das Geraet lesen lassen und Fehlendes ergaenzen.
-            if (stage === 'ganz' || stage === 'scan') {
-              const catN = ['tarife', 'geraete', 'internet'].filter(k => (cd[k] || []).length).length;
-              cloudThin = psO2SuspectTotals(cd) || psO2CloudNeedsLocal(cd, stage, dRef.current);
-              if (psO2SuspectTotals(cd)) cd.monatlich = ''; // hohe Einmalsumme ist keine Monatsrate
-            }
-          }
-        } catch (e) { if (!live()) return sum; console.warn('[O2 Dienst]', e && e.psKind || e && e.message || 'Fehler'); cloudFail = e && e.psKind || ''; if (e && e.name === 'TypeError') __psO2CloudOff = Date.now() + 120000; }
-      }
+      // Smart Scan 2: Angebotsfotos bleiben lokal. Handschrift-Dienst unverändert.
       // 2. Weg: Texterkennung auf dem Gerät (v55.193: Bildschirm zuerst ausschneiden, Auswertung nach Position), bei Bedarf mit weiteren Aufbereitungen.
       if (!r || cloudThin) {
         const loc = await psO2ReadLocal(file, m => { if (live()) setBusy(m); }, q => !missOf(q), { job, t: { budget: Math.min(PS_O2_T.budget, Math.max(10000, PS_O2_T.total - (Date.now() - tStart))) } });
