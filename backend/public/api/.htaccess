@@ -1,0 +1,10 @@
+# Alle API-Aufrufe an den Front-Controller. Keine Verzeichnisauflistung.
+Options -Indexes
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+<FilesMatch "^(?!index\.php$).*">
+  Require all denied
+</FilesMatch>

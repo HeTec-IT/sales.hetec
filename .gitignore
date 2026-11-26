@@ -1,0 +1,22 @@
+# Abhängigkeiten / Build
+node_modules/
+backend/vendor/
+backend/composer.lock
+release/
+dist/
+.cache/
+
+# Geheimnisse – NIE committen
+backend/config/config.php
+config/config.php
+*.env
+.env*
+backend/dev/.dev-keys.json
+backend/dev/.storage/
+storage/
+
+# Testartefakte
+test-results/
+playwright-report/
+tests/e2e/.out/
+*.log
