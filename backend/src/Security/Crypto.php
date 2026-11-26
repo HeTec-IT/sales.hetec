@@ -52,7 +52,9 @@ final class Crypto
 
     public function hashIp(string $ip): string
     {
-        return bin2hex(sodium_crypto_generichash('ip:' . $ip, $this->indexKey, 32));
+        // eigener, abgeleiteter Schlüssel → keine Überschneidung mit Suchindex-HMACs
+        $k = sodium_crypto_generichash('ps-ip-hash', $this->indexKey, 32);
+        return bin2hex(sodium_crypto_generichash($ip, $k, 32));
     }
 
     private function subKey(string $context): string

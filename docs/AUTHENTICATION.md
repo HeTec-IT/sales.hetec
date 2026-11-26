@@ -17,7 +17,12 @@
    - E-Mail/UPN endet auf `@hetec-gmbh.de` (zusätzlich, nicht stattdessen)
 6. Dauerhafte Identität: **Tenant-ID + Object-ID** (`users.entra_tenant_id`, `users.entra_object_id`).
 7. Neues Konto → `status = pending`, kein Zugriff, bis ein Administrator freigibt. Ausnahme: E-Mails aus
-   `bootstrap_super_admins` (nur für die Ersteinrichtung, danach leeren).
+   `bootstrap_super_admins` werden Hauptadministrator – **nur solange es noch keinen mit Microsoft verknüpften,
+   freigegebenen Hauptadministrator gibt** (Ersteinrichtung). Danach wirkt der Eintrag nicht mehr; trotzdem leeren.
+7a. **Migrierte Konten** (aus Firestore): Bei der ersten Microsoft-Anmeldung wird ein Altkonto mit genau gleicher E-Mail
+   verknüpft, aber auf `pending` gesetzt. Rolle, Shops und Historie werden erst nach Freigabe durch einen Admin aktiv
+   (die E-Mail/UPN ist veränderlich und kein Berechtigungsmerkmal; Schutz bei wiederverwendeten Adressen).
+   Ausnahme: migrierte Hauptadministratoren, deren E-Mail in `bootstrap_super_admins` steht (sonst könnte niemand freigeben).
 8. Neue Sitzungs-ID nach erfolgreicher Anmeldung (Schutz gegen Session Fixation).
 
 Getestet gegen einen Mock-Microsoft-Dienst (`tests/mock-entra/server.mjs`): gültiger Login, falscher Tenant, privates

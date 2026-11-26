@@ -88,7 +88,11 @@ Alte Releases nach einigen Tagen löschen (2 behalten).
 
 ## Power Automate
 
-- PDF-Archiv- und Folgetermin-Flows werden unverändert direkt vom Browser aufgerufen (CSP erlaubt die Microsoft-Hosts).
+- PDF-Archiv- und Folgetermin-Flows bleiben unverändert (gleicher Trigger, gleicher Payload), werden im HeTec-Betrieb aber
+  vom Backend aufgerufen: `config.php` → `power_automate.flows` (`archive`, `followup`, `followup_aalen`) und
+  `power_automate.shared_key` mit den bisherigen Werten aus `index.html` (`ARCHIVE_FLOW_URL`, `FOLLOWUP_FLOW_URL`,
+  `FOLLOWUP_FLOW_URL_AALEN`, `PA_SHARED_KEY`) füllen. Danach (Freigabe) die Flow-URLs in Power Automate neu
+  generieren und nur in `config.php` eintragen. Nicht konfiguriert → Meldung „nicht konfiguriert“ (kein Rückfall).
 - **Archivsuche** (Flow „PDF Archiv API V3“): im HeTec-Betrieb ruft das Backend den Flow auf (`archive_flow.url`,
   `archive_flow.shared_secret` in `config.php`). Der Flow muss angepasst werden: Bedingung „Header
   `X-HeTec-Flow-Secret` = gespeichertes Geheimnis“ statt Prüfung des Firebase-Tokens; Benutzer/Shops aus

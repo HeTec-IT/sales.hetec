@@ -192,6 +192,28 @@ test('PDF-Suchindex: Suche nur in erlaubten Shops, fremde Shops 403, Admin alle'
   assert.equal(mine.json.items[0].kunde, 'Synthetik Kunde');
 });
 
+test('Archivsuche nur mit Recht – auch mit shopId (Azubi ohne Archivrecht)', { skip }, async () => {
+  assert.equal((await tom.get('/api/v1/pdf-index/search?key=n:synthetik&shopId=schwaebisch-hall')).status, 403);
+  assert.equal((await tom.get('/api/v1/pdf-index/search?key=n:synthetik')).status, 403);
+  assert.equal((await tom.get('/api/v1/pdf-index/probe?shopId=schwaebisch-hall')).status, 403);
+  assert.equal((await tom.post('/api/v1/archive/flow', { payload: { action: 'status' } })).status, 403);
+});
+
+test('Statistik: Name und Ausnahme-Kennzeichen setzt der Server, nicht das Gerät', { skip }, async () => {
+  const r = await max.post('/api/v1/analytics/batch', { rows: [row('fake_name_1', 'aalen', { user: 'Mia Verkauf', exempt: true, result: 'Abgebrochen' })] });
+  assert.deepEqual(r.json.accepted, ['fake_name_1']);
+  const db = env.sql("SELECT user_name, exempt, JSON_UNQUOTE(JSON_EXTRACT(payload, '$.user')) pu FROM analytics_events WHERE id = 'fake_name_1'")[0];
+  assert.equal(db.user_name, 'Max Verkauf');
+  assert.equal(db.pu, 'Max Verkauf');
+  assert.equal(Number(db.exempt), 0);
+  const old = await max.post('/api/v1/analytics/batch', { rows: [row('too_old_1', 'aalen', { ts: new Date(Date.now() - 40 * 86400000).toISOString() })] });
+  assert.deepEqual(old.json.rejected, [{ id: 'too_old_1', reason: 'invalid_ts' }]);
+  const sum = await admin.get('/api/v1/statistics/summary?groupBy=user&includeExempt=1');
+  const names = sum.json.groups.map(g => g.group);
+  assert.equal(new Set(names).size, names.length, 'Gruppierung je Benutzer-ID');
+  assert.ok(names.includes('Max Verkauf'));
+});
+
 test('Admin: Rangregeln (Admin kann keinen Hauptadmin ändern, niemand sich selbst)', { skip }, async () => {
   const anna = new Client(env.app);
   await anna.loginDev('test.anna.admin@hetec-gmbh.de');
@@ -200,6 +222,9 @@ test('Admin: Rangregeln (Admin kann keinen Hauptadmin ändern, niemand sich selb
   const annaSelf = users.find(u => u.email === 'test.anna.admin@hetec-gmbh.de');
   const maxU = users.find(u => u.email === 'test.max.verkauf@hetec-gmbh.de');
   assert.equal((await anna.patch('/api/v1/admin/users/' + haupt.id, { status: 'blocked' })).status, 403);
+  assert.equal((await anna.post('/api/v1/admin/users/' + haupt.id + '/revoke-sessions', {})).status, 403, 'Sitzungen höherer Ränge nicht beendbar');
+  assert.equal((await anna.put('/api/v1/skip/agents/' + haupt.id, { exempt: false })).status, 403, 'Skip-Limits höherer Ränge nicht änderbar');
+  assert.equal((await anna.put('/api/v1/skip/agents/' + annaSelf.id, { exempt: true })).status, 403, 'keine Selbstfreistellung');
   assert.equal((await anna.patch('/api/v1/admin/users/' + annaSelf.id, { role: 'super_admin' })).status, 403);
   assert.equal((await anna.patch('/api/v1/admin/users/' + maxU.id, { role: 'admin' })).status, 403);
   const ok = await anna.patch('/api/v1/admin/users/' + maxU.id, { extraShopIds: ['crailsheim'] });

@@ -46,6 +46,8 @@ test('Release: Microsoft-Anmeldung (Mock) → App läuft, keine externen Verbind
   assert.equal(await pg.evaluate('window.__PS_PROFILE_NAME'), 'Max Verkauf');
   assert.equal(await pg.evaluate('PSBackend.mode'), 'hetec');
   assert.equal(await pg.evaluate('typeof window.firebase'), 'undefined');
+  // Power-Automate-Flows laufen über das Backend (Platzhalter statt signierter URL; hier nicht konfiguriert → 503)
+  assert.equal(await pg.evaluate("fetch('ps-flow:followup', { method: 'POST', mode: 'no-cors', body: JSON.stringify({ shop: 'Aalen' }) }).then(r => r.status)"), 503);
   assert.deepEqual(pg.ext, [], 'externe Hosts: ' + pg.ext);
   assert.deepEqual(await pg.evaluate('window.__csp || []'), []);
   assert.deepEqual(pg.errs, []);
@@ -115,10 +117,16 @@ test('Release: Benutzerwechsel auf geteiltem Tablet – Warteschlange des Vorgä
   await pg.click('#ps-logout-icon');
   await pg.waitForSelector('#ps-ms-login');
   await pg.close();
+  // Beim Abmelden wird Max' offene Zeile noch unter Max gesendet (kein stiller Verlust)
+  const sent = env.sql(`SELECT u.email FROM analytics_events e JOIN users u ON u.id = e.user_id WHERE e.id = '${id}'`);
+  assert.deepEqual(sent.map(x => x.email), ['test.max.verkauf@hetec-gmbh.de'], 'beim Abmelden unter Max gesendet');
   const pg2 = await login(ctx, 'test.mia.verkauf@hetec-gmbh.de', 'Mia Verkauf');
+  // Restbestand von Max (z. B. aus einem anderen Tab) darf nicht unter Mias Anmeldung gesendet werden
+  const id2 = id + '_rest';
+  await pg2.evaluate(([uid, id]) => PSSyncQueue.put('analytics', uid, { id, ts: new Date().toISOString(), user: 'Max Verkauf', shopId: 'aalen', result: 'Angebot', canvasStats: {} }), [maxUid, id2]);
   await pg2.evaluate('PSBackend.analytics.flush()');
   await pg2.waitForTimeout(1000);
-  assert.equal(Number(env.sql(`SELECT COUNT(*) AS n FROM analytics_events WHERE id = '${id}'`)[0].n), 0, 'Zeile von Max nicht unter Mia gesendet');
+  assert.equal(Number(env.sql(`SELECT COUNT(*) AS n FROM analytics_events WHERE id = '${id2}'`)[0].n), 0, 'Zeile von Max nicht unter Mia gesendet');
   assert.equal(await pg2.evaluate(uid => PSSyncQueue.count(uid), maxUid), 1, 'bleibt für Max liegen');
   await ctx.close();
 });

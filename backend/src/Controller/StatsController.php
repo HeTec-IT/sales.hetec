@@ -20,6 +20,7 @@ final class StatsController
 {
     private const MAX_BATCH = 500;
     private const MAX_ROW_BYTES = 65536;
+    private const MAX_AGE_DAYS = 15;
     private const RESULTS = ['Abschluss', 'Angebot', 'Anfrage', 'offen', 'Abgebrochen', 'Übersprungen', 'Geparkt'];
 
     public function __construct(private App $app)
@@ -62,15 +63,20 @@ final class StatsController
         }
         $tsRaw = (string) ($row['ts'] ?? '');
         $ts = strtotime($tsRaw);
-        if ($ts === false || $ts < strtotime('2020-01-01') || $ts > time() + 86400) {
+        // Offline-Warteschlange hält Einträge max. 14 Tage → ältere Zeitstempel sind nicht plausibel
+        if ($ts === false || $ts < time() - self::MAX_AGE_DAYS * 86400 || $ts > time() + 86400) {
             throw new HttpException(422, 'invalid_ts');
         }
         $result = (string) ($row['result'] ?? 'offen');
         if (!in_array($result, self::RESULTS, true)) {
             $result = mb_substr($result, 0, 32);
         }
-        // Server-seitig gesetzte Felder (Client kann sie nicht fälschen)
+        // Server-seitig gesetzte Felder (Client kann sie nicht fälschen): Name aus dem Profil,
+        // Ausnahme-Kennzeichen (wie bisher: Admin oder vom Admin freigestellt) aus der DB
         unset($row['userUid'], $row['syncedAt']);
+        $row['user'] = $p->displayName;
+        $row['exempt'] = $p->isAdmin()
+            || (int) ($this->app->db->scalar('SELECT exempt FROM skip_limits WHERE user_id = :u', ['u' => $p->id]) ?? 0) === 1;
         $payload = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         if (strlen($payload) > self::MAX_ROW_BYTES) {
             throw new HttpException(413, 'row_too_large');
@@ -86,14 +92,14 @@ final class StatsController
             $params = [
                 'id' => $id,
                 'u' => $p->id,
-                'un' => mb_substr((string) ($row['user'] ?? $p->displayName), 0, 120),
+                'un' => mb_substr($p->displayName, 0, 120),
                 's' => $shopId,
                 'sn' => $shopName,
                 'b' => $brand,
                 'ts' => Db::fromMs($ms),
                 'r' => $result,
                 'bid' => mb_substr((string) ($row['beratungsId'] ?? ''), 0, 64),
-                'ex' => !empty($row['exempt']) ? 1 : 0,
+                'ex' => $row['exempt'] ? 1 : 0,
                 'dm' => isset($row['durationMin']) && is_numeric($row['durationMin']) ? (int) $row['durationMin'] : null,
                 'p' => $payload,
             ];
@@ -191,7 +197,7 @@ final class StatsController
         $group = $r->q('groupBy', 'shop');
         $col = match ($group) {
             'shop' => 'e.shop_id',
-            'user' => 'e.user_name',
+            'user' => 'e.user_id',
             'day' => 'DATE(e.ts)',
             'month' => "DATE_FORMAT(e.ts, '%Y-%m')",
             default => throw new HttpException(422, 'invalid_group'),
@@ -223,11 +229,16 @@ final class StatsController
         if ($r->q('includeExempt') !== '1') {
             $where[] = 'e.exempt = 0';
         }
-        $sql = "SELECT $col AS grp, e.result, COUNT(*) AS n FROM analytics_events e WHERE " . implode(' AND ', $where) . " GROUP BY grp, e.result ORDER BY grp";
+        // Gruppierung nach Benutzer über die Benutzer-ID (Namen sind nicht eindeutig); Anzeige-Label = aktueller Name
+        $label = $group === 'user' ? ", COALESCE(MAX(u.display_name), MAX(e.user_name)) AS label" : '';
+        $join = $group === 'user' ? ' LEFT JOIN users u ON u.id = e.user_id' : '';
+        $sql = "SELECT $col AS grp, e.result, COUNT(*) AS n$label FROM analytics_events e$join WHERE " . implode(' AND ', $where) . " GROUP BY grp, e.result ORDER BY grp";
         $out = [];
         foreach ($this->app->db->all($sql, $params) as $row) {
-            $g = (string) $row['grp'];
-            $out[$g] ??= ['group' => $g, 'total' => 0, 'byResult' => []];
+            $g = $group === 'user' ? (string) ($row['label'] ?? '') . ($row['grp'] === null ? ' (ohne Konto)' : '') : (string) $row['grp'];
+            $key = $group === 'user' ? 'u' . (string) ($row['grp'] ?? 'null') : $g;
+            $out[$key] ??= ['group' => $g, 'total' => 0, 'byResult' => []];
+            $g = $key;
             $out[$g]['byResult'][(string) $row['result']] = (int) $row['n'];
             $out[$g]['total'] += (int) $row['n'];
         }

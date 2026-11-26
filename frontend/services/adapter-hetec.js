@@ -176,6 +176,20 @@
     return access;
   }
   function signOutEverywhere() {
+    // offene Statistik vor dem Abmelden senden; was nicht gesendet werden kann, wird gemeldet (nicht still verworfen)
+    var uid = state.user && state.user.id;
+    var pre = uid ? flush(true).catch(function () { return 0; }).then(function () {
+      return PSSyncQueue.count(uid).catch(function () { return 0; });
+    }) : Promise.resolve(0);
+    return pre.then(function (open) {
+      if (open > 0 && !window.confirm(open + ' Beratung(en) konnten noch nicht an den Server gesendet werden (keine Verbindung).\n\n' +
+          'Sie bleiben auf diesem Gerät gespeichert und werden bei Ihrer nächsten Anmeldung hier gesendet.\n\nTrotzdem abmelden?')) {
+        return null;
+      }
+      return logoutNow();
+    });
+  }
+  function logoutNow() {
     return api('POST', 'auth/logout', {}).then(function (r) { return r && r.logoutUrl; }, function () { return null; }).then(function (url) {
       return PSSyncQueue.kvDelete(SESSION_KEY).catch(function () {}).then(function () {
         try { if (window.__psClearActiveSession) window.__psClearActiveSession(); } catch (e) {}
@@ -231,6 +245,7 @@
           start(s.user, false);
         });
       }
+      state.csrf = s.csrfToken || '';
       PSSyncQueue.kvDelete(SESSION_KEY).catch(function () {});
       if (s.status === 'pending') return renderWait(s.name);
       if (loginResult === 'denied') return renderLogin(REASONS[reason] || 'Ihr Zugang ist gesperrt oder wurde nicht freigegeben. Bitte wenden Sie sich an einen Administrator.', true);
@@ -349,8 +364,20 @@
     });
   }
 
+  // Stellvertretender Aufruf eines Power-Automate-Flows über das Backend (Payload unverändert)
+  function flowFetch(name, init) {
+    var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    if (state.csrf) headers['X-PS-CSRF'] = state.csrf;
+    return (window.__psNativeFetch || window.fetch)(BASE + 'flows/' + encodeURIComponent(name), {
+      method: 'POST', headers: headers, credentials: 'same-origin', cache: 'no-store',
+      body: typeof init.body === 'string' ? init.body : JSON.stringify(init.body || {}),
+      keepalive: !!init.keepalive, signal: init.signal
+    });
+  }
+
   var adapter = {
     mode: 'hetec',
+    flowFetch: flowFetch,
     ready: function () { return Promise.resolve(true); },
     isReady: function () { return true; },
     auth: {

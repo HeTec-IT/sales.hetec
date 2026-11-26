@@ -92,12 +92,18 @@ self.addEventListener('fetch', function (e) {
       }));
       return;
     }
-    e.respondWith(fromCache(CACHE, req).then(function (hit) {
-      return hit || fetch(req).then(function (res) {
-        // Öffentliche, nicht versionierte Daten (Preis-JSONs) dürfen für den Offline-Fall nachgecacht werden
-        if (res.ok && /\.json$/.test(url.pathname)) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
+    // Tagesaktuelle Daten (Preis-JSONs der Bots): network-first, Cache nur als Offline-Rückfall.
+    // Cache-Schlüssel ohne Query (z. B. ?t=…), damit der Cache nicht unbegrenzt wächst.
+    if (/\.json$/.test(url.pathname) && url.pathname.indexOf('/vendor/') === -1 && url.pathname.indexOf('/ocr/') === -1) {
+      var key = new Request(url.origin + url.pathname);
+      e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
+        if (res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(key, copy); }).catch(function () {}); }
         return res;
-      }).catch(function () { return fromCache(CACHE, new Request(url.origin + url.pathname)).then(function (h) { return h || Response.error(); }); });
+      }).catch(function () { return fromCache(CACHE, key).then(function (h) { return h || Response.error(); }); }));
+      return;
+    }
+    e.respondWith(fromCache(CACHE, req).then(function (hit) {
+      return hit || fetch(req);
     }));
     return;
   }

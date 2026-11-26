@@ -125,10 +125,22 @@
     purgeOld: function () {
       var limit = Date.now() - MAX_AGE_DAYS * 86400000;
       return tx(['queue', 'rejected'], 'readwrite', function (t) {
-        var r = t.objectStore('queue').index('byQueued').openCursor(IDBKeyRange.upperBound(limit));
-        r.onsuccess = function () { var c = r.result; if (c) { c.delete(); c.continue(); } };
-        var r2 = t.objectStore('rejected').openCursor();
-        r2.onsuccess = function () { var c = r2.result; if (c) { if ((c.value.ts || 0) < limit) c.delete(); c.continue(); } };
+        var rj = t.objectStore('rejected');
+        // zuerst alte Ablehnungen löschen, dann abgelaufene Warteschlangen-Einträge nachvollziehbar nach „rejected“ verschieben
+        var r2 = rj.openCursor();
+        r2.onsuccess = function () {
+          var c = r2.result;
+          if (c) { if ((c.value.ts || 0) < limit) c.delete(); c.continue(); return; }
+          var r = t.objectStore('queue').index('byQueued').openCursor(IDBKeyRange.upperBound(limit));
+          r.onsuccess = function () {
+            var q = r.result;
+            if (!q) return;
+            var v = q.value;
+            rj.put({ kind: v.kind, uid: v.uid, id: v.id, reason: 'expired_offline', item: v.item || null, ts: Date.now() });
+            q.delete();
+            q.continue();
+          };
+        };
       });
     },
     rejected: function () {

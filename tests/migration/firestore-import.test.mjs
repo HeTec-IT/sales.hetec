@@ -23,6 +23,7 @@ function fixture() {
         uidD: { email: 'test.alt.wartet@hetec-gmbh.de', name: 'Alt Wartet', role: 'verkaeufer', status: 'pending', active: false, shopId: 'crailsheim' },
         uidE: { email: 'test.alt.gesperrt@hetec-gmbh.de', name: 'Alt Gesperrt', role: 'verkaeufer', status: 'blocked', active: false, shopId: 'aalen', allowedShops: { rosenheim: true, traunstein: false } },
         uidF: { email: 'keine-email', name: 'Kaputt' },
+        uidG: { email: 'test.alt.selbsternannt@hetec-gmbh.de', name: 'Alt Selbsternannt', role: 'super_admin', status: 'approved', active: true, shopId: 'aalen' },
       },
       analytics: {
         a1: { id: 'a1', ts: iso(3), user: 'Alt Verkauf', userUid: 'uidB', shop: 'o2 Shop Aalen', shopId: 'aalen', result: 'Angebot', exempt: false, canvasStats: { offer1: { used: true, strokes: 4 } } },
@@ -51,7 +52,7 @@ function fixture() {
 
 before(async () => {
   if (skip) return;
-  env = await startEnv({ seed: false });
+  env = await startEnv({ seed: false, bootstrap: ['test.alt.admin@hetec-gmbh.de'] });
   file = path.join(env.tmp, 'export.json');
   fs.writeFileSync(file, JSON.stringify(fixture()));
 });
@@ -62,7 +63,7 @@ const imp = (...args) => JSON.parse(execFileSync('php', [path.join(ROOT, 'backen
 test('Testlauf (--dry-run) liefert Bericht und speichert nichts', { skip }, () => {
   const r = imp(file, '--dry-run');
   assert.equal(r.dryRun, true);
-  assert.equal(r.report.users.imported, 5);
+  assert.equal(r.report.users.imported, 6);
   assert.equal(Number(env.sql('SELECT COUNT(*) n FROM users')[0].n), 0);
   assert.equal(Number(env.sql('SELECT COUNT(*) n FROM import_batches')[0].n), 0);
 });
@@ -72,7 +73,9 @@ test('Übernahme: vollständig, Rollen/Status/Shops korrekt, ungültige Datensä
   const r = imp(file, '--super-admin=test.alt.admin@hetec-gmbh.de');
   batch = r.batch;
   const rep = r.report;
-  assert.deepEqual([rep.users.imported, rep.users.skipped['keine gültige E-Mail']], [5, 1]);
+  assert.deepEqual([rep.users.imported, rep.users.skipped['keine gültige E-Mail']], [6, 1]);
+  assert.equal(rep.users.role_ignored, 1, 'unbekannte Rolle wird gemeldet');
+  assert.equal(rep.users.admins_to_review, 1);
   assert.equal(rep.analytics.imported, 3);
   assert.equal(rep.analytics.skipped['kein Zeitstempel'], 1);
   assert.equal(rep.analytics.skipped['ungültige ID'], 1);
@@ -87,6 +90,7 @@ test('Übernahme: vollständig, Rollen/Status/Shops korrekt, ungültige Datensä
   assert.equal(rep.aktionsmappe.imported, 1);
   const u = Object.fromEntries(env.sql('SELECT email, role_id, status, all_shops, home_shop_id, legacy_firebase_uid, entra_object_id FROM users').map(x => [x.email, x]));
   assert.equal(u['test.alt.admin@hetec-gmbh.de'].role_id, 'super_admin');
+  assert.equal(u['test.alt.selbsternannt@hetec-gmbh.de'].role_id, 'mitarbeiter', 'clientseitig gesetzte Rollen werden nicht übernommen');
   assert.equal(u['test.alt.verkauf@hetec-gmbh.de'].home_shop_id, 'aalen');
   assert.equal(Number(u['test.alt.springer@hetec-gmbh.de'].all_shops), 1);
   assert.equal(u['test.alt.springer@hetec-gmbh.de'].home_shop_id, 'schwaebisch-hall');
@@ -107,30 +111,59 @@ test('Wiederholte Übernahme erzeugt keine Dubletten', { skip }, () => {
   const before = env.sql('SELECT (SELECT COUNT(*) FROM users) u, (SELECT COUNT(*) FROM analytics_events) a, (SELECT COUNT(*) FROM saved_offers) o')[0];
   const r = imp(file);
   assert.equal(r.report.users.imported, 0);
-  assert.equal(r.report.users.existing, 5);
+  assert.equal(r.report.users.existing, 6);
   assert.equal(r.report.analytics.imported, 0);
   const after = env.sql('SELECT (SELECT COUNT(*) FROM users) u, (SELECT COUNT(*) FROM analytics_events) a, (SELECT COUNT(*) FROM saved_offers) o')[0];
   assert.deepEqual(after, before);
 });
 
-test('Migrierter Benutzer wird bei der ersten Microsoft-Anmeldung eindeutig über die E-Mail verknüpft und sieht seine Historie', { skip }, async () => {
+test('Migrierter Benutzer: Verknüpfung per E-Mail nur mit Admin-Freigabe, danach Rolle, Shops und Historie', { skip }, async () => {
   const c = new Client(env.app);
   const email = 'test.alt.verkauf@hetec-gmbh.de';
-  const { session } = await c.loginEntra(env, { oid: await devOid(email), email, name: 'Alt Verkauf', given: 'Alt', family: 'Verkauf' });
+  const ident = { oid: await devOid(email), email, name: 'Alt Verkauf', given: 'Alt', family: 'Verkauf' };
+  let { session } = await c.loginEntra(env, ident);
+  assert.equal(session.authenticated, false, 'kein Zugriff vor der Freigabe');
+  assert.equal(session.status, 'pending');
+  const row = env.sql(`SELECT public_id, status, entra_object_id IS NOT NULL l FROM users WHERE email = '${email}'`)[0];
+  assert.deepEqual([row.status, Number(row.l)], ['pending', 1]);
+  // Freigabe durch den (migrierten) Hauptadmin
+  const adm = new Client(env.app);
+  const ae = 'test.alt.admin@hetec-gmbh.de';
+  const a = await adm.loginEntra(env, { oid: await devOid(ae), email: ae, name: 'Alt Admin', given: 'Alt', family: 'Admin' });
+  assert.equal(a.session.user.role, 'super_admin', 'in der Server-Konfiguration hinterlegter Hauptadmin bleibt nach Verknüpfung freigegeben');
+  const ok = await adm.patch('/api/v1/admin/users/' + row.public_id, { status: 'approved' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  ({ session } = await c.loginEntra(env, ident));
   assert.equal(session.authenticated, true);
   assert.deepEqual(session.user.allowedShopIds, ['aalen', 'crailsheim']);
   const own = await c.get('/api/v1/analytics?scope=own');
   assert.deepEqual(own.json.rows.map(r => r.id).sort(), ['a1', 'a2']);
   const offers = await c.get('/api/v1/offers');
   assert.ok(offers.json.offers.some(o => o.id === 'o1' && o.kunde === 'Synthetik Kunde'));
-  assert.equal(env.sql(`SELECT entra_object_id IS NOT NULL l FROM users WHERE email = '${email}'`)[0].l, 1);
 });
 
-test('Rücknahme eines Laufs entfernt genau die übernommenen Datensätze', { skip }, () => {
+test('Import: Konto mit gleicher E-Mail existiert bereits → Konflikt im Bericht, kein Doppelkonto', { skip }, async () => {
+  const c = new Client(env.app);
+  const email = 'test.vorab.angemeldet@hetec-gmbh.de';
+  await c.loginEntra(env, { oid: await devOid(email), email, name: 'Vorab Angemeldet', given: 'Vorab', family: 'Angemeldet' });
+  const f2 = path.join(env.tmp, 'export2.json');
+  fs.writeFileSync(f2, JSON.stringify({ meta: { project: 'synthetisch-2' }, collections: { users: { uidZ: { email, name: 'Vorab Angemeldet', role: 'admin', status: 'approved', active: true } } } }));
+  const r = imp(f2);
+  assert.equal(r.report.users.skipped['E-Mail bereits als Konto vorhanden (manuell zusammenführen)'], 1);
+  assert.equal(Number(env.sql(`SELECT COUNT(*) n FROM users WHERE email = '${email}'`)[0].n), 1);
+});
+
+test('Rücknahme: entfernt übernommene Daten, behält bereits genutzte Konten und spätere Änderungen', { skip }, async () => {
+  const adm = new Client(env.app);
+  const ae = 'test.alt.admin@hetec-gmbh.de';
+  await adm.loginEntra(env, { oid: await devOid(ae), email: ae, name: 'Alt Admin', given: 'Alt', family: 'Admin' });
+  assert.equal((await adm.put('/api/v1/news/o2', { items: [{ text: 'Nach dem Import geändert', bis: '' }] })).status, 200);
   const r = imp('--rollback=' + batch);
-  assert.ok(r.deleted.users >= 5);
-  assert.equal(Number(env.sql('SELECT COUNT(*) n FROM users WHERE legacy_firebase_uid IS NOT NULL')[0].n), 0);
-  assert.equal(Number(env.sql('SELECT COUNT(*) n FROM analytics_events')[0].n), 0);
-  assert.equal(Number(env.sql('SELECT COUNT(*) n FROM saved_offers')[0].n), 0);
+  assert.equal(r.deleted.kept.users, 2, 'verknüpfter Mitarbeiter + angemeldeter Admin bleiben');
+  assert.equal(r.deleted.kept.changed_after_import, 1, 'geänderte News bleiben');
+  assert.deepEqual(env.sql('SELECT email FROM users WHERE legacy_firebase_uid IS NOT NULL ORDER BY email').map(x => x.email), ['test.alt.admin@hetec-gmbh.de', 'test.alt.verkauf@hetec-gmbh.de']);
+  assert.deepEqual(env.sql('SELECT id FROM analytics_events ORDER BY id').map(x => x.id), ['a1', 'a2'], 'Historie der behaltenen Konten bleibt');
+  assert.equal(Number(env.sql("SELECT COUNT(*) n FROM saved_offers")[0].n), 1);
   assert.equal(Number(env.sql('SELECT COUNT(*) n FROM shops')[0].n), 12, 'Stammdaten bleiben');
+  assert.throws(() => imp('--rollback=' + batch), 'zweite Rücknahme wird verweigert');
 });

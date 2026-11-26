@@ -56,7 +56,7 @@ Conditional Access (z. B. MFA außerhalb der Shop-Netze) kann auf diese App ange
     'reject_guests'  => true,
     'authority_override' => '',
 ],
-'bootstrap_super_admins' => ['d.dasilva@hetec-gmbh.de'],   // nach der ersten Anmeldung wieder leeren
+'bootstrap_super_admins' => ['v.nachname@hetec-gmbh.de'],   // Hauptadmin(s) der Ersteinrichtung
 ```
 
 ## 8. Prüfen

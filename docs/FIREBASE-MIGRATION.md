@@ -14,16 +14,17 @@ Server (neues Hosting)
    │ 2. Testlauf:   php app/bin/import-firestore.php export.json --dry-run   → Bericht, nichts gespeichert
    │ 3. Übernahme:  php app/bin/import-firestore.php export.json             → Lauf-ID
    │ 4. Kontrolle:  Bericht + Stichproben (unten)
-   │ (Rücknahme:    php app/bin/import-firestore.php --rollback=<Lauf-ID>)
+   │ (Rücknahme:    php app/bin/import-firestore.php --rollback=<Lauf-ID>  – behält bereits genutzte Konten
+   │                samt Historie sowie nach dem Import geänderte News/Einstellungen; nur einmal möglich)
    ▼
-5. Mitarbeiter melden sich mit Microsoft an → Verknüpfung über eindeutige E-Mail
+5. Mitarbeiter melden sich mit Microsoft an → Verknüpfung über eindeutige E-Mail → Admin gibt frei (/admin/)
 ```
 
 ## Was wird wie übernommen
 
 | Firestore | Ziel | Regeln |
 |---|---|---|
-| `users/{uid}` | `users`, `user_shops` | `legacy_firebase_uid = uid`; Rolle `admin` → Administrator (Bootstrap-E-Mail → Hauptadministrator), `verkaeufer` → Mitarbeiter; Status `approved`+`active` → freigegeben, `pending` → wartend, sonst gesperrt; Springer-/Shopwechsel-Felder → `all_shops`; Shop-Listen/-Maps → `user_shops` (nur bekannte Shops); ohne gültige E-Mail → übersprungen |
+| `users/{uid}` | `users`, `user_shops` | `legacy_firebase_uid = uid`; Rolle `admin` → Administrator (Bootstrap-E-Mail → Hauptadministrator, im Bericht `admins_to_review`), alle anderen Werte → Mitarbeiter (unbekannte Rollen werden nicht übernommen, Bericht `role_ignored` – Profile waren im Altsystem clientseitig beschreibbar); Status `approved`+`active` → freigegeben, `pending` → wartend, sonst gesperrt; Springer-/Shopwechsel-Felder → `all_shops`; Shop-Listen/-Maps → `user_shops` (nur bekannte Shops); ohne gültige E-Mail → übersprungen |
 | `analytics/{id}` | `analytics_events` | ID bleibt (keine Dubletten); Benutzer über `userUid`, sonst eindeutigen Namen; nicht zuordenbar → bleibt ohne Benutzer erhalten (Historie) |
 | `saved_offers/{id}` | `saved_offers` | verschlüsselt; älter als 30 Tage oder ohne gültigen Shop → nicht übernommen (Löschfrist) |
 | `skip_limits/limit_*`, `skip_*_YYYY-MM` | `skip_limits`, `skip_counters` | Agentenname → eindeutiger Benutzer, sonst Bericht |
@@ -39,6 +40,10 @@ Server (neues Hosting)
 - Beim Import wird **keine** Microsoft-Identität gesetzt.
 - Bei der ersten Microsoft-Anmeldung (Tenant geprüft, Domain geprüft) wird ein migrierter Benutzer verknüpft, wenn
   **genau ein** migrierter, noch unverknüpfter Datensatz dieselbe E-Mail hat. Danach zählt nur noch Tenant-ID + Object-ID.
+- Das verknüpfte Konto steht danach auf **„wartet auf Freigabe“**: Ein Admin prüft Rolle/Shops und gibt frei
+  (Schutz bei wiederverwendeten E-Mail-Adressen). Ausnahme: Hauptadmins aus `bootstrap_super_admins`.
+- Existiert vor dem Import bereits ein Konto mit derselben E-Mail (Anmeldung vor dem Import), legt der Import **kein**
+  zweites Konto an, sondern meldet einen Konflikt im Bericht (manuell zusammenführen).
 - Mehrdeutig/keine Übereinstimmung → normales neues Konto „wartet auf Freigabe“; Admin bereinigt (Protokoll `entra_linked`).
 - Strenger (optional): Die IT liefert Object-IDs; vor dem Import in die Exportdatei bzw. danach in `users.entra_object_id` eintragen.
 

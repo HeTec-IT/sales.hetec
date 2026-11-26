@@ -99,6 +99,8 @@ final class App
         $r->add('GET', '/v1/pdf-index/probe', [$idx, 'probe'], ['auth' => true]);
         $r->add('DELETE', '/v1/pdf-index/{id}', [$idx, 'delete'], ['auth' => true, 'csrf' => true, 'perm' => 'archive.import']);
         $r->add('POST', '/v1/archive/flow', [$idx, 'flowProxy'], ['auth' => true, 'csrf' => true]);
+        $flows = new Controller\FlowController($this);
+        $r->add('POST', '/v1/flows/{name}', [$flows, 'post'], ['auth' => true, 'csrf' => true, 'perm' => 'consultation.use']);
 
         $r->add('POST', '/v1/downloads', [$dl, 'create'], ['auth' => true, 'csrf' => true, 'perm' => 'consultation.use']);
         $r->add('DELETE', '/v1/downloads/{id}', [$dl, 'delete'], ['auth' => true, 'csrf' => true]);

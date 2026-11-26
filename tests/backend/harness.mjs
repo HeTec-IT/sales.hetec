@@ -20,7 +20,7 @@ export function phpAvailable() {
   try { execFileSync(PHP, ['-r', 'exit(extension_loaded("pdo_mysql") && extension_loaded("sodium") ? 0 : 1);']); return true; } catch { return false; }
 }
 
-export async function startEnv({ seed = true, archiveFlowUrl = '', releaseDir = '' } = {}) {
+export async function startEnv({ seed = true, archiveFlowUrl = '', releaseDir = '', bootstrap = ['test.bootstrap.chef@hetec-gmbh.de'], powerAutomate = { flows: {}, shared_key: '' } } = {}) {
   const port = await freePort();
   const mock = await startMockEntra({ tenantId: TENANT, clientId: CLIENT_ID, clientSecret: SECRET });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ps-test-'));
@@ -34,9 +34,10 @@ export async function startEnv({ seed = true, archiveFlowUrl = '', releaseDir = 
     entra: { tenant_id: TENANT, client_id: CLIENT_ID, client_secret: SECRET, redirect_uri: app + '/api/v1/auth/callback', post_logout_redirect_uri: app + '/', allowed_domains: ['hetec-gmbh.de'], reject_guests: true, authority_override: mock.authority },
     data_key: keys.d, index_key: keys.i,
     session: { cookie_name: 'ps_sid_test', idle_minutes: 480, absolute_hours: 12, offline_grace_hours: 12 },
-    bootstrap_super_admins: ['test.bootstrap.chef@hetec-gmbh.de'],
+    bootstrap_super_admins: bootstrap,
     storage_dir: path.join(tmp, 'storage'),
     archive_flow: { url: archiveFlowUrl, shared_secret: archiveFlowUrl ? 'flow-secret-test' : '' },
+    power_automate: powerAutomate,
     allow_web_migrations: false,
   });
   fs.writeFileSync(cfgFile, `<?php return json_decode(base64_decode('${Buffer.from(cfgJson).toString('base64')}'), true, 32, JSON_THROW_ON_ERROR);`);
@@ -58,6 +59,7 @@ export async function startEnv({ seed = true, archiveFlowUrl = '', releaseDir = 
   return {
     app, mock, cfgFile, tmp, env, log: () => log, php: run,
     sql(q) { return JSON.parse(execFileSync(PHP, ['-r', '$f = require getenv("PS_APP_ROOT") . "/bootstrap.php"; echo json_encode($f()->db->all(base64_decode($argv[1])));', Buffer.from(q).toString('base64')], { env: { ...env, PS_APP_ROOT: path.join(ROOT, 'backend') } }).toString()); },
+    exec(q) { return Number(execFileSync(PHP, ['-r', '$f = require getenv("PS_APP_ROOT") . "/bootstrap.php"; echo $f()->db->exec(base64_decode($argv[1]));', Buffer.from(q).toString('base64')], { env: { ...env, PS_APP_ROOT: path.join(ROOT, 'backend') } }).toString()); },
     async stop() { srv.kill(); await mock.close(); fs.rmSync(tmp, { recursive: true, force: true }); },
   };
 }

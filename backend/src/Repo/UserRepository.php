@@ -35,9 +35,10 @@ final class UserRepository
     }
 
     /**
-     * Migrierte Benutzer (aus Firestore) haben noch keine Entra-Identität. Sie werden NUR dann verknüpft,
-     * wenn genau ein unverknüpfter, nicht gelöschter Datensatz mit derselben E-Mail existiert UND ein
-     * Administrator die Verknüpfung vorbereitet hat (link_pending = Status 'approved' + entra_* NULL + legacy_firebase_uid gesetzt).
+     * Migrierte Benutzer (aus Firestore) haben noch keine Entra-Identität. Kandidat nur, wenn genau ein
+     * unverknüpfter, nicht gelöschter Datensatz mit derselben E-Mail existiert. Die E-Mail (UPN) ist veränderlich
+     * und kein Berechtigungsmerkmal: Die Verknüpfung setzt das Konto daher auf 'pending' – erst die Freigabe
+     * durch einen Admin aktiviert Rolle, Shops und Historie (siehe EntraLogin::establish).
      * @return array<string,mixed>|null
      */
     public function findLinkableLegacy(string $email): ?array
@@ -49,12 +50,43 @@ final class UserRepository
         return count($rows) === 1 ? $rows[0] : null;
     }
 
-    public function linkEntra(int $userId, string $tenantId, string $objectId): void
+    public function linkEntra(int $userId, string $tenantId, string $objectId, bool $keepApproved = false): void
     {
+        // Freigegebene Altkonten werden nach der Verknüpfung erneut zur Freigabe vorgelegt (gesperrte bleiben gesperrt).
+        // Ausnahme: in der Server-Konfiguration hinterlegte Hauptadmins (bootstrap_super_admins), sonst gäbe es niemanden,
+        // der die übrigen Konten freigeben kann.
         $this->db->exec(
-            'UPDATE users SET entra_tenant_id = :t, entra_object_id = :o WHERE id = :id AND entra_object_id IS NULL',
-            ['t' => strtolower($tenantId), 'o' => strtolower($objectId), 'id' => $userId]
+            "UPDATE users SET entra_tenant_id = :t, entra_object_id = :o,
+                    status = IF(status = 'approved' AND :keep = 0, 'pending', status)
+              WHERE id = :id AND entra_object_id IS NULL",
+            ['t' => strtolower($tenantId), 'o' => strtolower($objectId), 'id' => $userId, 'keep' => $keepApproved ? 1 : 0]
         );
+    }
+
+    /**
+     * Rangregel für alle Eingriffe in fremde Konten (Rechte, Sitzungen, Skip-Limits):
+     * nur Hauptadministratoren oder Benutzer mit höherem Rang als das Zielkonto; nie das eigene Konto.
+     * @param array<string,mixed> $target
+     */
+    public function assertCanManage(\HeTec\PS\Auth\Principal $p, array $target): void
+    {
+        if ((int) $target['id'] === $p->id) {
+            throw new \HeTec\PS\Http\HttpException(403, 'cannot_modify_self');
+        }
+        if ($p->roleId === 'super_admin') {
+            return;
+        }
+        $rank = (int) $this->db->scalar('SELECT rank_level FROM roles WHERE id = :r', ['r' => $target['role_id']]);
+        if ($rank >= $p->roleRank) {
+            throw new \HeTec\PS\Http\HttpException(403, 'insufficient_rank');
+        }
+    }
+
+    public function hasActiveSuperAdmin(): bool
+    {
+        // nur mit Microsoft verknüpfte Hauptadmins zählen (migrierte, noch unverknüpfte können sich noch nicht anmelden)
+        return (int) $this->db->scalar("SELECT COUNT(*) FROM users WHERE role_id = 'super_admin' AND status = 'approved'
+            AND entra_object_id IS NOT NULL AND deleted_at IS NULL") > 0;
     }
 
     /** @param array{email:string,display_name:string,vorname:string,nachname:string} $p */

@@ -147,6 +147,7 @@ final class AdminController
         if (!$target) {
             throw new HttpException(404, 'not_found');
         }
+        $this->app->users->assertCanManage($p, $target);
         $n = $this->app->session->revokeUser((int) $target['id']);
         $this->app->audit->log($p->id, 'sessions_revoked', 'user', (string) $target['public_id'], null, ['count' => $n]);
         return Response::json(['ok' => true, 'revoked' => $n]);

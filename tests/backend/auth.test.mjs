@@ -70,11 +70,43 @@ test('Callback ohne passenden state wird abgelehnt (CSRF auf den Login)', { skip
   assert.match(r.headers.get('location'), /login=error/);
 });
 
-test('Bootstrap-Admin aus der Konfiguration wird beim ersten Login Hauptadministrator', { skip }, async () => {
+test('Bootstrap-Admin aus der Konfiguration: nur solange kein Hauptadmin existiert', { skip }, async () => {
+  // Es gibt bereits einen (verknüpften) Hauptadmin → Bootstrap-Eintrag wirkt nicht, Konto wartet auf Freigabe
+  const c1 = new Client(env.app);
+  const r1 = await c1.loginEntra(env, await ident('test.bootstrap.chef@hetec-gmbh.de', 'Bootstrap Chef'));
+  assert.equal(r1.session.authenticated, false);
+  assert.equal(r1.session.status, 'pending');
+  // Ersteinrichtung simulieren: kein freigegebener Hauptadmin vorhanden
+  env.exec("DELETE FROM users WHERE email = 'test.bootstrap.chef@hetec-gmbh.de'");
+  const supers = env.sql("SELECT id FROM users WHERE role_id = 'super_admin' AND status = 'approved'").map(x => x.id);
+  env.exec("UPDATE users SET status = 'blocked' WHERE id IN (" + supers.join(',') + ')');
+  try {
+    const c2 = new Client(env.app);
+    const r2 = await c2.loginEntra(env, await ident('test.bootstrap.chef@hetec-gmbh.de', 'Bootstrap Chef'));
+    assert.equal(r2.session.authenticated, true);
+    assert.equal(r2.session.user.role, 'super_admin');
+  } finally {
+    env.exec("UPDATE users SET status = 'approved' WHERE id IN (" + supers.join(',') + ')');
+  }
+});
+
+test('Wartendes Konto kann sich serverseitig abmelden (CSRF-Token auch ohne Freigabe)', { skip }, async () => {
   const c = new Client(env.app);
-  const { session } = await c.loginEntra(env, await ident('test.bootstrap.chef@hetec-gmbh.de', 'Bootstrap Chef'));
-  assert.equal(session.authenticated, true);
-  assert.equal(session.user.role, 'super_admin');
+  const { session } = await c.loginEntra(env, await ident('test.neu.wartend2@hetec-gmbh.de', 'Neu Wartend'));
+  assert.equal(session.status, 'pending');
+  assert.ok(session.csrfToken);
+  c.csrf = session.csrfToken;
+  const r = await c.post('/api/v1/auth/logout', {});
+  assert.equal(r.status, 200);
+  assert.equal((await c.get('/api/v1/session')).json.status, 'anonymous');
+});
+
+test('Name kann nur einmalig ergänzt werden, nicht nachträglich geändert', { skip }, async () => {
+  const c = new Client(env.app);
+  await c.loginDev('test.max.verkauf@hetec-gmbh.de');
+  const r = await c.patch('/api/v1/me/profile', { vorname: 'Fremder', nachname: 'Name' });
+  assert.equal(r.status, 409);
+  assert.equal(r.json.error, 'profile_complete');
 });
 
 test('Logout beendet die Sitzung serverseitig und liefert die Microsoft-Abmelde-URL', { skip }, async () => {
@@ -105,6 +137,6 @@ test('Sperre durch Admin beendet laufende Sitzungen sofort', { skip }, async () 
 
 test('Dev-Login akzeptiert nur synthetische Testkonten', { skip }, async () => {
   const c = new Client(env.app);
-  const r = await c.post('/api/v1/dev/login', { email: 'd.dasilva@hetec-gmbh.de' });
+  const r = await c.post('/api/v1/dev/login', { email: 'm.mustermann@hetec-gmbh.de' });
   assert.equal(r.status, 422);
 });

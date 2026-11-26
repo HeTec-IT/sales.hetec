@@ -12,10 +12,12 @@ use HeTec\PS\Http\Response;
  * NUR FÜR DIE LOKALE ENTWICKLUNG. Dieses Verzeichnis (backend/dev/) ist im Release-Artefakt NICHT enthalten
  * (scripts/build-release.mjs schließt es aus, tests/release prüft das).
  * Zusätzliche Sperren, falls es doch auf einen Server gelangt:
- *   1. env muss 'development' sein (Config verweigert Produktionswerte in dev-fremden Umgebungen),
+ *   1. env muss 'development' sein (Config erlaubt 'development' nur mit app_url auf localhost),
  *   2. app_url muss auf localhost/127.0.0.1 zeigen,
  *   3. die Anfrage muss von der Loopback-Adresse kommen,
- *   4. nur E-Mails synthetischer Testbenutzer (@test.hetec-gmbh.de bzw. konfigurierte Dev-Domain).
+ *   4. nur E-Mails synthetischer Testbenutzer nach dem Muster test.*@hetec-gmbh.de (keine echten Postfächer;
+ *      echte Konten mit diesem Muster darf es im Tenant nicht geben – siehe docs/DEVELOPMENT.md).
+ * Zusätzlich fehlt das Verzeichnis backend/dev/ im Release vollständig (Release-Test).
  */
 final class DevAuthController
 {

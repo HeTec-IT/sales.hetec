@@ -31,6 +31,10 @@ Ausgangsstand: 56.0-beta.4. Produktive Freigabe erst nach Abnahme auf echter Inf
 - Serverseitige Rechte je Shop, CSRF-Schutz, Rate Limiting, Audit-Protokoll, DB-Sitzungen mit sofortigem Widerruf.
 - Download-Links zu Kundenformularen gehen nicht mehr an einen externen QR-Dienst.
 
+- Unabhängige Sicherheitsprüfung durchgeführt, alle hoch/mittel-Befunde behoben (docs/SECURITY.md):
+  Power-Automate-Flows über das Backend (signierte URLs/Schlüssel nicht mehr im Browser), Admin-Freigabe nach
+  Verknüpfung migrierter Konten, Statistik-Name/Ausnahme serverseitig, Archivsuche nur mit Recht, sichere Import-Rücknahme.
+
 ### Behobene Fehler
 - **Neuronale OCR (PaddleOCR) lief nie** (`document is not defined` im Worker) – Smart Scan nutzte unbemerkt nur
   Tesseract. Behoben; OCR-Paket von 129 MB auf 41 MB verkleinert.

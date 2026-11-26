@@ -92,6 +92,20 @@ for (const tag of ['<script src="frontend/services/adapter-firebase.js"></script
   lines.splice(i, 1);
   html = lines.join(nl);
 }
+// Power-Automate: signierte Flow-URLs und Schlüssel aus dem Browser entfernen → Backend-Weiterleitung (FlowController)
+// PENCIL_ARCHIV_FLOW_URL (Archivsuche) läuft im HeTec-Betrieb ohnehin über /api/v1/archive/flow; der Platzhalter hält nur „verbunden“ aktiv.
+const FLOW_CONSTS = { ARCHIVE_FLOW_URL: 'archive', PA_UPLOAD_URL: 'archive', FOLLOWUP_FLOW_URL: 'followup', FOLLOWUP_FLOW_URL_AALEN: 'followup_aalen', PENCIL_ARCHIV_FLOW_URL: 'archive_search' };
+for (const [c, name] of Object.entries(FLOW_CONSTS)) {
+  const re = new RegExp('(const ' + c + " = )'https://[^']*'", 'g');
+  const n = (html.match(re) || []).length;
+  if (n !== 1) throw new Error('Flow-Konstante nicht eindeutig gefunden: ' + c + ' (' + n + ')');
+  html = html.replace(re, "$1'ps-flow:" + name + "'");
+}
+for (const c of ['PA_SHARED_KEY', 'ARCHIVE_FLOW_KEY']) {
+  const re = new RegExp('(const ' + c + " = )'[^']*'", 'g');
+  if ((html.match(re) || []).length !== 1) throw new Error(c + ' nicht eindeutig gefunden');
+  html = html.replace(re, "$1''");   // Schlüssel setzt der Server (FlowController)
+}
 const hashed = new Map();
 html = html.replace(/(<(?:script|link)\b[^>]*?\b(?:src|href)=")([^"?#:]+\.(?:js|css|webmanifest))(")/g, (m, a, url, b) => {
   const file = path.join(PUB, url);
@@ -173,6 +187,7 @@ for (const f of walk(OUT)) {
     if (/gstatic\.com|googleapis\.com|firebaseio\.com|firebaseapp\.com|cloudfunctions\.net|AIzaSy|window\.firebase|firebase\.(initializeApp|firestore|auth)\b|mymemory\.translated|api\.qrserver\.com|cdn\.jsdelivr|cdnjs\.cloudflare|unpkg\.com|cdn\.tailwindcss/i.test(s)) problems.push('Firebase/Google/CDN-Abhängigkeit: ' + r);
     if (/DevAuthController|\/v1\/dev\/login/.test(s) && !/src\/App\.php$/.test(r)) problems.push('Test-Login-Bezug: ' + r);
     if (/-----BEGIN (RSA |EC )?PRIVATE KEY-----/.test(s)) problems.push('privater Schlüssel: ' + r);
+    if (/[?&]sig=[A-Za-z0-9_%-]{20,}/.test(s)) problems.push('signierte Flow-URL (sig=) im Release: ' + r);
   }
 }
 if (!fs.existsSync(path.join(PUB, 'api', 'index.php'))) problems.push('api/index.php fehlt');

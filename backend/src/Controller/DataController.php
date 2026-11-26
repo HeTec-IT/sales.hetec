@@ -249,6 +249,7 @@ final class DataController
         if (!$u) {
             throw new HttpException(404, 'not_found');
         }
+        $this->app->users->assertCanManage($p, $u);
         $uid = (int) $u['id'];
         $b = $r->json();
         $this->app->db->tx(function () use ($b, $uid) {

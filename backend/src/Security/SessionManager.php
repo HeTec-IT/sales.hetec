@@ -23,6 +23,7 @@ final class SessionManager
     private bool $destroyed = false;
     private ?string $createdAt = null;
     private bool $loaded = false;
+    private bool $isNew = false;
 
     public function __construct(private Db $db, private Config $config)
     {
@@ -47,6 +48,7 @@ final class SessionManager
         $this->id = $raw;
         $this->data = is_array($data) ? $data : [];
         $this->createdAt = (string) $row['created_at'];
+        $this->isNew = false;
         $this->dirty = true; // last_seen/Leerlauf verlängern
     }
 
@@ -80,6 +82,7 @@ final class SessionManager
         }
         $this->id = Ids::token(32);
         $this->createdAt = null;
+        $this->isNew = true;
         if (!$keepData) {
             $this->data = [];
         }
@@ -136,18 +139,30 @@ final class SessionManager
             return;
         }
         $userId = $this->get('uid');
-        $this->db->exec(
-            'INSERT INTO sessions (id_hash, user_id, data, created_at, last_seen_at, expires_at, user_agent)
-             VALUES (:h, :u, :d, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), :e, :ua)
-             ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), data = VALUES(data), last_seen_at = UTC_TIMESTAMP(3), expires_at = VALUES(expires_at)',
-            [
-                'h' => hash('sha256', $this->id),
-                'u' => is_int($userId) ? $userId : null,
-                'd' => json_encode($this->data, JSON_THROW_ON_ERROR),
-                'e' => gmdate('Y-m-d H:i:s', $expires),
-                'ua' => mb_substr($userAgent, 0, 200),
-            ]
-        );
+        $h = hash('sha256', $this->id);
+        $u = is_int($userId) ? $userId : null;
+        $d = json_encode($this->data, JSON_THROW_ON_ERROR);
+        $e = gmdate('Y-m-d H:i:s', $expires);
+        if ($this->isNew) {
+            $this->db->exec(
+                'INSERT INTO sessions (id_hash, user_id, data, created_at, last_seen_at, expires_at, user_agent)
+                 VALUES (:h, :u, :d, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), :e, :ua)',
+                ['h' => $h, 'u' => $u, 'd' => $d, 'e' => $e, 'ua' => mb_substr($userAgent, 0, 200)]
+            );
+            $this->isNew = false;
+        } else {
+            // Bestehende Sitzung nur fortschreiben – nie neu anlegen. Wurde sie während der Anfrage widerrufen
+            // (Admin sperrt/meldet ab), bleibt sie gelöscht und das Cookie wird entfernt.
+            $n = $this->db->exec(
+                'UPDATE sessions SET user_id = :u, data = :d, last_seen_at = UTC_TIMESTAMP(3), expires_at = :e WHERE id_hash = :h',
+                ['h' => $h, 'u' => $u, 'd' => $d, 'e' => $e]
+            );
+            if ($n === 0 && $this->db->scalar('SELECT 1 FROM sessions WHERE id_hash = :h', ['h' => $h]) === null) {
+                $this->id = null;
+                $this->addCookie($res, $cookieName, '', time() - 3600);
+                return;
+            }
+        }
         $this->addCookie($res, $cookieName, $this->id, $created + $absolute);
     }
 

@@ -36,7 +36,10 @@ final class AuthController
                     $name = (string) $u['display_name'];
                 }
             }
-            return Response::json(['ok' => true, 'authenticated' => false, 'status' => $status, 'name' => $name, 'version' => App::VERSION]);
+            // CSRF-Token auch ohne Freigabe (z. B. wartende Konten), damit die Abmeldung serverseitig möglich ist
+            $this->app->session->ensureStarted();
+            return Response::json(['ok' => true, 'authenticated' => false, 'status' => $status, 'name' => $name,
+                'csrfToken' => $this->app->session->csrfToken(), 'version' => App::VERSION]);
         }
         $u = $this->app->users->findById($p->id) ?? [];
         return Response::json([
@@ -91,6 +94,10 @@ final class AuthController
     public function updateProfile(Request $r): Response
     {
         $p = $this->app->principal();
+        $cur = $this->app->users->findById($p->id) ?? [];
+        if (trim((string) ($cur['nachname'] ?? '')) !== '' || trim((string) ($cur['display_name'] ?? '')) !== '') {
+            throw new HttpException(409, 'profile_complete');   // Namensänderung nur durch Admin
+        }
         $b = $r->json();
         $vorname = trim(mb_substr((string) ($b['vorname'] ?? ''), 0, 80));
         $nachname = trim(mb_substr((string) ($b['nachname'] ?? ''), 0, 80));

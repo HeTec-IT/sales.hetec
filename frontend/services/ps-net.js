@@ -31,8 +31,14 @@
 
   if (cfg.backend === 'hetec' && typeof window.fetch === 'function') {
     var orig = window.fetch.bind(window);
+    window.__psNativeFetch = orig;
     window.fetch = function (input, init) {
       var url = typeof input === 'string' ? input : (input && input.url) || String(input);
+      // Power-Automate-Flows laufen im HeTec-Betrieb über das Backend (signierte URLs nur auf dem Server)
+      if (/^ps-flow:[a-z_]{1,32}$/.test(url)) {
+        if (window.PSBackend && typeof window.PSBackend.flowFetch === 'function') return window.PSBackend.flowFetch(url.slice(8), init || {});
+        return Promise.reject(new TypeError('PSNet: Flow-Weiterleitung nicht verfügbar'));
+      }
       if (!allowed(url)) {
         var host = '';
         try { host = new URL(url, location.href).host; } catch (e) {}

@@ -15,11 +15,11 @@
 |---|---|
 | HTTPS | Umleitung + HSTS (.htaccess); Konfiguration verweigert Nicht-HTTPS außerhalb der Entwicklung |
 | Anmeldung | Entra ID, OIDC Code + PKCE, strenge Claim-Prüfung (siehe AUTHENTICATION.md), keine Passwörter in der App |
-| Sitzungen | DB-Sitzungen, `__Host-`Cookie, HttpOnly, Secure, SameSite=Lax, Rotation nach Login, serverseitiger Widerruf |
+| Sitzungen | DB-Sitzungen, `__Host-`Cookie, HttpOnly, Secure, SameSite=Lax, Rotation nach Login, serverseitiger Widerruf (wirkt auch auf gleichzeitig laufende Anfragen) |
 | CSRF | Header-Token je Sitzung + Origin-Prüfung für alle schreibenden Anfragen |
 | XSS | React escapt; Gate-/Admin-Oberflächen escapen explizit; CSP ohne fremde Quellen; API mit `default-src 'none'` |
 | SQL-Injection | nur vorbereitete Anweisungen (PDO, keine Emulation); dynamische Teile nur aus festen Listen |
-| Autorisierung | jede Route deklariert `auth`/`perm`; Shop-Prüfung in jedem Controller; Tests für fremde Shops |
+| Autorisierung | jede Route deklariert `auth`/`perm`; Shop-Prüfung in jedem Controller; Rangregel für alle Eingriffe in fremde Konten (Rechte, Sitzungen, Skip-Limits); Statistik-Name/Ausnahme setzt der Server |
 | Rate Limiting | je Benutzer/IP (DB-basiert, ohne Zusatzdienste); Login, Downloads gesondert |
 | Uploads | nur PDF/JPEG/PNG (Magic Bytes), max. 10 MB, zufällige Dateinamen außerhalb Webroot, verschlüsselt |
 | Path Traversal | IDs per Regex, keine Benutzerpfade; Router-Tests |
@@ -59,16 +59,33 @@ GitHub nach `backend/third_party/` übernehmen, Version in `composer.json` anpas
 
 1. **Inline-Skripte in `index.html`** erzwingen `script-src 'unsafe-inline'`. Ziel: weitere Module auslagern, dann
    Nonces/Hashes. Bis dahin mindern React-Escaping und die strikte Herkunftsliste der CSP das Risiko.
-2. **Power-Automate-Flow-URLs** (mit SAS-Signatur) stehen weiterhin im Frontend (wie bisher). Wer die App laden
-   kann, kennt die URLs. Empfehlung: Flows mittelfristig ebenfalls über den Backend-Proxy (Secret-Header) aufrufen.
+2. **Power-Automate-Flows:** Im HeTec-Release ruft der Browser die Flows (Archiv-Upload, Folgetermin) nicht mehr direkt
+   auf, sondern über `POST /api/v1/flows/{name}` (nur angemeldet, CSRF, Rate Limit, Audit). Signierte Trigger-URLs und
+   der Schlüssel stehen nur in `config.php`; der Release-Build ersetzt sie in `index.html` und bricht ab, wenn noch eine
+   `sig=`-Adresse enthalten ist. **Offen (Freigabe nötig):** Die bisherigen URLs sind öffentlich bekannt (GitHub Pages) –
+   nach dem Umzug in Power Automate neu signieren. CSP erlaubt `*.api.powerplatform.com`/`*.logic.azure.com` weiterhin,
+   weil Admins pro Gerät eine eigene Webhook-URL eintragen können (bestehende Funktion).
 3. **Archivsuche** benötigt eine Anpassung des Flows „PDF Archiv API V3“: statt Firebase-ID-Token den Header
    `X-HeTec-Flow-Secret` prüfen und die vom Backend mitgelieferte Identität (`identity.shops`) verwenden.
 4. Echte Microsoft-Anmeldung, echtes Hosting und echte Geräte sind **nicht** getestet (keine Infrastruktur).
-5. Verknüpfung migrierter Benutzer erfolgt über die eindeutige E-Mail innerhalb des eigenen Tenants. Alternativ kann
-   die IT vorab Object-IDs liefern; dann vor dem Import in `users.entra_object_id` eintragen.
+5. Verknüpfung migrierter Benutzer über die eindeutige E-Mail im eigenen Tenant, danach **Admin-Freigabe** (kein
+   automatischer Zugriff). Alternativ kann die IT vorab Object-IDs liefern.
+6. Skip-Limit-Verwaltung ordnet Mitarbeiter (wie bisher) über den Anzeigenamen zu; bei zwei gleichnamigen Konten
+   ist das Limit nicht verwaltbar → Namen eindeutig halten (Verwaltung zeigt beide).
+7. Test-Login nutzt das Muster `test.*@hetec-gmbh.de`; er ist nur mit `env=development`, `app_url` auf localhost,
+   Loopback-IP und vorhandenem `backend/dev/` möglich (fehlt im Release). Im Tenant keine echten Konten mit diesem Muster anlegen.
 
 ## DSGVO-Datenminimierung
 
 Keine neuen personenbezogenen Felder gegenüber Firestore. Kundendaten liegen nur dort, wo sie fachlich nötig sind
 (gespeicherte Angebote 30 Tage, Suchindex, 24-h-Downloads) – jeweils verschlüsselt. Statistik enthält keine Kundendaten.
 Microsoft erhält nur, was für die Anmeldung nötig ist (keine Graph-Zugriffe).
+
+## Unabhängige Prüfung (2026-11-26)
+
+Ein separater Prüfer (ohne Kenntnis der Umsetzung) hat Backend, Auth, Frontend-Dienste, Service Worker, Release und
+Importer geprüft: keine kritischen Befunde, 2 hoch, 5 mittel, 9 niedrig. Behoben: automatische Verknüpfung ohne
+Freigabe, Flow-URLs im Browser, Archivsuche ohne Recht, fälschbarer Statistik-Name/Ausnahme/Zeitstempel, Rollen aus
+Altprofilen, Rücknahme löscht genutzte Daten, Doppelkonten beim Import, wiederauflebende Sitzungen, fehlende Rangprüfung
+(Sitzungen/Skip), unbegrenzter Bootstrap, Abmeldung wartender Konten, stiller Verlust der Offline-Warteschlange,
+Preis-JSON-Caching, Dev-Modus auf öffentlicher Domain, Hash-Trennung. Offen/dokumentiert: Restrisiken 1, 2, 6, 7 oben.

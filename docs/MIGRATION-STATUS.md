@@ -22,7 +22,7 @@
 | 12 | PWA/Cache | ✅ versionierter SW, Update ohne Unterbrechung, Rollback über Release-Verzeichnis |
 | 13 | Firestore-Migration | ✅ Export-Werkzeug + Import (Testlauf, Bericht, Rücknahme), nur synthetisch getestet |
 | 14 | Hetzner/SFTP | ✅ Release-Build, deploy-sftp.mjs, docs/HETZNER-DEPLOYMENT.md (nicht auf echtem Hosting getestet) |
-| 15 | Regression/Sicherheit | ✅ 176 Tests bestanden, 0 fehlgeschlagen; WebKit nur in CI (docs/TEST-REPORT.md) |
+| 15 | Regression/Sicherheit | ✅ 182 Tests bestanden, 0 fehlgeschlagen; unabhängige Prüfung, Befunde behoben (docs/SECURITY.md); WebKit nur in CI |
 | 16 | Doku + PR | ✅ Doku vollständig; Review + Pull Request (nicht gemergt) |
 
 ## Wichtige Befunde während der Umsetzung
@@ -56,5 +56,5 @@
 1. IT: App-Registrierung nach docs/MICROSOFT-ENTRA-SETUP.md (Tenant-ID, Client-ID, Secret → nur in `config.php` auf dem Server).
 2. Hetzner: Hosting/DB bereitstellen, Release nach docs/HETZNER-DEPLOYMENT.md, Rauchtest.
 3. CI-Lauf mit WebKit prüfen; echte Geräte (Galaxy Tab S9 FE, iPads) testen inkl. OCR-Laufzeiten.
-4. Power-Automate-Archivflow auf Secret-Header umstellen.
+4. Power-Automate: Archivsuche-Flow auf Secret-Header umstellen; Flow-URLs in `config.php` eintragen und neu signieren.
 5. Nach Freigabe: Firestore-Export → Import (Testlauf zuerst) → Parallelbetrieb → Firebase abschalten (docs/FIREBASE-MIGRATION.md).

@@ -180,13 +180,15 @@ final class EntraLogin
         if (!$user) {
             $legacy = $this->users->findLinkableLegacy($id['email']);
             if ($legacy) {
-                $this->users->linkEntra((int) $legacy['id'], $id['tid'], $id['oid']);
-                $this->audit->log((int) $legacy['id'], 'entra_linked', 'user', (string) $legacy['public_id']);
+                $trusted = in_array($id['email'], $this->config->bootstrapSuperAdmins(), true) && $legacy['role_id'] === 'super_admin';
+                $this->users->linkEntra((int) $legacy['id'], $id['tid'], $id['oid'], $trusted);
+                $this->audit->log((int) $legacy['id'], 'entra_linked_review', 'user', (string) $legacy['public_id']);
                 $user = $this->users->findById((int) $legacy['id']);
             }
         }
         if (!$user) {
-            $isBootstrap = in_array($id['email'], $this->config->bootstrapSuperAdmins(), true);
+            // Bootstrap nur für die Ersteinrichtung: solange kein freigegebener Hauptadministrator existiert
+            $isBootstrap = in_array($id['email'], $this->config->bootstrapSuperAdmins(), true) && !$this->users->hasActiveSuperAdmin();
             $display = $id['name'] !== '' ? $id['name'] : trim($id['given'] . ' ' . $id['family']);
             $uid = $this->users->createPending($id['tid'], $id['oid'], [
                 'email' => $id['email'],

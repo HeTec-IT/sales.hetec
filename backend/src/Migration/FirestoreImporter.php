@@ -72,25 +72,68 @@ final class FirestoreImporter
         return ['batch' => $this->batch, 'dryRun' => $dryRun, 'report' => $this->report];
     }
 
+    /**
+     * Nimmt einen Lauf zurück, ohne inzwischen produktiv genutzte Daten zu zerstören:
+     * - Benutzer, die bereits mit Microsoft verknüpft sind oder sich angemeldet haben, bleiben erhalten
+     *   (samt ihren übernommenen Zeilen) und werden im Bericht unter "kept" aufgeführt.
+     * - News/Einstellungen, die nach dem Import geändert wurden, bleiben erhalten.
+     * - Ein bereits zurückgenommener Lauf wird nicht erneut verarbeitet.
+     */
     public function rollback(string $batch): array
     {
-        $b = $this->db->one('SELECT id, rolled_back_at FROM import_batches WHERE id = :id', ['id' => $batch]);
+        $b = $this->db->one('SELECT id, finished_at, rolled_back_at FROM import_batches WHERE id = :id', ['id' => $batch]);
         if (!$b) {
             throw new \RuntimeException('Import-Lauf nicht gefunden: ' . $batch);
         }
+        if ($b['rolled_back_at'] !== null) {
+            throw new \RuntimeException('Import-Lauf wurde bereits zurückgenommen: ' . $batch);
+        }
+        $finished = (string) ($b['finished_at'] ?? '');
         $order = ['pdf_index', 'saved_offers', 'analytics_events', 'skip_counters', 'skip_limits', 'tool_usage', 'user_shops', 'news', 'app_settings', 'users'];
         $keys = ['pdf_index' => 'id', 'saved_offers' => 'id', 'analytics_events' => 'id', 'news' => 'brand_id', 'app_settings' => 'setting_key', 'users' => 'id'];
         $deleted = [];
-        $this->db->tx(function () use ($batch, $order, $keys, &$deleted) {
+        $kept = ['users' => 0, 'rows_of_kept_users' => 0, 'changed_after_import' => 0];
+        $this->db->tx(function () use ($batch, $order, $keys, $finished, &$deleted, &$kept) {
+            $importedUsers = array_map('intval', array_column($this->db->all("SELECT row_key FROM import_log WHERE batch_id = :b AND table_name = 'users'", ['b' => $batch]), 'row_key'));
+            $keepIds = [];
+            if ($importedUsers) {
+                [$in, $ip] = Db::in($importedUsers, 'ku');
+                $keepIds = array_map('intval', array_column($this->db->all(
+                    "SELECT id FROM users WHERE id IN ($in) AND (entra_object_id IS NOT NULL OR last_login_at IS NOT NULL)", $ip
+                ), 'id'));
+            }
+            $kept['users'] = count($keepIds);
+            $keepSet = array_flip($keepIds);
             foreach ($order as $t) {
                 $rows = array_column($this->db->all('SELECT row_key FROM import_log WHERE batch_id = :b AND table_name = :t', ['b' => $batch, 't' => $t]), 'row_key');
                 $n = 0;
                 foreach ($rows as $k) {
-                    if (isset($keys[$t])) {
-                        $n += $this->db->exec("DELETE FROM `$t` WHERE `{$keys[$t]}` = :k", ['k' => $k]);
+                    if ($t === 'users') {
+                        if (isset($keepSet[(int) $k])) {
+                            continue;
+                        }
+                        $n += $this->db->exec('DELETE FROM users WHERE id = :k', ['k' => $k]);
+                    } elseif (in_array($t, ['pdf_index', 'saved_offers', 'analytics_events'], true)) {
+                        $owner = $this->db->scalar("SELECT user_id FROM `$t` WHERE id = :k", ['k' => $k]);
+                        if ($owner !== null && isset($keepSet[(int) $owner])) {
+                            $kept['rows_of_kept_users']++;
+                            continue;
+                        }
+                        $n += $this->db->exec("DELETE FROM `$t` WHERE id = :k", ['k' => $k]);
+                    } elseif (isset($keys[$t])) {
+                        // news / app_settings: nur löschen, wenn seit dem Import unverändert
+                        $c = $this->db->exec("DELETE FROM `$t` WHERE `{$keys[$t]}` = :k AND updated_at <= :f", ['k' => $k, 'f' => $finished]);
+                        if ($c === 0 && $this->db->scalar("SELECT 1 FROM `$t` WHERE `{$keys[$t]}` = :k", ['k' => $k]) !== null) {
+                            $kept['changed_after_import']++;
+                        }
+                        $n += $c;
                     } else {
                         // zusammengesetzte Schlüssel: user|tool|month etc.
                         $p = explode('|', $k);
+                        if (isset($keepSet[(int) $p[0]])) {
+                            $kept['rows_of_kept_users']++;
+                            continue;
+                        }
                         $n += match ($t) {
                             'skip_counters' => $this->db->exec('DELETE FROM skip_counters WHERE user_id = :u AND month = :m', ['u' => $p[0], 'm' => $p[1]]),
                             'skip_limits' => $this->db->exec('DELETE FROM skip_limits WHERE user_id = :u', ['u' => $p[0]]),
@@ -104,7 +147,7 @@ final class FirestoreImporter
             }
             $this->db->exec('UPDATE import_batches SET rolled_back_at = UTC_TIMESTAMP(3) WHERE id = :id', ['id' => $batch]);
         });
-        return $deleted;
+        return $deleted + ['kept' => $kept];
     }
 
     private function log(string $table, string $key): void
@@ -176,14 +219,23 @@ final class FirestoreImporter
                 $this->count('users', 'existing');
                 continue;
             }
+            // Konflikt: Konto mit dieser E-Mail existiert bereits (z. B. Microsoft-Anmeldung vor dem Import)
+            if ($this->db->scalar('SELECT 1 FROM users WHERE email = :e AND deleted_at IS NULL', ['e' => $email]) !== null) {
+                $this->count('users', 'skipped', 'E-Mail bereits als Konto vorhanden (manuell zusammenführen)');
+                continue;
+            }
+            // Das Altsystem kannte nur 'admin' und 'verkaeufer'. Andere Werte stammen nicht aus der App
+            // (Profile waren clientseitig beschreibbar) und werden NICHT als Rechte übernommen.
             $roleRaw = strtolower((string) ($d['role'] ?? 'verkaeufer'));
-            $role = match (true) {
-                $roleRaw === 'admin' => in_array($email, $this->superAdminEmails, true) ? 'super_admin' : 'admin',
-                in_array($roleRaw, ['super_admin', 'filialbetreuer', 'shop_leiter', 'azubi', 'mitarbeiter'], true) => $roleRaw,
-                in_array($roleRaw, ['shopleiter', 'shop-leiter', 'leiter'], true) => 'shop_leiter',
-                in_array($roleRaw, ['auszubildende', 'auszubildender', 'azubi'], true) => 'azubi',
-                default => 'mitarbeiter',
-            };
+            if (!in_array($roleRaw, ['admin', 'verkaeufer', ''], true)) {
+                $this->count('users', 'role_ignored');
+            }
+            $role = $roleRaw === 'admin'
+                ? (in_array($email, $this->superAdminEmails, true) ? 'super_admin' : 'admin')
+                : 'mitarbeiter';
+            if ($roleRaw === 'admin') {
+                $this->count('users', 'admins_to_review');
+            }
             $statusRaw = (string) ($d['status'] ?? '');
             $status = ($d['active'] ?? false) === true && $statusRaw === 'approved' ? 'approved'
                 : ($statusRaw === 'pending' ? 'pending' : ($statusRaw === 'rejected' ? 'rejected' : (($d['active'] ?? false) === true ? 'approved' : 'blocked')));

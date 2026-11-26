@@ -141,6 +141,9 @@ final class PdfIndexController
     private function shopFilter(Principal $p, string $shop, array &$params): string
     {
         $all = $p->can('archive.search_all');
+        if (!$all && !$p->can('archive.search_shops')) {
+            throw new HttpException(403, 'permission-denied');   // Recht gilt immer, auch mit shopId
+        }
         if ($shop !== '') {
             if (!$all && !$p->hasShop($shop)) {
                 throw new HttpException(403, 'permission-denied');
@@ -150,9 +153,6 @@ final class PdfIndexController
         }
         if ($all) {
             return '';
-        }
-        if (!$p->can('archive.search_shops')) {
-            throw new HttpException(403, 'permission-denied');
         }
         [$in, $ip] = Db::in($p->shopIds, 'sh');
         $params += $ip;
@@ -212,6 +212,9 @@ final class PdfIndexController
     public function flowProxy(Request $r): Response
     {
         $p = $this->app->principal();
+        if (!$p->can('archive.search_all') && !$p->can('archive.search_shops')) {
+            throw new HttpException(403, 'permission-denied');
+        }
         $cfg = $this->app->config->archiveFlow();
         if ($cfg['url'] === '' || $cfg['shared_secret'] === '') {
             throw new HttpException(503, 'flow_not_configured');

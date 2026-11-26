@@ -69,6 +69,18 @@ return [
         'shared_secret' => '',   // wird als Header X-HeTec-Flow-Secret mitgeschickt; der Flow prüft ihn
     ],
 
+    // Power-Automate-Flows, die das Backend stellvertretend aufruft (Payload unverändert).
+    // Die signierten Trigger-URLs stehen NUR hier (nicht mehr im Browser). Nach dem Umzug in Power Automate
+    // neue Signaturen erzeugen ("URL neu generieren"), damit die alten, öffentlich bekannten URLs ungültig werden.
+    'power_automate' => [
+        'flows' => [
+            'archive'        => '',   // Flow „PDF-Archiv“ (bisher ARCHIVE_FLOW_URL / PA_UPLOAD_URL in index.html)
+            'followup'       => '',   // Folgetermin-Flow (bisher FOLLOWUP_FLOW_URL)
+            'followup_aalen' => '',   // Folgetermin-Flow Shop Aalen (bisher FOLLOWUP_FLOW_URL_AALEN)
+        ],
+        'shared_key' => '',           // bisher PA_SHARED_KEY in index.html (Feld "key" im Payload)
+    ],
+
     // Datenbank-Migrationen über die Web-Oberfläche erlauben (nur wenn kein SSH vorhanden ist).
     // Nach der Migration wieder auf false setzen.
     'allow_web_migrations' => false,

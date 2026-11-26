@@ -36,7 +36,12 @@ if (isset($opts['list'])) {
     exit(0);
 }
 if (isset($opts['rollback'])) {
-    $res = $importer->rollback((string) $opts['rollback']);
+    try {
+        $res = $importer->rollback((string) $opts['rollback']);
+    } catch (\RuntimeException $e) {
+        fwrite(STDERR, $e->getMessage() . PHP_EOL);
+        exit(1);
+    }
     $app->audit->log(null, 'firestore_import_rollback', 'import', (string) $opts['rollback'], null, $res);
     echo json_encode(['rolledBack' => $opts['rollback'], 'deleted' => $res], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), PHP_EOL;
     exit(0);

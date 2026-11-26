@@ -60,6 +60,7 @@ final class Config
             'bootstrap_super_admins' => array_filter(explode(',', $e('PS_BOOTSTRAP_SUPER_ADMINS'))),
             'storage_dir' => $e('PS_STORAGE_DIR', sys_get_temp_dir() . '/ps-storage'),
             'archive_flow' => ['url' => $e('PS_ARCHIVE_FLOW_URL'), 'shared_secret' => $e('PS_ARCHIVE_FLOW_SECRET')],
+            'power_automate' => ['flows' => [], 'shared_key' => ''],
             'allow_web_migrations' => $e('PS_ALLOW_WEB_MIGRATIONS') === '1',
         ];
     }
@@ -78,6 +79,13 @@ final class Config
         }
         if ($this->data['data_key'] === $this->data['index_key']) {
             throw new \RuntimeException('data_key und index_key müssen verschieden sein');
+        }
+        if ($env === 'development') {
+            // Entwicklungsmodus (inkl. Test-Login) nur auf dem eigenen Rechner – nie auf einer öffentlichen Domain
+            $host = strtolower((string) parse_url($this->appUrl(), PHP_URL_HOST));
+            if (!in_array($host, ['localhost', '127.0.0.1', '[::1]', '::1'], true)) {
+                throw new \RuntimeException("env 'development' ist nur mit app_url auf localhost erlaubt");
+            }
         }
         if ($env !== 'development') {
             if (!str_starts_with($this->appUrl(), 'https://')) {
@@ -175,6 +183,23 @@ final class Config
     {
         $a = (array) ($this->data['archive_flow'] ?? []);
         return ['url' => (string) ($a['url'] ?? ''), 'shared_secret' => (string) ($a['shared_secret'] ?? '')];
+    }
+
+    /**
+     * Power-Automate-Flows (Archiv-Upload, Folgetermin), die das Backend stellvertretend aufruft.
+     * Die signierten Flow-Adressen stehen damit nur noch in config.php auf dem Server, nicht im Browser.
+     * @return array{flows:array<string,string>,shared_key:string}
+     */
+    public function powerAutomate(): array
+    {
+        $a = (array) ($this->data['power_automate'] ?? []);
+        $flows = [];
+        foreach ((array) ($a['flows'] ?? []) as $k => $v) {
+            if (is_string($k) && preg_match('/^[a-z_]{1,32}$/', $k) && is_string($v) && $v !== '') {
+                $flows[$k] = $v;
+            }
+        }
+        return ['flows' => $flows, 'shared_key' => (string) ($a['shared_key'] ?? '')];
     }
 
     public function allowWebMigrations(): bool
