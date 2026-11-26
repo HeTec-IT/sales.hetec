@@ -1,0 +1,59 @@
+name: CI – HeTec Independent Architecture
+# Läuft auf jedem Push/Pull Request des Entwicklungsbranches. Kein Python, kein Firebase.
+on:
+  push:
+    branches: [feature/hetec-independent-architecture]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: pencil_test
+          MARIADB_USER: pencil_dev
+          MARIADB_PASSWORD: pencil_dev
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      PS_TEST_DB_DSN: mysql:host=127.0.0.1;port=3306;dbname=pencil_test;charset=utf8mb4
+      PS_REQUIRE_BROWSERS: '1'
+      PS_BROWSERS: chromium,webkit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, sodium, curl, mbstring, openssl
+          coverage: none
+      - name: Abhängigkeiten
+        run: npm ci --no-audit --no-fund
+      - name: Browser (Chromium + WebKit)
+        run: npx playwright install --with-deps chromium webkit
+      - name: Vendor-Dateien unverändert (Herkunft/Hash)
+        run: |
+          npm run vendor
+          git diff --exit-code vendor/manifest.json || (echo "vendor/ weicht von package-lock ab" && exit 1)
+      - name: Alle Tests
+        run: npm test
+      - name: Testbericht
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-summary
+          path: |
+            tests/.out/
+          if-no-files-found: ignore

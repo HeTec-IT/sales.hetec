@@ -19,11 +19,11 @@
 | 9 | Firebase-freier Modus | ✅ `backend: 'hetec'` |
 | 10 | Google/CDNs entfernt | ✅ vendor/ |
 | 11 | Offline + Sync | ✅ IndexedDB-Warteschlange, Offline-Frist |
-| 12 | PWA/Cache | siehe unten |
-| 13 | Firestore-Migration | siehe unten |
-| 14 | Hetzner/SFTP | siehe unten |
-| 15 | Regression/Sicherheit | siehe docs/TEST-REPORT.md |
-| 16 | Doku + PR | siehe unten |
+| 12 | PWA/Cache | ✅ versionierter SW, Update ohne Unterbrechung, Rollback über Release-Verzeichnis |
+| 13 | Firestore-Migration | ✅ Export-Werkzeug + Import (Testlauf, Bericht, Rücknahme), nur synthetisch getestet |
+| 14 | Hetzner/SFTP | ✅ Release-Build, deploy-sftp.mjs, docs/HETZNER-DEPLOYMENT.md (nicht auf echtem Hosting getestet) |
+| 15 | Regression/Sicherheit | ✅ 176 Tests bestanden, 0 fehlgeschlagen; WebKit nur in CI (docs/TEST-REPORT.md) |
+| 16 | Doku + PR | ✅ Doku vollständig; Review + Pull Request (nicht gemergt) |
 
 ## Wichtige Befunde während der Umsetzung
 
@@ -50,3 +50,11 @@
 - Echte Geräte (Galaxy Tab S9 FE, iPads, Safari/WebKit) – nur Chromium headless getestet; WebKit-Download im Build-Netz gesperrt.
 - Power-Automate-Archivflow muss für den Backend-Proxy angepasst werden (Secret-Header statt Firebase-Token).
 - Echte Firestore-Daten wurden NICHT exportiert/migriert (nur synthetische Daten).
+
+## Nächste Schritte (Freigaben nötig)
+
+1. IT: App-Registrierung nach docs/MICROSOFT-ENTRA-SETUP.md (Tenant-ID, Client-ID, Secret → nur in `config.php` auf dem Server).
+2. Hetzner: Hosting/DB bereitstellen, Release nach docs/HETZNER-DEPLOYMENT.md, Rauchtest.
+3. CI-Lauf mit WebKit prüfen; echte Geräte (Galaxy Tab S9 FE, iPads) testen inkl. OCR-Laufzeiten.
+4. Power-Automate-Archivflow auf Secret-Header umstellen.
+5. Nach Freigabe: Firestore-Export → Import (Testlauf zuerst) → Parallelbetrieb → Firebase abschalten (docs/FIREBASE-MIGRATION.md).

@@ -135,7 +135,19 @@ fs.writeFileSync(path.join(OUT, 'storage', 'README.txt'), 'Laufzeitdaten (Kunden
 fs.writeFileSync(path.join(OUT, 'app-path.php'), "<?php\n// Pfad zum Backend (app/) relativ zu dieser Datei. Bei abweichender Struktur hier anpassen.\nreturn __DIR__ . '/app';\n");
 // config.php wird in app/config/ erwartet (Config::load) → Verweis auf ../config
 fs.mkdirSync(path.join(APP, 'config'), { recursive: true });
-fs.writeFileSync(path.join(APP, 'config', 'config.php'), "<?php\n// Lädt die eigentliche Konfiguration aus dem Verzeichnis config/ neben app/ (außerhalb des Webroots).\nreturn require dirname(__DIR__, 2) . '/config/config.php';\n");
+fs.writeFileSync(path.join(APP, 'config', 'config.php'), [
+  '<?php',
+  '// Sucht die echte Konfiguration (außerhalb des Webroots, nie im Release enthalten):',
+  '//  1. PS_SHARED_DIR/config/config.php (Umgebungsvariable)',
+  '//  2. <basis>/shared/config/config.php  bei versionierten Releases: <basis>/releases/<version>/app/config/',
+  '//  3. <release>/config/config.php        bei flacher Struktur',
+  '$c = [];',
+  'if (getenv(\'PS_SHARED_DIR\')) $c[] = rtrim((string) getenv(\'PS_SHARED_DIR\'), \'/\') . \'/config/config.php\';',
+  '$c[] = dirname(__DIR__, 4) . \'/shared/config/config.php\';',
+  '$c[] = dirname(__DIR__, 2) . \'/config/config.php\';',
+  'foreach ($c as $f) { if (is_file($f)) { return require $f; } }',
+  'throw new RuntimeException(\'Konfiguration nicht gefunden (config.php)\');',
+  ''].join('\n'));
 
 // ── 5. Datenbank (alle Migrationen in einer Datei, für phpMyAdmin) ─────────
 fs.mkdirSync(path.join(OUT, 'database'), { recursive: true });
@@ -166,13 +178,14 @@ for (const f of walk(OUT)) {
 if (!fs.existsSync(path.join(PUB, 'api', 'index.php'))) problems.push('api/index.php fehlt');
 if (problems.length) { console.error('Release-Prüfung fehlgeschlagen:\n - ' + problems.join('\n - ')); process.exit(1); }
 
-// ── 7. Prüfsummen, Metadaten, Archiv ───────────────────────────────────────
-const files = walk(OUT).filter(f => !f.endsWith('SHA256SUMS'));
-fs.writeFileSync(path.join(OUT, 'SHA256SUMS'), files.map(f => sha(fs.readFileSync(f)) + '  ' + rel(f)).join('\n') + '\n');
+// ── 7. Metadaten, Prüfsummen, Archiv ───────────────────────────────────────
 let commit = '';
 try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT }).toString().trim(); } catch {}
-const bytes = files.reduce((n, f) => n + fs.statSync(f).size, 0);
-fs.writeFileSync(path.join(OUT, 'RELEASE.json'), JSON.stringify({ version: VERSION, build: swManifest.version, commit, builtAt: new Date().toISOString(), files: files.length, bytes }, null, 2) + '\n');
+const pre = walk(OUT);
+const bytes = pre.reduce((n, f) => n + fs.statSync(f).size, 0);
+fs.writeFileSync(path.join(OUT, 'RELEASE.json'), JSON.stringify({ version: VERSION, build: swManifest.version, commit, builtAt: new Date().toISOString(), files: pre.length + 2, bytes }, null, 2) + '\n');
+const files = walk(OUT).filter(f => !f.endsWith('SHA256SUMS'));
+fs.writeFileSync(path.join(OUT, 'SHA256SUMS'), files.map(f => sha(fs.readFileSync(f)) + '  ' + rel(f)).join('\n') + '\n');
 try {
   execFileSync('tar', ['-czf', path.join(OUT_BASE, `pencil-selling-${VERSION}.tar.gz`), '-C', OUT_BASE, `pencil-selling-${VERSION}`]);
 } catch (e) { console.warn('tar nicht verfügbar – Archiv übersprungen'); }

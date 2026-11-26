@@ -26,7 +26,7 @@ const files = [
   ['@tesseract.js-data/eng', '4.0.0_best_int/eng.traineddata.gz', 'tesseract/lang/eng.traineddata.gz'],
 ];
 
-const manifest = { generated: new Date().toISOString(), note: 'Automatisch erzeugt von scripts/vendor-sync.mjs – nicht von Hand ändern.', files: {} };
+const manifest = { note: 'Automatisch erzeugt von scripts/vendor-sync.mjs – nicht von Hand ändern.', files: {} };
 for (const [pkg, src, dst] of files) {
   const pj = JSON.parse(fs.readFileSync(path.join(NM, pkg, 'package.json'), 'utf8'));
   const from = path.join(NM, pkg, src);

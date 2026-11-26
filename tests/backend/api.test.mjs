@@ -230,3 +230,40 @@ test('Archiv-Flow ohne Konfiguration → 503 (kein stiller Fallback)', { skip },
   const r = await max.post('/api/v1/archive/flow', { payload: { action: 'status' } });
   assert.equal(r.status, 503);
 });
+
+test('SQL-Injection-Muster in Parametern bleiben wirkungslos', { skip }, async () => {
+  const before = env.sql('SELECT COUNT(*) AS n FROM analytics_events')[0].n;
+  const inj = ["' OR '1'='1", "aalen' OR 1=1 -- ", "1; DROP TABLE users; --", "\" UNION SELECT email FROM users -- "];
+  for (const s of inj) {
+    const q = encodeURIComponent(s);
+    const own = await max.get('/api/v1/analytics?scope=own&shopId=' + q + '&cursor=' + q);
+    assert.ok([200, 403, 422].includes(own.status), 'analytics ' + own.status);
+    if (own.status === 200) assert.ok(own.json.rows.every(x => x.shopId === 'aalen'), 'nur eigener Shop');
+    const se = await max.get('/api/v1/pdf-index/search?key=' + q + '&shopId=' + q + '&limit=' + q);
+    assert.ok([200, 403, 422].includes(se.status), 'search ' + se.status);
+    if (se.status === 200) assert.equal(se.json.items.length, 0);
+    const off = await max.get('/api/v1/offers?shopId=' + q);
+    assert.ok([403, 422].includes(off.status), 'offers ' + off.status);
+    const r = await max.post('/api/v1/analytics/batch', { rows: [row('inj_' + inj.indexOf(s), s)] });
+    assert.equal(r.json.rejected?.[0]?.reason, 'shop_forbidden');
+  }
+  assert.equal(env.sql('SELECT COUNT(*) AS n FROM analytics_events')[0].n, before);
+  assert.ok(env.sql('SELECT COUNT(*) AS n FROM users')[0].n >= 10, 'users-Tabelle intakt');
+});
+
+test('Rate Limit: zu viele Anfragen → 429 mit retryAfter', { skip }, async () => {
+  const { createHash } = await import('node:crypto');
+  const c = new Client(env.app);
+  await c.loginDev('test.anna.admin@hetec-gmbh.de');
+  const id = env.sql("SELECT id FROM users WHERE email = 'test.anna.admin@hetec-gmbh.de'")[0].id;
+  const k = createHash('sha256').update('u:' + id + ':GET').digest('hex');
+  const w = Math.floor(Date.now() / 1000 / 60) * 60;
+  // Zähler für aktuelles und nächstes Fenster auf das Limit setzen (vermeidet 600 echte Anfragen im Test)
+  env.sql(`INSERT INTO rate_limits (rl_key, window_start, hits) VALUES ('${k}', ${w}, 600), ('${k}', ${w + 60}, 600)
+           ON DUPLICATE KEY UPDATE hits = 600 RETURNING hits`);
+  const r = await c.get('/api/v1/shops');
+  assert.equal(r.status, 429);
+  assert.equal(r.json.error, 'rate_limited');
+  assert.ok(r.json.retryAfter >= 0 && r.json.retryAfter <= 120);
+  assert.equal((await max.get('/api/v1/shops')).status, 200, 'andere Benutzer nicht betroffen');
+});

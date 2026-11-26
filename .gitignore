@@ -21,3 +21,4 @@ playwright-report/
 tests/e2e/.out/
 *.log
 tests/.scratch/
+tests/.out/
