@@ -1,8 +1,8 @@
 {
   "quelle": "https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden",
-  "geprueft": "25.11.2026",
-  "stand": "25.11.2026 21:26",
-  "geaendertAm": "24.11.2026",
+  "geprueft": "26.11.2026",
+  "stand": "26.11.2026 15:23",
+  "geaendertAm": "26.11.2026",
   "geraete": [
     {
       "gen": 11,
@@ -15,9 +15,10 @@
       "rate": 27.5,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-256gb-frost-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2320596/03c242ae485c4b967059aa84d331e673/png/article-item-frost-imagemed-mit-yt-stoerer-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-11-256-gb.webp",
       "rate24": 41,
-      "anzahlung24": 7
+      "anzahlung24": 7,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2320596/03c242ae485c4b967059aa84d331e673/png/article-item-frost-imagemed-mit-yt-stoerer-picture-data.webp"
     },
     {
       "gen": 11,
@@ -30,9 +31,10 @@
       "rate": 33,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2311270/9559b7d4720eee03a997b43c840b0b12/png/article-item-canyon-imagemed-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-11-pro-256-gb.webp",
       "rate24": 49.5,
-      "anzahlung24": 1
+      "anzahlung24": 1,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2311270/9559b7d4720eee03a997b43c840b0b12/png/article-item-canyon-imagemed-picture-data.webp"
     },
     {
       "gen": 11,
@@ -45,9 +47,10 @@
       "rate": 39,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-xl-256gb-canyon-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2311666/79b79560ea77d6ab3e4afd0c564fc62a/png/article-item-canyon-imagemed-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-11-pro-xl-256-gb.webp",
       "rate24": 58.5,
-      "anzahlung24": 1
+      "anzahlung24": 1,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2311666/79b79560ea77d6ab3e4afd0c564fc62a/png/article-item-canyon-imagemed-picture-data.webp"
     },
     {
       "gen": 11,
@@ -60,9 +63,10 @@
       "rate": 55,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-11-pro-fold-256gb-olive-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2312024/a65a55b27aec1ab3f542597ca0643026/png/article-item-olive-imagemed-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-11-pro-fold-256-gb.webp",
       "rate24": 82.5,
-      "anzahlung24": 1
+      "anzahlung24": 1,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2312024/a65a55b27aec1ab3f542597ca0643026/png/article-item-olive-imagemed-picture-data.webp"
     },
     {
       "gen": 10,
@@ -75,9 +79,10 @@
       "rate": 19.5,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-10-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2069204/76b9d5bcdc48cfe680eaf0682d074088/png/article-item-4510-320211-00-imagemed-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-10-128-gb.webp",
       "rate24": 29,
-      "anzahlung24": 7
+      "anzahlung24": 7,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2069204/76b9d5bcdc48cfe680eaf0682d074088/png/article-item-4510-320211-00-imagemed-picture-data.webp"
     },
     {
       "gen": 10,
@@ -90,9 +95,10 @@
       "rate": 14.5,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-10a-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2188102/ecaeec87805c503a6a1fc960a63ca3ad/png/article-item-4510-320257-00-imagemed-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-10a-128-gb.webp",
       "rate24": 21.5,
-      "anzahlung24": 7
+      "anzahlung24": 7,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2188102/ecaeec87805c503a6a1fc960a63ca3ad/png/article-item-4510-320257-00-imagemed-picture-data.webp"
     },
     {
       "gen": 10,
@@ -105,9 +111,10 @@
       "rate": 27,
       "anzahlung": 1,
       "url": "https://www.o2online.de/e-shop/google/google-pixel-10-pro-128gb-obsidian-details?ohne-tarif=ja&zielgruppe=privatkunden&ratenzahlung=36&vertragsart=ratenzahlung",
-      "bild": "https://static2.o9.de/resource/blob/2069258/58a1ea7674a178a9bcdb274d1bedb38b/png/article-item-4510-320216-00-imagemed-picture-data.webp",
+      "bild": "bilder/pixel/google-pixel-10-pro-128-gb.webp",
       "rate24": 40.5,
-      "anzahlung24": 1
+      "anzahlung24": 1,
+      "bildQuelle": "https://static2.o9.de/resource/blob/2069258/58a1ea7674a178a9bcdb274d1bedb38b/png/article-item-4510-320216-00-imagemed-picture-data.webp"
     }
   ]
 }

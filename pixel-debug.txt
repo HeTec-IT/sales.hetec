@@ -1,1 +1,0 @@
-Pixel-Abruf fehlgeschlagen: geschuetztSchreiben is not defined
