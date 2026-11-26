@@ -40,3 +40,14 @@ test('Sprungerkennung: Preisfelder ja, Zähler (Monate, GB) nein', () => {
   assert.equal(spruenge({ preise: { s: 10, monate: 6 } }, { preise: { s: 10, monate: 24 } }).length, 0);
   assert.equal(spruenge({ preise: { s: 10 } }, { preise: { s: 20 } }).length, 1);
 });
+
+test('alle Preis-Bots importieren den Preis-Schutz, den sie verwenden (sonst Laufzeitfehler im Bot)', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../../scripts/', import.meta.url);
+  for (const f of readdirSync(dir).filter(f => /-(preise|geraete)\.mjs$/.test(f))) {
+    const src = readFileSync(new URL(f, dir), 'utf8');
+    for (const fn of ['geschuetztSchreiben', 'spruenge']) {
+      if (new RegExp('\\b' + fn + '\\(').test(src)) assert.match(src, new RegExp('import\\s*\\{[^}]*\\b' + fn + '\\b[^}]*\\}\\s*from\\s*[\'"]\\./lib/price-guard\\.mjs[\'"]'), f + ' verwendet ' + fn + ' ohne Import');
+    }
+  }
+});

@@ -19,7 +19,7 @@ const SEED = {
 let srv, list = [];
 // PS_FB_ROOT/PS_FB_PATH: dieselbe Prüfung gegen eine gebaute Testversion (scripts/build-preview.mjs)
 const FB_ROOT = process.env.PS_FB_ROOT || ROOT, FB_PATH = process.env.PS_FB_PATH || '/index.html';
-before(async () => { srv = await staticServer(FB_ROOT); list = (await browsers()).filter(x => x.name === 'chromium'); });
+before(async () => { srv = await staticServer(FB_ROOT); list = await browsers(); }); // Chromium + WebKit (wenn installiert)
 after(async () => { for (const { b } of list) await b.close(); if (srv) await srv.close(); });
 
 async function open(ctx) {
@@ -39,8 +39,9 @@ async function open(ctx) {
 }
 
 test('Firebase-Betrieb: Anmeldung, App-Start, Datenwege des Adapters, Abmeldung', { timeout: 150000 }, async t => {
-  if (!list.length) return t.skip('kein Chromium');
-  const ctx = await list[0].b.newContext();
+  if (!list.length) return t.skip('kein Browser');
+  for (const { name: bn, b } of list) {
+  const ctx = await b.newContext();
   const pg = await open(ctx);
   await pg.waitForSelector('#ps-gate-email', { timeout: 30000 });
   assert.equal(await pg.evaluate('PSBackend.mode'), 'firebase');
@@ -85,4 +86,6 @@ test('Firebase-Betrieb: Anmeldung, App-Start, Datenwege des Adapters, Abmeldung'
   await Promise.all([pg.waitForEvent('load'), pg.evaluate('PSBackend.auth.signOutAndReload()')]);
   await pg.waitForSelector('#ps-gate-email', { timeout: 30000 });
   await ctx.close();
+  t.diagnostic(bn + ': ok');
+  }
 });

@@ -22,7 +22,7 @@
 | 12 | PWA/Cache | ✅ versionierter SW, Update ohne Unterbrechung, Rollback über Release-Verzeichnis |
 | 13 | Firestore-Migration | ✅ Export-Werkzeug + Import (Testlauf, Bericht, Rücknahme), nur synthetisch getestet |
 | 14 | Hetzner/SFTP | ✅ Release-Build, deploy-sftp.mjs, docs/HETZNER-DEPLOYMENT.md (nicht auf echtem Hosting getestet) |
-| 15 | Regression/Sicherheit | ✅ 182 Tests bestanden, 0 fehlgeschlagen; unabhängige Prüfung, Befunde behoben (docs/SECURITY.md); WebKit nur in CI |
+| 15 | Regression/Sicherheit | ✅ 185 Tests bestanden (lokal + CI mit Chromium und WebKit); unabhängige Prüfung, Befunde behoben (docs/SECURITY.md) |
 | 16 | Doku + PR | ✅ Doku vollständig; Review + Pull Request (nicht gemergt) |
 
 ## Wichtige Befunde während der Umsetzung
@@ -55,6 +55,11 @@
 
 1. IT: App-Registrierung nach docs/MICROSOFT-ENTRA-SETUP.md (Tenant-ID, Client-ID, Secret → nur in `config.php` auf dem Server).
 2. Hetzner: Hosting/DB bereitstellen, Release nach docs/HETZNER-DEPLOYMENT.md, Rauchtest.
-3. CI-Lauf mit WebKit prüfen; echte Geräte (Galaxy Tab S9 FE, iPads) testen inkl. OCR-Laufzeiten.
+3. Echte Geräte (Galaxy Tab S9 FE, iPads) beobachten inkl. OCR-Laufzeiten (Version ist seit 26.11.2026 live auf GitHub Pages im Firebase-Betrieb).
 4. Power-Automate: Archivsuche-Flow auf Secret-Header umstellen; Flow-URLs in `config.php` eintragen und neu signieren.
 5. Nach Freigabe: Firestore-Export → Import (Testlauf zuerst) → Parallelbetrieb → Firebase abschalten (docs/FIREBASE-MIGRATION.md).
+
+## Live-Stand GitHub Pages
+
+- 26.11.2026: Branch in `main` übernommen → https://hetec-it.github.io/sales.hetec/ läuft mit 57.0.0-beta.1 im **Firebase-Betrieb**
+  (gleiche Anmeldung/Daten wie bisher). Rückweg: `git revert -m 1 <Merge-Commit>` oder Branch `backup/56.0-beta.4-pre-independent`.

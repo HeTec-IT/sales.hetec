@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
+import { geschuetztSchreiben } from './lib/price-guard.mjs';
 
 export const QUELLE = 'https://www.o2online.de/e-shop/google?ohne-tarif=ja&zielgruppe=privatkunden';
 const BASIS = 'https://www.o2online.de';

@@ -741,6 +741,19 @@ function psO2TotalsPlausible(x, all) {
   if (x.monatlich && (all || []).some(y => y !== x && y.einmalig && y.einmalig === x.monatlich && !(y.monatlich && (psO2Cents(y.monatlich) || 0) >= max))) return false;
   return true;
 }
+// v57: Gesamtsumme, die sich von der Summe der vollständig gelesenen Einzelpreise in GENAU EINER Ziffer unterscheidet
+// (gleiche Länge, z. B. 2.468,96 statt 2.468,98), ist fast sicher ein Lesefehler einer Ziffer. Solche Summen werden
+// nicht übernommen (leer → Vorschlag aus den Einzelpreisen bzw. Eingabe von Hand). Lieber leer als falsch.
+// Rückgabe: Liste der Felder ('einmalig'/'monatlich'), die geleert werden sollen.
+function psO2TotalsDigitSlip(d) {
+  const c = d ? psO2Check(d) : null;
+  if (!c) return [];
+  const one = (a, b) => { const x = String(a), y = String(b); if (x.length !== y.length || x === y) return false; let n = 0; for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) n++; return n === 1; };
+  const out = [];
+  if (c.e && !c.e.ok && c.e.calc.some(v => one(c.e.val, v))) out.push('einmalig');
+  if (c.m && !c.m.ok && !c.m.incomplete && c.m.calc.some(v => one(c.m.val, v))) out.push('monatlich');
+  return out;
+}
 function psO2Combine(res) {
   const pick = kind => {
     const L = res.map(x => x[kind]).filter(a => a && a.length);

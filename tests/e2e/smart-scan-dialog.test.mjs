@@ -26,7 +26,9 @@ before(async () => {
 after(async () => { for (const { b } of list) await b.close(); if (srv) await srv.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
 const PARTIAL = BELEG.split('\n').filter(l => !/Kosten|^HANDY$|2\.389,00|iPhone/.test(l)).join('\n');
-const A_BAD = BELEG.replace('Monatliche Kosten 69,98 €', 'Monatliche Kosten 79,98 €');
+// Abweichung in mehreren Stellen (echte andere Summe) → Konflikt-Hinweis; Abweichung in genau einer Ziffer → Lesefehler (siehe unten)
+const A_BAD = BELEG.replace('Monatliche Kosten 69,98 €', 'Monatliche Kosten 84,98 €');
+const A_SLIP = BELEG.replace('Monatliche Kosten 69,98 €', 'Monatliche Kosten 69,93 €');
 
 async function newPage(b) {
   const pg = await b.newPage({ viewport: { width: 900, height: 1500 } });
@@ -110,6 +112,13 @@ const scenarios = [
     const d = await state(pg); const t = await text(pg);
     assert.equal(d.monatlich, '69,98');
     assert.ok(/Gesamtkosten weichen ab/.test(t), t.slice(-300));
+  }],
+  ['Lesefehler in einer Ziffer der Gesamtsumme (69,93 statt 69,98): Summe bleibt leer statt falsch, Rest übernommen', async pg => {
+    await ocr(pg, A_SLIP); await shoot(pg);
+    const d = await state(pg);
+    assert.equal(d.monatlich, '', 'falsch gelesene Summe nicht übernommen');
+    assert.equal(d.einmalig, '2.468,98');
+    assert.deepEqual(cnt(d).slice(0, 3), [2, 1, 0]);
   }],
   ['Zeitlimit: hängende Texterkennung → Dialog frei, klare Meldung, Arbeiter beendet', async pg => {
     await ocr(pg, '', { hang: true }); const t0 = Date.now(); await shoot(pg); const dt = Date.now() - t0; const t = await text(pg);

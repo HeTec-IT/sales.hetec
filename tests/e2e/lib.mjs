@@ -13,11 +13,12 @@ export async function playwright() {
   return pw;
 }
 // Chromium (immer) und WebKit (wenn installiert: npx playwright install webkit)
-export async function browsers() {
+// only: z. B. ['chromium'] – nur diese starten (nicht gestartete Browser können den Testprozess nicht offen halten)
+export async function browsers(only) {
   const p = await playwright();
   if (!p) return [];
   const out = [];
-  for (const name of (process.env.PS_BROWSERS || 'chromium,webkit').split(',')) {
+  for (const name of (process.env.PS_BROWSERS || 'chromium,webkit').split(',').filter(n => !only || only.includes(n))) {
     try { const b = await p[name].launch({ args: name === 'chromium' ? ['--no-sandbox'] : [] }); out.push({ name, b }); } catch (e) { if (process.env.PS_REQUIRE_BROWSERS) throw e; }
   }
   return out;
