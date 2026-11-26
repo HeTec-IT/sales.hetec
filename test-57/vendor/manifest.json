@@ -1,0 +1,103 @@
+{
+  "note": "Automatisch erzeugt von scripts/vendor-sync.mjs – nicht von Hand ändern.",
+  "files": {
+    "react/react.production.min.js": {
+      "package": "react",
+      "version": "18.3.1",
+      "license": "MIT",
+      "sha256": "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd",
+      "bytes": 10751
+    },
+    "react/react-dom.production.min.js": {
+      "package": "react-dom",
+      "version": "18.3.1",
+      "license": "MIT",
+      "sha256": "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d",
+      "bytes": 131835
+    },
+    "pdf-lib/pdf-lib.min.js": {
+      "package": "pdf-lib",
+      "version": "1.17.1",
+      "license": "MIT",
+      "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f",
+      "bytes": 525099
+    },
+    "pdfjs/pdf.min.js": {
+      "package": "pdfjs-dist",
+      "version": "2.16.105",
+      "license": "Apache-2.0",
+      "sha256": "1fc294eefda602e591a06c1d5af361cae23756b5a334fc2421d5f9accce038e5",
+      "bytes": 286899
+    },
+    "pdfjs/pdf.worker.min.js": {
+      "package": "pdfjs-dist",
+      "version": "2.16.105",
+      "license": "Apache-2.0",
+      "sha256": "99732130603cd4980f009a29a38a86373b43ffb9ae22c35ec85440f311ceddfc",
+      "bytes": 1066087
+    },
+    "html2pdf/html2pdf.bundle.min.js": {
+      "package": "html2pdf.js",
+      "version": "0.10.1",
+      "license": "MIT",
+      "sha256": "85e6ee9ce246e3ae4424313f7e46a5ed860a28d757811de8dc9c43f306049d65",
+      "bytes": 905956
+    },
+    "tesseract/tesseract.min.js": {
+      "package": "tesseract.js",
+      "version": "5.1.1",
+      "license": "Apache-2.0",
+      "sha256": "a8e29918d098b2b06e1012bdaeffb4aec0445c5d5654709023e0bd1f442a80e8",
+      "bytes": 66695
+    },
+    "tesseract/worker.min.js": {
+      "package": "tesseract.js",
+      "version": "5.1.1",
+      "license": "Apache-2.0",
+      "sha256": "aca1229639fc9907d86f96e825955a2b7c5716d17f3bc3acd71f9c7ab66181fc",
+      "bytes": 123724
+    },
+    "tesseract/core/tesseract-core-simd-lstm.wasm.js": {
+      "package": "tesseract.js-core",
+      "version": "5.1.1",
+      "license": "Apache-2.0",
+      "sha256": "ce20eda9533cbed1e6c2b4276fbae1e0adc61b6754b5513084be601787b457cf",
+      "bytes": 3938657
+    },
+    "tesseract/core/tesseract-core-lstm.wasm.js": {
+      "package": "tesseract.js-core",
+      "version": "5.1.1",
+      "license": "Apache-2.0",
+      "sha256": "8f04aa0cc81e7bde33f80e92fa01a7a665f0b4884d098acf5de9c7104a11dfaa",
+      "bytes": 3938277
+    },
+    "tesseract/lang/deu.traineddata.gz": {
+      "package": "@tesseract.js-data/deu",
+      "version": "1.0.0",
+      "license": "MIT",
+      "sha256": "306c4280d0cbed46fbff727486bd43b92730181bae80f56941a091f363bdf28b",
+      "bytes": 1333102
+    },
+    "tesseract/lang/eng.traineddata.gz": {
+      "package": "@tesseract.js-data/eng",
+      "version": "1.0.0",
+      "license": "MIT",
+      "sha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91",
+      "bytes": 2952873
+    },
+    "qrcode.js": {
+      "package": "qrcode-generator",
+      "version": "1.4.4",
+      "license": "MIT",
+      "sha256": "18ae399f81182bc9de916e9c77b195df20cc58d6f2d55a62b085a299f1bf1780",
+      "bytes": 56694
+    },
+    "jsQR.js": {
+      "package": "jsqr",
+      "version": "1.4.0",
+      "license": "Apache-2.0",
+      "sha256": "bc40c8a15196236b2314db0856f72ca0b49980cd5413b8c852a7349f5fee0859",
+      "bytes": 256885
+    }
+  }
+}

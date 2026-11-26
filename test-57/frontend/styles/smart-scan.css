@@ -1,0 +1,33 @@
+/*
+ * Smart Scan – Gestaltung
+ *
+ * Darstellung und Bedienung des Smart-Scan-Dialogs liegen ausschließlich in
+ *   frontend/smart-scan/ui-dialog.js   (Dialog, Karten, Summen, Knöpfe)
+ *   frontend/smart-scan/ui-crop.js     (Zuschneiden/Entzerren)
+ *   frontend/styles/smart-scan.css     (diese Datei: Farben, Abstände, Schriftgrößen als Variablen)
+ * Parser, Bildvorverarbeitung, OCR-Engine und Datenübernahme bleiben bei einem Redesign unverändert.
+ *
+ * Der Dialog trägt das Attribut data-ps-o2-import="1"; Variablen gelten nur innerhalb des Dialogs.
+ */
+[data-ps-o2-import] {
+  --ss-primary: #2563eb;
+  --ss-primary-strong: #1d4ed8;
+  --ss-ok: #16a34a;
+  --ss-warn: #d97706;
+  --ss-error: #dc2626;
+  --ss-text: #0f172a;
+  --ss-muted: #64748b;
+  --ss-border: #e2e8f0;
+  --ss-surface: #ffffff;
+  --ss-surface-alt: #f8fafc;
+  --ss-radius: 14px;
+  --ss-touch: 44px; /* Mindestgröße für Touch-Ziele (Tablet) */
+  -webkit-tap-highlight-color: transparent;
+}
+[data-ps-o2-import] button {
+  min-height: 32px;
+  touch-action: manipulation;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ps-o2-import] * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
