@@ -78,3 +78,25 @@ Alle bisherigen Dateien und Index-Einträge bleiben unverändert und sichtbar (a
 ## 6. Tests
 
 Siehe `tests/archive/archive-queue.test.mjs`, `tests/e2e/archive-flow.test.mjs`, `tests/e2e/archive-ui.test.mjs` und `docs/TEST-REPORT.md` (Abschnitt Archivierung).
+
+## 7. Live-Rollout (27.11.2026)
+
+| Repo / Datei | Vorher | Nachher | Hinweise |
+|---|---|---|---|
+| `PS-Dashboard/index.html` (o2, alle Shops außer Hall) | 55.168 | 55.169 | Archiv-Ausgang, eindeutige Namen, Bestätigung über `exists`, Diagnose |
+| `PS-Dashboard/index-neu.html` (o2, Hall-Test) | 56.0-beta.5 | 56.0-beta.6 | wie oben |
+| `PS-Dashboard-Telekom/index.html` (Fachhandel) | 57.8 | 57.9 | wie oben, angepasst an das Telekom-Namensschema |
+
+Backup-Branch in beiden Live-Repos: `backup/vor-archiv-fix-20261127`. `archive-queue.js` liegt jeweils im Repo-Wurzelordner.
+
+**Telekom-Besonderheiten**
+- Namensschema `PENCIL_[Shop]_[Typ]_[Datum]_[Kennung].pdf` → das Kennzeichen hängt an der Kennung (letzter Teil):
+  `PENCIL_Fh-Ellwangen_Angebot_2026-11-27_Schmidt--2317pfm.pdf`. Shop/Typ/Datum für den Flow unverändert.
+- Vorher zusätzlich: Toast „✅ Archiviert.“ auch bei fehlgeschlagenem Versand, kein Parken bei Fehlern (Vorgang nach dem
+  Neustart verloren), kein Zeitlimit, Mitarbeitername aus dem beim Seitenstart gemerkten Namen (geteiltes Tablet:
+  Name des Vormitarbeiters im Betreff). Behoben.
+- Der Telekom-Prüfflow „PDF Archiv API V3 Telekom“ kennt die Aktion `exists` noch nicht (`PS_ARCH_EXISTS_AKTIV = false`).
+  Archivierungen erscheinen deshalb als **„An das Archiv übergeben“** (ehrlich, aber ohne SharePoint-Bestätigung) und
+  werden nicht automatisch erneut gesendet. Sobald der Telekom-Flow die Aktion `exists` wie der o2-Flow beherrscht,
+  `PS_ARCH_EXISTS_AKTIV = true` setzen – dann gilt dieselbe Bestätigung wie bei o2 (mit diesem Schalter getestet).
+- Filialauswahl je Benutzer: meldet sich ein anderer Mitarbeiter an, gilt seine Profil-Filiale (einmaliger Neustart).

@@ -272,3 +272,22 @@ test('17: Normalisierung alter und neuer Index-Einträge', () => {
   const ohneTs = Q.normalizeIndexEntry({ fileName: 'PENCIL_A_Aalen_Angebot_2026-11-01.pdf', datum: '2026-11-01' });
   assert.ok(ohneTs.ts > 0);
 });
+
+test('Telekom-Namensschema: Kennzeichen an die Kennung (letzter Teil), Shop/Typ/Datum unverändert', () => {
+  const tk = 'PENCIL_Fh-Ellwangen_Angebot_2026-11-27_Schmidt.pdf';
+  const f = Q.uniqueFileName(tk, '2317pfm');
+  assert.equal(f, 'PENCIL_Fh-Ellwangen_Angebot_2026-11-27_Schmidt--2317pfm.pdf');
+  const p = f.replace(/\.pdf$/, '').split('_');
+  assert.deepEqual([p[1], p[2], p[3]], ['Fh-Ellwangen', 'Angebot', '2026-11-27']);
+  assert.equal(Q.uniqueFileName(f, 'xxxxxxx'), f);
+  assert.equal(Q.fileToken(f), '2317pfm');
+  assert.equal(Q.baseFileName(f), tk);
+  assert.equal(Q.kennungOf(f), 'Schmidt');
+  assert.equal(Q.kennungOf(Q.uniqueFileName('PENCIL_017612345_Aalen_Abschluss_2026-11-27.pdf', 'abcd123')), '017612345');
+  // Telekom ohne Shop
+  assert.equal(Q.uniqueFileName('PENCIL_Abschluss_2026-11-27_0176123456.pdf', 'abc1234'), 'PENCIL_Abschluss_2026-11-27_0176123456--abc1234.pdf');
+  const rec = { archiveId: 'x', uid: 'u', type: 'abschluss', subject: 'PENCIL|abschluss|2026-11-27|Tina', pdfBlob: new Blob(['%PDF-1.4' + 'x'.repeat(500)]) };
+  assert.deepEqual(Q.validate({ ...rec, fileName: Q.uniqueFileName('PENCIL_Telekom-Crailsheim_Abschluss_2026-11-27_0176123456.pdf', 'tk12345') }), []);
+  assert.ok(Q.validate({ ...rec, fileName: Q.uniqueFileName('PENCIL_Telekom-Crailsheim_Abschluss_2026-11-27_keineNr.pdf', 'tk12345') }).includes('abschlussOhneNummer'));
+  assert.ok(Q.validate({ ...rec, fileName: 'PENCIL_Telekom-Crailsheim_Angebot_2026-11-27_X--tk12345.pdf' }).includes('typeMismatch'));
+});

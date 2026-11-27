@@ -82,29 +82,57 @@
   function makeArchiveId(ms, rnd) {
     return 'ar-' + (typeof ms === 'number' ? ms : Date.now()).toString(36) + '-' + rand(8, rnd);
   }
-  /** Kennzeichen hinter die Kennung setzen: PENCIL_Mueller_Aalen_… → PENCIL_Mueller--1415k7q_Aalen_… (idempotent). */
+  // Zwei Namensschemata:
+  //   o2:      PENCIL_[Kennung]_[Shop]_[Typ]_[Datum].pdf   → Kennung = Teil [1]
+  //   Telekom: PENCIL_[Shop]_[Typ]_[Datum]_[Kennung].pdf   → Kennung = letzter Teil
+  // Das Kennzeichen kommt immer an die KENNUNG, damit die vom Flow gelesenen Teile (Shop, Typ, Datum) unverändert bleiben.
+  var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function kennIndex(parts) {
+    if (parts.length >= 3 && DATE_RE.test(parts[parts.length - 1])) return 1;                // o2
+    if (parts.length >= 4 && DATE_RE.test(parts[parts.length - 2])) return parts.length - 1; // Telekom
+    return -1;
+  }
+  function splitName(fileName) {
+    var f = String(fileName || '');
+    if (!/^PENCIL_/i.test(f)) return null;
+    var ext = /\.pdf$/i.test(f) ? f.slice(-4) : '';
+    var parts = (ext ? f.slice(0, -4) : f).split('_');
+    var k = kennIndex(parts);
+    return k < 1 ? null : { parts: parts, k: k, ext: ext };
+  }
+  /** Kennzeichen an die Kennung setzen: PENCIL_Mueller_Aalen_… → PENCIL_Mueller--1415k7q_Aalen_… (idempotent). */
   function uniqueFileName(fileName, token) {
     var f = String(fileName || '');
-    var m = /^(PENCIL_)([^_]+)(_.*)$/i.exec(f);
-    if (!m || !token) return f;
-    if (TOKEN_RE.test(m[2])) return f;
-    return m[1] + m[2] + '--' + String(token).replace(/[^A-Za-z0-9]/g, '').slice(0, 12) + m[3];
+    var s = splitName(f);
+    if (!s || !token) return f;
+    if (TOKEN_RE.test(s.parts[s.k])) return f;
+    s.parts[s.k] = s.parts[s.k] + '--' + String(token).replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
+    return s.parts.join('_') + s.ext;
+  }
+  /** Kennung eines Dateinamens ohne Kennzeichen ('' = unbekanntes Schema). */
+  function kennungOf(fileName) {
+    var s = splitName(fileName);
+    return s ? stripToken(s.parts[s.k]) : '';
   }
   /** Kennzeichen eines Dateinamens ('' = alter Name ohne Kennzeichen). */
   function fileToken(fileName) {
-    var m = /^PENCIL_([^_]+)_/i.exec(String(fileName || ''));
-    var t = m && TOKEN_RE.exec(m[1]);
+    var s = splitName(fileName);
+    var t = s && TOKEN_RE.exec(s.parts[s.k]);
     return t ? t[1] : '';
   }
-  /** Kennung (Teil [1]) ohne Kennzeichen. */
+  /** Kennung ohne Kennzeichen. */
   function stripToken(part) { return String(part == null ? '' : part).replace(TOKEN_RE, ''); }
   /** Dateiname ohne Kennzeichen (Vergleich alter/neuer Namen, Kollisions-Diagnose). */
   function baseFileName(fileName) {
-    return String(fileName || '').replace(/^(PENCIL_[^_]+?)--[A-Za-z0-9]{4,12}(_)/i, '$1$2');
+    var s = splitName(fileName);
+    if (!s) return String(fileName || '');
+    s.parts[s.k] = stripToken(s.parts[s.k]);
+    return s.parts.join('_') + s.ext;
   }
   function idOf(fileName) { return String(fileName || '').toLowerCase().replace(/[^a-z0-9._+\-]/g, '_').slice(0, 180); }
 
-  var FILE_RE = /^PENCIL_[A-Za-z0-9+\-]+_(?:[A-Za-z0-9\-]+_)?(Angebot|Abschluss)_(\d{4}-\d{2}-\d{2})\.pdf$/;
+  var FILE_RE = /^PENCIL_[A-Za-z0-9+\-]+_(?:[A-Za-z0-9\-]+_)?(Angebot|Abschluss)_(\d{4}-\d{2}-\d{2})\.pdf$/;          // o2
+  var FILE_RE_TK = /^PENCIL_(?:[A-Za-z0-9\-]+_)?(Angebot|Abschluss)_(\d{4}-\d{2}-\d{2})_[A-Za-z0-9+\-]+\.pdf$/;       // Telekom
 
   /** Vollständigkeit vor dem Versand. Rückgabe: Liste von Fehlercodes (leer = in Ordnung). */
   function validate(rec) {
@@ -112,7 +140,7 @@
     rec = rec || {};
     if (!rec.archiveId) errs.push('archiveId');
     if (!rec.uid) errs.push('uid');
-    var m = FILE_RE.exec(String(rec.fileName || ''));
+    var m = FILE_RE.exec(String(rec.fileName || '')) || FILE_RE_TK.exec(String(rec.fileName || ''));
     if (!m) errs.push('fileName');
     var s = String(rec.subject || '').split('|');
     if (s.length !== 4 || s[0] !== 'PENCIL' || (s[1] !== 'angebot' && s[1] !== 'abschluss') || !/^\d{4}-\d{2}-\d{2}$/.test(s[2]) || !s[3]) errs.push('subject');
@@ -121,8 +149,7 @@
     if (m && typ && m[1].toLowerCase() !== typ) errs.push('typeMismatch');
     if (s.length === 4 && typ && s[1] !== typ) errs.push('typeMismatch');
     if (typ === 'abschluss') {
-      var k = /^PENCIL_([^_]+)_/i.exec(String(rec.fileName || ''));
-      var kenn = k ? stripToken(k[1]) : '';
+      var kenn = kennungOf(rec.fileName);
       if (!/\d/.test(kenn) || /^keineNr$/i.test(kenn)) errs.push('abschlussOhneNummer');
     }
     if (!rec.pdfBlob && !rec.pdfRemoved) errs.push('pdf');
@@ -555,6 +582,7 @@
     uniqueFileName: uniqueFileName,
     fileToken: fileToken,
     stripToken: stripToken,
+    kennungOf: kennungOf,
     baseFileName: baseFileName,
     idOf: idOf,
     validate: validate,

@@ -22781,7 +22781,7 @@ const psArchDiagAnalyze = (entries, opts) => {
     const dTs = e.datum ? Date.parse(e.datum + 'T12:00:00') : NaN;
     if (!e.ts || e.ts > now + 3600000 || (isFinite(dTs) && Math.abs(dTs - e.ts) > 36 * 3600000)) out.badTs.push(row);
     if (e.src === 'app' && e.legacyName) out.legacyName.push(row);
-    if (/^PENCIL_keinName(--|_)/i.test(e.fileName)) out.keinName.push(row);
+    if (/^keinName$/i.test(window.PSArchivQueue ? PSArchivQueue.kennungOf(e.fileName) : '')) out.keinName.push(row);
     const base = window.PSArchivQueue ? PSArchivQueue.baseFileName(e.fileName).toLowerCase() : e.fileName.toLowerCase();
     if (!groups.has(base)) groups.set(base, []);
     groups.get(base).push(row);
