@@ -24,7 +24,7 @@ use HeTec\PS\Security\SessionManager;
  */
 final class App
 {
-    public const VERSION = '57.0.0-beta.1';
+    public const VERSION = '57.0.0-beta.2';
 
     public readonly Db $db;
     public readonly Crypto $crypto;

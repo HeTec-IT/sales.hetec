@@ -1,5 +1,23 @@
 # Changelog
 
+## 57.0.0-beta.2 – Archivierung zuverlässig (nur Beta)
+
+- **Behoben: Archivierungen überschrieben sich gegenseitig.** Gleicher Dateiname (Kunde/Rufnummer + Shop + Typ + Tag, z. B.
+  jedes „keinName“-Angebot eines Shops am selben Tag) überschrieb SharePoint-Datei und Suchindex-Eintrag des Kollegen →
+  „A findet seine Archivierung nicht, B sieht sie“. Jetzt eindeutiges Kennzeichen hinter der Kennung
+  (`PENCIL_Mueller--1415k7q_Aalen_Angebot_2026-11-27.pdf`), Flow-Positionen und Betreff unverändert.
+- **Behoben: Nachsenden unter fremder Anmeldung** (geteilte Tablets): Eigentümer, Name und Shop bleiben beim Mitarbeiter, der archiviert hat.
+- **Behoben: geparkte Vorgänge wurden nach 24 h still gelöscht**; nur eigene sichtbar, Löschen nur mit Rückfrage.
+- **Behoben: Schein-Erfolg.** „Archivierung erfolgreich“ erst, wenn die Datei in SharePoint gefunden wurde (Flow V3 `exists`);
+  sonst „wird überprüft“, „übergeben“, „ausstehend“ oder „fehlgeschlagen“.
+- **Neu: Archiv-Ausgang** (`frontend/services/archive-queue.js`): dauerhafte Speicherung vor dem Versand, automatische
+  Wiederholung, Prüfung im Hintergrund, „Erneut senden“, technisches Protokoll ohne Kundendaten.
+- **Behoben: „Meine Archivierungen“** zeigte ab 300 Einträgen keine neuen mehr; frühere Shops (Springer) fehlten.
+- **Behoben:** Springer/Admin übernahm die Filiale des vorherigen Mitarbeiters am Tablet.
+- Zeitlimit nach Dateigröße, lokales Datum statt UTC.
+- **Neu: Archiv-Diagnose (Admin, nur lesend).**
+- Details, Restrisiken und empfohlene Flow-Anpassungen: `docs/ARCHIVIERUNG.md`.
+
 ## Smart Capture QR-Import (Branch feature/hetec-smart-capture, nicht produktiv freigegeben)
 
 - **Neu:** Smart-Scan-Dialog – Importweg „Smart Capture – QR-Code scannen“: Angebot vom PC (HeTec Smart Capture) per QR-Code

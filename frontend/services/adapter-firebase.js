@@ -426,8 +426,15 @@ function __PS_startAuthGate(startAppFn) {
     var priorShop = null;
     var oldAllowed = '';
     var oldSwitch = '';
+    // FIX Archivierung (geteilte Tablets): die zuletzt gewählte Filiale gehört dem Benutzer, der sie gewählt hat.
+    // Früher übernahm ein Springer/Admin die Filiale des VORHERIGEN Mitarbeiters am Tablet → Archivierungen landeten
+    // unbemerkt im falschen Shop (Dateiname, SharePoint-Ordner, Suchindex). Anderer Benutzer → Stammfiliale.
+    var currentUid = '';
+    try { currentUid = (window.__betaAuth && window.__betaAuth.currentUser && window.__betaAuth.currentUser.uid) || ''; } catch (e) {}
     try {
       priorShop = localStorage.getItem('ps_shop');
+      var shopOwner = localStorage.getItem('ps_shop_uid') || '';
+      if (currentUid && shopOwner !== currentUid) priorShop = null;
       oldAllowed = localStorage.getItem('ps_allowed_shops') || '';
       oldSwitch = localStorage.getItem('ps_shopwechsel') || '';
     } catch (e) {}
@@ -435,6 +442,7 @@ function __PS_startAuthGate(startAppFn) {
     var allowedJson = JSON.stringify(access.allowed);
     var switchValue = access.allShops || access.extra.length > 0 ? '1' : '0';
     try {
+      if (currentUid) localStorage.setItem('ps_shop_uid', currentUid);
       localStorage.setItem('ps_shop', effectiveShop);
       localStorage.setItem('ps_allowed_shops', allowedJson);
       localStorage.setItem('ps_shopwechsel', switchValue);
@@ -931,14 +939,35 @@ const api = {
     available: () => !!getStatsDb(),
     write: async (id, entry) => { await need().collection(PS_IDX_COLL).doc(id).set(entry); },
     // shops: [''] = ohne Einschränkung; Rückgabe: { results:[{status, items|reason}] } wie Promise.allSettled
-    mine: async (uid, shops) => {
+    // FIX Archivierung: Bisher limit(300) OHNE Zeitfilter und ohne Sortierung → Firestore liefert die ersten 300 Dokumente
+    // nach Dokument-ID (= Dateiname, alphabetisch) über ALLE Zeiten. Ab 300 Archivierungen eines Mitarbeiters fehlten
+    // neue Einträge in "Meine Archivierungen" (z. B. alle Kunden mit späterem Anfangsbuchstaben).
+    // Jetzt: Zeitfilter ts >= since (braucht Firestore-Index uid+ts bzw. shopId+uid+ts); fehlt der Index
+    // (failed-precondition), Rückfall auf alle Einträge des Mitarbeiters ohne 300er-Grenze (max. 5000).
+    mine: async (uid, shops, since) => {
       const db = need();
-      const rs = await Promise.allSettled(shops.map(shop => {
+      const sinceMs = Number(since) || 0;
+      const one = async shop => {
         let q = db.collection(PS_IDX_COLL);
         if (shop) q = q.where('shopId', '==', shop);
-        return q.where('uid', '==', uid).limit(300).get();
-      }));
-      return rs.map(r => r.status === 'fulfilled' ? { ok: true, items: r.value.docs.map(d => ({ docId: d.id, ...d.data() })) } : { ok: false, code: r.reason && r.reason.code });
+        q = q.where('uid', '==', uid);
+        if (sinceMs > 0) {
+          try {
+            return await q.where('ts', '>=', sinceMs).limit(2000).get();
+          } catch (e) {
+            if (!e || (e.code !== 'failed-precondition' && !/index/i.test(String(e.message || '')))) throw e;
+            try { console.warn('[ARCHIV] Firestore-Index pdf_index (uid, ts) fehlt – Rückfall ohne Zeitfilter.'); } catch (_) {}
+          }
+        }
+        return q.limit(5000).get();
+      };
+      const rs = await Promise.allSettled(shops.map(one));
+      return rs.map(r => r.status === 'fulfilled' ? { ok: true, items: r.value.docs.map(d => ({ docId: d.id, ...d.data() })).filter(x => !sinceMs || (Number(x.ts) || 0) >= sinceMs) } : { ok: false, code: r.reason && r.reason.code });
+    },
+    // Admin-Diagnose: alle Einträge seit since (Einzelfeld-Filter, kein Zusatzindex nötig). Lesen erlauben nur die Regeln.
+    recent: async (since, limit) => {
+      const snap = await need().collection(PS_IDX_COLL).where('ts', '>=', Number(since) || 0).limit(Math.max(1, Math.min(10000, Number(limit) || 5000))).get();
+      return snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     },
     search: async (key, shop, limit) => {
       let q = need().collection(PS_IDX_COLL);
@@ -967,6 +996,15 @@ const api = {
       chunk.forEach((e, j) => { if (!docs[j].exists) { batch.set(refs[j], e); n++; } });
       if (n) await batch.commit();
       return n;
+    }
+  },
+  users: {
+    // Admin-Diagnose: bekannte Benutzer-IDs (nur wenn die Regeln das Lesen erlauben)
+    listIds: async () => {
+      const db = __psGetBetaDb();
+      if (!db) throw Object.assign(new Error('Keine Firebase-Verbindung'), { code: 'unavailable' });
+      const snap = await db.collection('users').get();
+      return snap.docs.map(d => d.id);
     }
   },
   archive: {

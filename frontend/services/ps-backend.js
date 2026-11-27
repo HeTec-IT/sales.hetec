@@ -51,8 +51,12 @@
       var extra = allowed.filter(function (id) { return id !== home; });
       var allShops = !!(user.isAdmin || user.allShops);
       var priorShop = null, oldAllowed = '', oldSwitch = '';
+      // Geteilte Tablets: zuletzt gewählte Filiale nur für denselben Benutzer übernehmen (siehe adapter-firebase.js)
+      var owner = String(user.id || user.publicId || '');
       try {
         priorShop = localStorage.getItem('ps_shop');
+        if (owner && (localStorage.getItem('ps_shop_uid') || '') !== owner) priorShop = null;
+        if (owner) localStorage.setItem('ps_shop_uid', owner);
         oldAllowed = localStorage.getItem('ps_allowed_shops') || '';
         oldSwitch = localStorage.getItem('ps_shopwechsel') || '';
       } catch (e) {}

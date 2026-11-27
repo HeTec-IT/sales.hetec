@@ -1077,7 +1077,7 @@
          Bei neuer Version: APP_VERSION unten hochsetzen. Fertig.
          ══════════════════════════════════════════════════════════════════════ -->
     <script>
-    window.APP_VERSION = '57.0.0-beta.1';
+    window.APP_VERSION = '57.0.0-beta.2';
     // ── v55.20: gemeinsame Helfer (Flacker-Fix / Wiederherstellung) ─────────
     // Frist der automatischen Wiederherstellung: EIN Wert fuer Pruefung UND Anzeige.
     window.__PS_RESTORE_WINDOW_MS = 5 * 60 * 1000;
@@ -1169,6 +1169,7 @@
     <script src="frontend/core/qr.js"></script>
     <script src="frontend/services/ps-net.js"></script>
     <script src="frontend/services/sync-queue.js"></script>
+    <script src="frontend/services/archive-queue.js"></script>
     <script src="frontend/services/adapter-firebase.js"></script>
     <script src="frontend/services/adapter-hetec.js"></script>
     <script src="frontend/services/ps-backend.js"></script>
@@ -14308,17 +14309,33 @@ const ReferralModal = ({
   // wird (genau das fuehlte sich vorher wie ein Absturz an).
   // Archivierung geklappt: kurze, klare Bestaetigung VOR dem Neustart (sonst ging der Hinweis beim Reload unter).
   if (archivErfolg) {
+    // FIX Archivierung: Anzeige je Phase – "erfolgreich" nur nach Bestätigung aus SharePoint
+    const _ph = archivErfolg.phase || 'handed';
+    const _wer = archivErfolg.name ? archivErfolg.name : (archivErfolg.typ === 'abschluss' ? 'Der Abschluss' : 'Das Angebot');
+    const _P = {
+      verifying: { bg: '#2563eb', icon: '…', title: 'Archivierung wird überprüft', text: _wer + ' wurde an das Archiv übergeben. Die Ablage in SharePoint wird geprüft …' },
+      verified: { bg: '#16a34a', icon: '✓', title: 'Archivierung erfolgreich', text: _wer + ' liegt im SharePoint-Archiv (bestätigt).' },
+      handed: { bg: '#0369a1', icon: '↑', title: 'An das Archiv übergeben', text: _wer + ' wurde übergeben. Die Bestätigung aus SharePoint folgt automatisch – Stand unter Meine Statistik → Archiv. Bei einem Fehler wird automatisch erneut gesendet.' },
+      queued: { bg: '#d97706', icon: '⏳', title: 'Archivierung ausstehend', text: _wer + ' ist auf diesem Gerät gesichert und wird automatisch gesendet, sobald die Verbindung steht. Nichts geht verloren.' },
+      parked: { bg: '#ca8a04', icon: 'P', title: 'Geparkt – noch nicht archiviert', text: 'Der Vorgang liegt unter „Geparkte Angebote“ und muss dort nachgetragen werden.' },
+      manual: { bg: '#0369a1', icon: '✉', title: 'Zum manuellen Versand bereit', text: 'Bitte die E-Mail an das Archiv-Postfach absenden. Erst danach ist der Vorgang archiviert.' }
+    }[_ph] || { bg: '#0369a1', icon: '↑', title: 'An das Archiv übergeben', text: '' };
     return /*#__PURE__*/React.createElement("div", {
-      className: "fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 no-print"
+      className: "fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 no-print",
+      "data-archiv-phase": _ph
     }, /*#__PURE__*/React.createElement("div", {
       className: "bg-white w-full max-w-sm rounded-3xl shadow-2xl p-8 text-center border border-slate-200"
     }, /*#__PURE__*/React.createElement("div", {
-      style: { width: '56px', height: '56px', margin: '0 auto 14px', borderRadius: '50%', background: '#16a34a', color: '#fff', fontSize: '32px', lineHeight: '56px', fontWeight: 900 }
-    }, "✓"), /*#__PURE__*/React.createElement("div", {
+      style: { width: '56px', height: '56px', margin: '0 auto 14px', borderRadius: '50%', background: _P.bg, color: '#fff', fontSize: '28px', lineHeight: '56px', fontWeight: 900 }
+    }, _P.icon), /*#__PURE__*/React.createElement("div", {
       style: { fontSize: '18px', fontWeight: 900, color: '#0f172a', marginBottom: '6px' }
-    }, "Archivierung erfolgreich"), /*#__PURE__*/React.createElement("div", {
+    }, _P.title), /*#__PURE__*/React.createElement("div", {
       style: { fontSize: '13px', color: '#64748b', lineHeight: 1.5 }
-    }, archivErfolg.name ? archivErfolg.name + " wurde an das Archiv gesendet." : "Das Dokument wurde an das Archiv gesendet.", /*#__PURE__*/React.createElement("br", null), "Die Ablage in SharePoint siehst du unter Meine Statistik → Archiv.", /*#__PURE__*/React.createElement("br", null), "Die App startet jetzt neu.")));
+    }, _P.text, /*#__PURE__*/React.createElement("br", null), "Die App startet jetzt neu."), _ph === 'verifying' && /*#__PURE__*/React.createElement("button", {
+      type: 'button',
+      onClick: () => { window.__psArchivSkipWait = true; },
+      style: { marginTop: '14px', padding: '9px 16px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#fff', color: '#1e3a8a', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }
+    }, "Nicht warten – Prüfung läuft im Hintergrund weiter")));
   }
   if (archivLaeuft) {
     return /*#__PURE__*/React.createElement("div", {
@@ -22511,33 +22528,44 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
     try {
       if (!PSBackend.pdfIndex.available() || !uid) throw new Error('no-db');
       if (psArchOffline()) throw new Error('offline');
-      const shops = cfg.isAdmin ? [''] : (cfg.allowedIds || []).slice();
-      const rs = await PSBackend.pdfIndex.mine(uid, shops, since);
+      // FIX Archivierung: eigene Archivierungen zuerst NUR über die eigene uid laden (unabhängig vom Shop). Früher nur
+      // in den aktuell freigegebenen Shops → Springer/Shopwechsel: frühere Archivierungen "verschwanden".
+      // Lehnt die Datenbank das ab (Regeln), wie bisher je freigegebenem Shop.
+      let rs = await PSBackend.pdfIndex.mine(uid, [''], since);
+      if (!cfg.isAdmin && !rs.some(r => r.ok)) rs = await PSBackend.pdfIndex.mine(uid, (cfg.allowedIds || []).slice(), since);
       const map = new Map();
       let ok = 0;
       rs.forEach(r => {
         if (!r.ok) return;
         ok++;
         r.items.forEach(x => {
-          if (x && x.fileName && x.src === 'app' && String(x.uid || '') === uid && (x.ts || 0) >= since) map.set(x.docId, x);
+          const n = window.PSArchivQueue ? PSArchivQueue.normalizeIndexEntry(x) : x; // alte/neue Felder einheitlich
+          if (x && x.fileName && n.src === 'app' && String(n.uid || '') === uid && (n.ts || 0) >= since) map.set(x.docId || psIdxId(x.fileName), { ...x, ts: n.ts, typ: n.typ, shopId: n.shopId });
         });
       });
-      if (!ok && shops.length) error = 'Archiv-Protokoll konnte nicht geladen werden (Verbindung oder Berechtigung).';
+      if (!ok) error = 'Archiv-Protokoll konnte nicht geladen werden (Verbindung oder Berechtigung).';
       items = Array.from(map.values());
     } catch (e) {
       error = 'Archiv-Protokoll konnte nicht geladen werden (kein Internet?).';
     }
+    // Archiv-Ausgang dieses Geräts (nur eigene Einträge)
+    let outbox = [];
+    try {
+      if (window.PSArchivQueue && uid) outbox = (await PSArchivQueue.queue('o2').listForUser(uid)).filter(r => (r.createdAt || 0) >= since);
+    } catch (e) {}
+    const obById = new Map(outbox.map(r => [psIdxId(r.fileName), r]));
     const ids = new Set(items.map(x => psIdxId(x.fileName)));
     let queued = [], parked = [];
     try {
-      queued = psIdxQueueGet().filter(x => String(x.uid || '') === uid && (x.ts || 0) >= since && !ids.has(psIdxId(x.fileName)));
+      queued = psIdxQueueGet().filter(x => String(x.uid || '') === uid && (x.ts || 0) >= since && !ids.has(psIdxId(x.fileName)) && !obById.has(psIdxId(x.fileName)));
     } catch (e) {}
     try {
       parked = (await listParkedArchive() || []).filter(x => (x.ts || 0) >= since && String(x.uid || '') === uid);
     } catch (e) {}
     // Ablage in SharePoint pruefen (nur fuer noch nicht bestaetigte Dateien)
     const okMap = psArchOkGet();
-    const toCheck = items.filter(x => !okMap[psIdxId(x.fileName)]);
+    outbox.forEach(r => { if (r.status === 'verified') okMap[psIdxId(r.fileName)] = r.verifiedAt || now; });
+    const toCheck = items.filter(x => !okMap[psIdxId(x.fileName)] && !obById.has(psIdxId(x.fileName)));
     let verifyAvailable = false;
     if (toCheck.length && !error) {
       const v = await psArchVerify(cfg, toCheck.map(x => x.fileName));
@@ -22550,13 +22578,23 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
       verifyAvailable = true; // alles bereits frueher bestaetigt
     }
     const rows = [];
+    const OBST = { sending: 'q_sending', handed: 'q_verifying', pending: 'q_pending', failed: 'q_failed' };
     items.forEach(e => {
       const id = psIdxId(e.fileName);
+      const ob = obById.get(id);
       let status;
       if (okMap[id]) status = 'ok';
+      else if (ob && OBST[ob.status]) status = OBST[ob.status];
       else if (verifyAvailable) status = now - (e.ts || 0) < PS_ARCH_ABLAGE_MIN * 60000 ? 'wait' : 'fail';
       else status = 'ok_unchecked';
-      rows.push({ key: 'i' + e.fileName, e, status });
+      rows.push({ key: 'i' + e.fileName, e, status, ob });
+    });
+    // Einträge im Archiv-Ausgang ohne (oder noch ohne) Suchindex-Eintrag
+    outbox.forEach(r => {
+      const id = psIdxId(r.fileName);
+      if (ids.has(id)) return;
+      const status = r.status === 'verified' ? 'ok' : OBST[r.status] || 'q_pending';
+      rows.push({ key: 'o' + r.archiveId, e: { fileName: r.fileName, typ: r.type, kunde: r.kunde, ruf: r.ruf, shopId: r.shopId, ts: r.createdAt }, status, ob: r });
     });
     queued.forEach(e => rows.push({ key: 'q' + e.fileName, e, status: 'wait_net' }));
     parked.forEach(e => rows.push({ key: 'p' + e.id, e, status: 'parked' }));
@@ -22571,13 +22609,43 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
   const shopName = id => (typeof SHOPS !== 'undefined' && SHOPS && SHOPS[id] && SHOPS[id].name) || id || '';
   const INFO = {
     ok: { icon: '\u2705', text: 'Archivierung erfolgreich', sub: 'in SharePoint abgelegt', color: '#15803d' },
-    ok_unchecked: { icon: '\u2705', text: 'Archivierung erfolgreich', sub: 'gesendet \u00B7 Ablage nicht gepr\u00FCft', color: '#15803d' },
+    ok_unchecked: { icon: '\uD83D\uDCE4', text: 'An Archiv \u00FCbergeben', sub: 'Ablage konnte nicht gepr\u00FCft werden', color: '#0369a1' },
+    q_sending: { icon: '\u23F3', text: 'Archivierung l\u00E4uft', sub: 'wird gerade \u00FCbertragen', color: '#1d4ed8' },
+    q_verifying: { icon: '\uD83D\uDD0E', text: 'Archivierung wird \u00FCberpr\u00FCft', sub: '\u00FCbergeben \u2013 Ablage in SharePoint noch nicht best\u00E4tigt', color: '#1d4ed8' },
+    q_pending: { icon: '\u23F3', text: 'Archivierung ausstehend', sub: 'auf diesem Ger\u00E4t gesichert \u2013 wird automatisch gesendet', color: '#b45309' },
+    q_failed: { icon: '\u274C', text: 'Archivierung fehlgeschlagen', sub: 'PDF ist auf diesem Ger\u00E4t gesichert \u2013 bitte erneut senden', color: '#dc2626' },
     wait: { icon: '\u23F3', text: 'Wird abgelegt \u2026', sub: 'wird noch in SharePoint abgelegt', color: '#b45309' },
     wait_net: { icon: '\u23F3', text: 'Wartet auf Verbindung', sub: 'wird automatisch nachgesendet', color: '#b45309' },
     parked: { icon: '\u23F3', text: 'Geparkt', sub: 'noch nicht gesendet \u2013 unter \u201EGeparkte Vorg\u00E4nge\u201C nachtragen', color: '#b45309' },
     fail: { icon: '\u274C', text: 'Archivierung fehlgeschlagen', sub: 'nicht in SharePoint gefunden \u2013 bitte erneut archivieren', color: '#dc2626' },
     fail_send: { icon: '\u274C', text: 'Archivierung fehlgeschlagen', sub: 'nicht gesendet \u2013 bitte erneut archivieren', color: '#dc2626' }
   };
+  const [busy, setBusy] = React.useState('');
+  const [diagOpen, setDiagOpen] = React.useState(false);
+  const isAdmin = (() => { try { return PS_IS_ADMIN(); } catch (e) { return false; } })();
+  // Aktionen für Einträge im Archiv-Ausgang (nur Eigentümer; Admin über die Diagnose)
+  const qAction = async (ob, what) => {
+    if (!ob || !window.PSArchivQueue) return;
+    const q = PSArchivQueue.queue('o2');
+    const actor = { uid: String(window.__PS_USER_UID || ''), isAdmin };
+    setBusy(ob.archiveId);
+    try {
+      if (what === 'retry') {
+        await q.retry(ob.archiveId, actor);
+        const deps = window.__psArchivQueueDeps ? window.__psArchivQueueDeps() : null;
+        if (deps) await q.sendNow(ob.archiveId, deps);
+      } else if (what === 'discard') {
+        let ok = false;
+        try { ok = window.confirm('Diese Archivierung wirklich verwerfen? Die gesicherte PDF wird von diesem Gerät gelöscht und ist danach NICHT im Archiv.'); } catch (e) {}
+        if (ok) await q.discard(ob.archiveId, actor);
+      }
+    } catch (e) {
+      try { alertBox(e); } catch (_) {}
+    }
+    setBusy('');
+    load();
+  };
+  const alertBox = e => setSt(x => ({ ...x, error: e && e.code === 'nopdf' ? 'Die PDF ist auf diesem Gerät nicht mehr vorhanden.' : 'Aktion nicht möglich.' }));
   const row = r => {
     const e = r.e, I = INFO[r.status];
     const isAbs = e.typ === 'abschluss' || e.type === 'abschluss';
@@ -22586,7 +22654,7 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
     const zusatz = isAbs ? (e.ruf && e.kunde ? e.kunde : '') : (e.kunde && e.ruf ? e.ruf : '');
     return h('div', {
       key: r.key,
-      style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', background: r.status.indexOf('fail') === 0 ? '#fef2f2' : '#fff' }
+      style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', background: (r.status.indexOf('fail') === 0 || r.status === 'q_failed') ? '#fef2f2' : '#fff' }
     }, h('div', { style: { fontSize: '18px', width: '24px', textAlign: 'center' } }, I.icon),
     h('div', { style: { flex: 1, minWidth: 0 } },
       h('div', { style: { fontSize: '13px', fontWeight: 800, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
@@ -22594,7 +22662,10 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
       h('div', { style: { fontSize: '11px', color: '#64748b' } }, fmt(e.ts) + (e.shopId ? ' \u00B7 ' + shopName(e.shopId) : '') + (zusatz ? ' \u00B7 ' + zusatz : ''))),
     h('div', { style: { textAlign: 'right', maxWidth: '45%' } },
       h('div', { style: { fontSize: '12px', fontWeight: 800, color: I.color } }, I.text),
-      h('div', { style: { fontSize: '10.5px', color: '#94a3b8' } }, I.sub)));
+      h('div', { style: { fontSize: '10.5px', color: '#94a3b8' } }, I.sub),
+      r.ob && (r.status === 'q_failed' || r.status === 'q_pending') && r.ob.pdfBlob && h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '5px' } },
+        h('button', { type: 'button', disabled: busy === r.ob.archiveId, onClick: () => qAction(r.ob, 'retry'), style: { padding: '4px 9px', borderRadius: '8px', fontSize: '11px', fontWeight: 800, background: '#1e3a8a', color: '#fff', border: 'none', cursor: 'pointer' } }, busy === r.ob.archiveId ? '\u2026' : 'Erneut senden'),
+        r.status === 'q_failed' && h('button', { type: 'button', disabled: busy === r.ob.archiveId, onClick: () => qAction(r.ob, 'discard'), style: { padding: '4px 9px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, background: '#fff', color: '#64748b', border: '1px solid #cbd5e1', cursor: 'pointer' } }, 'Verwerfen'))));
   };
   const weeks = (() => {
     const fm = ms => new Date(ms).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
@@ -22613,13 +22684,15 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
     return out;
   })();
   const cnt = f => st.rows.filter(r => f(r.status)).length;
-  const nOk = cnt(x => x === 'ok' || x === 'ok_unchecked'), nFail = cnt(x => x.indexOf('fail') === 0), nWait = cnt(x => x === 'wait' || x === 'wait_net' || x === 'parked');
+  const isFail = x => x.indexOf('fail') === 0 || x === 'q_failed';
+  const isWait = x => x === 'wait' || x === 'wait_net' || x === 'parked' || x === 'ok_unchecked' || x === 'q_sending' || x === 'q_verifying' || x === 'q_pending';
+  const nOk = cnt(x => x === 'ok'), nFail = cnt(isFail), nWait = cnt(isWait);
   if (heute) {
     // Überblick: was habe ich HEUTE archiviert (Name, Art, Uhrzeit, Status)
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const hr = st.rows.filter(r => (r.e.ts || 0) >= d0.getTime());
     const zeit = ts => { try { return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
-    const KURZ = { ok: 'abgelegt', ok_unchecked: 'gesendet', wait: 'wird abgelegt \u2026', wait_net: 'wartet auf Verbindung', parked: 'geparkt', fail: 'fehlgeschlagen', fail_send: 'fehlgeschlagen' };
+    const KURZ = { ok: 'abgelegt', ok_unchecked: '\u00FCbergeben', wait: 'wird abgelegt \u2026', wait_net: 'wartet auf Verbindung', parked: 'geparkt', fail: 'fehlgeschlagen', fail_send: 'fehlgeschlagen', q_sending: 'l\u00E4uft', q_verifying: 'wird \u00FCberpr\u00FCft', q_pending: 'ausstehend', q_failed: 'fehlgeschlagen' };
     const MAXH = 5;
     const zeile = (r, i, arr) => {
       const e = r.e, I = INFO[r.status];
@@ -22632,7 +22705,7 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
           h('div', { style: { fontSize: '11px', color: '#64748b' } }, (isAbs ? 'Abschluss' : 'Angebot') + ' \u00B7 ' + zeit(e.ts) + (e.kunde && e.ruf ? ' \u00B7 ' + e.ruf : ''))),
         h('div', { style: { fontSize: '11px', fontWeight: 800, color: I.color, whiteSpace: 'nowrap' } }, KURZ[r.status] || I.text));
     };
-    return h('div', { style: { background: '#fff', borderRadius: '14px', border: '1px solid ' + (hr.some(r => r.status.indexOf('fail') === 0) ? '#fecaca' : '#e2e8f0'), padding: '13px 16px' } },
+    return h('div', { style: { background: '#fff', borderRadius: '14px', border: '1px solid ' + (hr.some(r => isFail(r.status)) ? '#fecaca' : '#e2e8f0'), padding: '13px 16px' } },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' } },
         h('div', { style: { fontSize: '13px', fontWeight: 900, color: '#0f172a' } }, 'Heute archiviert'),
         !st.loading && h('div', { style: { fontSize: '11px', fontWeight: 700, color: '#64748b' } }, hr.length + (hr.length === 1 ? ' Pencil Selling' : ' Pencil Sellings')),
@@ -22651,14 +22724,16 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
       chip('\u2705 ' + nOk + ' erfolgreich', '#15803d', '#f0fdf4', '#bbf7d0'),
       nFail > 0 && chip('\u274C ' + nFail + ' fehlgeschlagen', '#dc2626', '#fef2f2', '#fecaca'),
       nWait > 0 && chip('\u23F3 ' + nWait + ' offen', '#b45309', '#fffbeb', '#fde68a'),
-      h('button', { onClick: load, style: { marginLeft: 'auto', padding: '5px 11px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, background: '#fff', color: '#1e3a8a', border: '1px solid #cbd5e1', cursor: 'pointer' } }, '\u21BB Aktualisieren')),
+      h('button', { onClick: () => { try { window.__psArchivQueueRun && window.__psArchivQueueRun(); } catch (e) {} load(); }, style: { marginLeft: 'auto', padding: '5px 11px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, background: '#fff', color: '#1e3a8a', border: '1px solid #cbd5e1', cursor: 'pointer' } }, '\u21BB Aktualisieren'),
+      isAdmin && h('button', { type: 'button', onClick: () => setDiagOpen(true), style: { padding: '5px 11px', borderRadius: '8px', fontSize: '11px', fontWeight: 700, background: '#fff', color: '#7c2d12', border: '1px solid #fed7aa', cursor: 'pointer' } }, '\uD83E\uDE7A Archiv-Diagnose (Admin)')),
+    diagOpen && isAdmin && h(PsArchivDiagnose, { onClose: () => setDiagOpen(false) }),
     st.error && h('div', { style: { fontSize: '12px', fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '8px 12px' } }, '\u26A0\uFE0F ' + st.error),
     st.loading ? h('div', { style: { padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', fontWeight: 600 } }, '\u23F3 Lade Archiv-Protokoll\u2026')
       : (st.rows.length === 0 && !st.error) ? h('div', { style: { padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', fontWeight: 600, background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0' } }, '\uD83D\uDCED Noch keine Archivierungen in den letzten 4 Wochen')
       : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }, weeks.map(w => {
         const isOpen = !!openWeeks[w.key] && w.rows.length > 0;
         const cc = f => w.rows.filter(r => f(r.status)).length;
-        const wOk = cc(x => x === 'ok' || x === 'ok_unchecked'), wFail = cc(x => x.indexOf('fail') === 0), wWait = cc(x => x === 'wait' || x === 'wait_net' || x === 'parked');
+        const wOk = cc(x => x === 'ok'), wFail = cc(isFail), wWait = cc(isWait);
         const mini = (txt, c) => h('span', { style: { fontSize: '11px', fontWeight: 800, color: c } }, txt);
         return h('div', { key: w.key, style: { background: '#fff', borderRadius: '14px', border: '1px solid ' + (wFail ? '#fecaca' : '#e2e8f0'), overflow: 'hidden' } },
           h('button', {
@@ -22676,7 +22751,159 @@ const ArchivProtokollView = ({ heute, onAlle } = {}) => {
               wWait > 0 && mini('\u23F3 ' + wWait, '#b45309'))),
           isOpen && h('div', null, w.rows.map(row)));
       })),
-    h('div', { style: { fontSize: '10.5px', color: '#94a3b8', lineHeight: 1.5 } }, st.verifyAvailable ? '\u201EErfolgreich\u201C = Datei wurde in SharePoint gefunden. Dauert die Ablage l\u00E4nger als ' + PS_ARCH_ABLAGE_MIN + ' Minuten, gilt sie als fehlgeschlagen. Angezeigt werden die letzten 4 Wochen.' : '\u201EErfolgreich\u201C = vom Archiv-Ablauf angenommen (die Ablage in SharePoint wird noch nicht gepr\u00FCft). Angezeigt werden die letzten 4 Wochen.'));
+    h('div', { style: { fontSize: '10.5px', color: '#94a3b8', lineHeight: 1.5 } }, st.verifyAvailable ? '\u201EErfolgreich\u201C = Datei wurde in SharePoint gefunden. Nicht gefundene Dateien werden automatisch erneut gesendet; danach gelten sie als fehlgeschlagen (PDF bleibt gesichert). Angezeigt werden die letzten 4 Wochen.' : '\u201E\u00DCbergeben\u201C = vom Archiv-Ablauf angenommen, die Ablage in SharePoint konnte gerade nicht gepr\u00FCft werden. \u201EErfolgreich\u201C erscheint erst nach Best\u00E4tigung. Angezeigt werden die letzten 4 Wochen.'));
+};
+
+// ═════════════════════════════════════════════════════════════════
+// FIX Archivierung: ARCHIV-DIAGNOSE (nur Admin, nur lesend)
+//   Findet scheinbar verschwundene Archivierungen: Einträge ohne/mit unbekannter Mitarbeiter-ID, ohne/unbekannter Shop,
+//   fehlerhafte Zeitstempel, alte (kollisionsgefährdete) Dateinamen, Index-Einträge ohne PDF in SharePoint, PDFs ohne
+//   Index-Eintrag (für Mitarbeiter unsichtbar) sowie offene/fehlgeschlagene Vorgänge auf diesem Gerät.
+//   Es wird NICHTS geändert, gelöscht oder neu zugeordnet. Ergebnis als JSON exportierbar.
+//   Zugriffsschutz: Knopf nur für Admins; Lesen fremder Einträge erlauben ausschließlich die Firestore-Regeln/der Flow.
+// ═════════════════════════════════════════════════════════════════
+const psArchDiagAnalyze = (entries, opts) => {
+  opts = opts || {};
+  const now = opts.now || Date.now();
+  const shops = opts.shopIds || [];
+  const users = opts.users || null; // Set bekannter uids (oder null = unbekannt)
+  const out = { total: 0, noUid: [], unknownUid: [], noShop: [], unknownShop: [], badTs: [], legacyName: [], keinName: [], multi: [] };
+  const groups = new Map();
+  (entries || []).forEach(raw => {
+    const e = window.PSArchivQueue ? PSArchivQueue.normalizeIndexEntry(raw) : raw;
+    if (!e.fileName) return;
+    out.total++;
+    const row = { fileName: e.fileName, shopId: e.shopId, uid: e.uid, agent: e.agent, datum: e.datum, ts: e.ts, src: e.src };
+    if (e.src === 'app' && !e.uid) out.noUid.push(row);
+    if (e.src === 'app' && e.uid && users && !users.has(e.uid)) out.unknownUid.push(row);
+    if (!e.shopId) out.noShop.push(row);
+    else if (shops.length && shops.indexOf(e.shopId) === -1) out.unknownShop.push(row);
+    const dTs = e.datum ? Date.parse(e.datum + 'T12:00:00') : NaN;
+    if (!e.ts || e.ts > now + 3600000 || (isFinite(dTs) && Math.abs(dTs - e.ts) > 36 * 3600000)) out.badTs.push(row);
+    if (e.src === 'app' && e.legacyName) out.legacyName.push(row);
+    if (/^PENCIL_keinName(--|_)/i.test(e.fileName)) out.keinName.push(row);
+    const base = window.PSArchivQueue ? PSArchivQueue.baseFileName(e.fileName).toLowerCase() : e.fileName.toLowerCase();
+    if (!groups.has(base)) groups.set(base, []);
+    groups.get(base).push(row);
+  });
+  groups.forEach((rows, base) => { if (rows.length > 1) out.multi.push({ base, rows }); });
+  return out;
+};
+const PsArchivDiagnose = ({ onClose }) => {
+  const h = React.createElement;
+  const [days, setDays] = React.useState(30);
+  const [st, setSt] = React.useState({ busy: '', err: '', device: null, idx: null, sp: null });
+  const cfg = (window.__psArchCfgGetter && window.__psArchCfgGetter()) || {};
+  const shopIds = (typeof SHOPS !== 'undefined' && SHOPS) ? Object.keys(SHOPS) : [];
+  const device = React.useCallback(async () => {
+    const d = { outbox: [], parked: [], idxQueue: [], fails: [], log: [] };
+    try { if (window.PSArchivQueue) d.outbox = (await PSArchivQueue.queue('o2').all()).map(r => ({ archiveId: r.archiveId, uid: r.uid, shopId: r.shopId, status: r.status, fileName: r.fileName, sends: r.sends || 0, lastError: r.lastError || '', createdAt: r.createdAt, hasPdf: !!r.pdfBlob })); } catch (e) {}
+    try { d.parked = (await listParkedArchive()).map(p => ({ id: p.id, uid: p.uid || '', shopId: p.shopId || '', type: p.type, ts: p.ts, overdue: !!p.overdue, ready: !!p.readyToAutoSend, fileName: p.dateiname || '' })); } catch (e) {}
+    try { d.idxQueue = psIdxQueueGet().map(x => ({ fileName: x.fileName, uid: x.uid, shopId: x.shopId, ts: x.ts })); } catch (e) {}
+    try { d.fails = psArchFailGet().map(x => ({ fileName: x.fileName, uid: x.uid, shopId: x.shopId, ts: x.ts, reason: x.reason })); } catch (e) {}
+    try { d.log = window.PSArchivQueue ? PSArchivQueue.readLog().slice(-200) : []; } catch (e) {}
+    return d;
+  }, []);
+  React.useEffect(() => { device().then(d => setSt(x => ({ ...x, device: d }))); }, [device]);
+  const loadIdx = async () => {
+    setSt(x => ({ ...x, busy: 'idx', err: '' }));
+    try {
+      if (!PSBackend.pdfIndex.recent) throw new Error('Im aktuellen Betrieb nicht verfügbar.');
+      const since = Date.now() - days * 86400000;
+      const items = await PSBackend.pdfIndex.recent(since, 5000);
+      let users = null;
+      try { if (PSBackend.users && PSBackend.users.listIds) users = new Set(await PSBackend.users.listIds()); } catch (e) { users = null; }
+      setSt(x => ({ ...x, busy: '', idx: { since, items, a: psArchDiagAnalyze(items, { shopIds, users }) } }));
+    } catch (e) {
+      setSt(x => ({ ...x, busy: '', err: 'Suchindex konnte nicht gelesen werden: ' + (e && (e.code || e.message) || e) }));
+    }
+  };
+  const loadSp = async () => {
+    if (!st.idx) return;
+    setSt(x => ({ ...x, busy: 'sp', err: '' }));
+    try {
+      const appItems = st.idx.items.filter(e => e && e.fileName && (e.ts || 0) < Date.now() - PS_ARCH_ABLAGE_MIN * 60000);
+      const v = appItems.length ? await psArchVerify(cfg, appItems.map(e => e.fileName)) : { available: true, found: new Set() };
+      if (!v.available) throw new Error('Prüfdienst (Aktion exists) nicht verfügbar');
+      const missing = appItems.filter(e => !v.found.has(psIdxId(e.fileName))).map(e => ({ fileName: e.fileName, uid: e.uid, shopId: e.shopId, ts: e.ts }));
+      // PDFs ohne Index-Eintrag (Dateiliste, nur Admin; höchstens 20 Seiten)
+      let orphans = null;
+      try {
+        const known = new Set(st.idx.items.map(e => psIdxId(e.fileName)));
+        const sinceDate = (window.PSArchivQueue ? PSArchivQueue.localDate(st.idx.since) : '');
+        orphans = [];
+        let after = 0;
+        for (let i = 0; i < 20; i++) {
+          const res = await psArchRequest(cfg, { action: 'list', afterId: after, limit: 500 }, 90000);
+          (Array.isArray(res.items) ? res.items : []).forEach(it => {
+            if (!it || !/^PENCIL_/i.test(it.name || '')) return;
+            const p = psArchParseFile(it.name, shopIds);
+            if (sinceDate && p.datum && p.datum < sinceDate) return;
+            if (!known.has(psIdxId(it.name))) orphans.push({ fileName: it.name, modified: it.modified || '' });
+          });
+          const last = Number(res.lastId) || 0;
+          if (res.done === true || !last || last <= after) break;
+          after = last;
+        }
+      } catch (e) { orphans = null; }
+      setSt(x => ({ ...x, busy: '', sp: { missing, orphans } }));
+    } catch (e) {
+      setSt(x => ({ ...x, busy: '', err: 'SharePoint-Abgleich nicht möglich: ' + (e && (e.code || e.message) || e) }));
+    }
+  };
+  const exportJson = () => {
+    try {
+      const blob = new Blob([JSON.stringify({ erstellt: new Date().toISOString(), version: window.APP_VERSION || '', tage: days, geraet: st.device, index: st.idx && st.idx.a, sharepoint: st.sp }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'archiv-diagnose-' + (window.PSArchivQueue ? PSArchivQueue.localDate() : 'heute') + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) {}
+  };
+  const fmt = ts => { try { return ts ? new Date(ts).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '–'; } catch (e) { return '–'; } };
+  const sec = (title, rows, render, hint) => h('details', { style: { border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 10px', marginTop: '8px', background: rows.length ? '#fff' : '#f8fafc' } },
+    h('summary', { style: { cursor: 'pointer', fontSize: '12.5px', fontWeight: 800, color: rows.length ? '#9a3412' : '#15803d' } }, (rows.length ? '\u26A0\uFE0F ' : '\u2705 ') + title + ' (' + rows.length + ')'),
+    hint && h('div', { style: { fontSize: '11px', color: '#64748b', margin: '4px 0' } }, hint),
+    h('div', { style: { maxHeight: '220px', overflowY: 'auto', fontSize: '11px', fontFamily: 'ui-monospace,monospace', color: '#334155' } }, rows.slice(0, 300).map((r, i) => h('div', { key: i, style: { padding: '2px 0', borderBottom: '1px dashed #f1f5f9', wordBreak: 'break-all' } }, render(r)))));
+  const line = r => (r.fileName || '') + ' · ' + (r.shopId || '–') + ' · uid ' + (r.uid ? String(r.uid).slice(0, 8) + '…' : '–') + ' · ' + fmt(r.ts);
+  const btn = (t, fn, dis) => h('button', { type: 'button', onClick: fn, disabled: !!dis, style: { padding: '7px 12px', borderRadius: '9px', fontSize: '12px', fontWeight: 800, background: dis ? '#e2e8f0' : '#1e3a8a', color: dis ? '#94a3b8' : '#fff', border: 'none', cursor: dis ? 'default' : 'pointer' } }, t);
+  const d = st.device;
+  const a = st.idx && st.idx.a;
+  return h('div', { onClick: onClose, style: { position: 'fixed', inset: 0, zIndex: 10050, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' } },
+    h('div', { onClick: e => e.stopPropagation(), role: 'dialog', 'aria-label': 'Archiv-Diagnose', style: { background: '#fff', width: '100%', maxWidth: '760px', maxHeight: '88vh', overflowY: 'auto', borderRadius: '16px', padding: '18px' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+        h('div', { style: { fontSize: '16px', fontWeight: 900, color: '#0f172a' } }, '\uD83E\uDE7A Archiv-Diagnose'),
+        h('div', { style: { fontSize: '11px', color: '#64748b' } }, 'nur lesend \u00B7 keine automatische Neuzuordnung'),
+        h('button', { type: 'button', onClick: onClose, style: { marginLeft: 'auto', border: 'none', background: '#f1f5f9', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', fontWeight: 800 } }, '\u2715')),
+      st.err && h('div', { style: { marginTop: '8px', fontSize: '12px', fontWeight: 700, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 10px' } }, st.err),
+      h('div', { style: { marginTop: '12px', fontSize: '13px', fontWeight: 900, color: '#0f172a' } }, 'Dieses Gerät'),
+      !d ? h('div', { style: { fontSize: '12px', color: '#94a3b8' } }, 'Lade \u2026') : h('div', null,
+        sec('Archiv-Ausgang: nicht bestätigte Vorgänge', d.outbox.filter(r => r.status !== 'verified'), r => r.status + ' · ' + line(r) + ' · Versuche ' + r.sends + (r.lastError ? ' · ' + r.lastError : '') + (r.hasPdf ? ' · PDF gesichert' : ''), 'Alle Benutzer dieses Geräts. Einträge anderer Mitarbeiter werden mit deren Angaben gesendet, aber nie umgeschrieben.'),
+        sec('Geparkte Vorgänge', d.parked, r => (r.overdue ? '\u00FCberf\u00E4llig \u00B7 ' : '') + (r.ready ? 'versandbereit \u00B7 ' : 'Nummer fehlt \u00B7 ') + (r.type || '') + ' · ' + line(r)),
+        sec('Suchindex-Einträge, die auf das Schreiben warten', d.idxQueue, line),
+        sec('Protokollierte Übergabe-Fehler (30 Tage)', d.fails, r => line(r) + ' · ' + (r.reason || '')),
+        sec('Technisches Protokoll (ohne Kundendaten)', d.log.slice().reverse(), r => fmt(r.t) + ' · ' + r.step + ' · ' + r.status + (r.code ? ' · ' + r.code : '') + ' · ' + r.archiveId + ' · uid ' + String(r.uid || '').slice(0, 8) + ' · ' + (r.shopId || '') + (r.attempt ? ' · Versuch ' + r.attempt : ''))),
+      h('div', { style: { marginTop: '16px', fontSize: '13px', fontWeight: 900, color: '#0f172a' } }, 'Suchindex (alle Shops)'),
+      h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' } },
+        h('select', { value: days, onChange: e => setDays(Number(e.target.value)), style: { padding: '6px 8px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' } }, [7, 30, 90, 180].map(n => h('option', { key: n, value: n }, 'letzte ' + n + ' Tage'))),
+        btn(st.busy === 'idx' ? '\u23F3 Lese \u2026' : 'Suchindex analysieren', loadIdx, !!st.busy),
+        btn(st.busy === 'sp' ? '\u23F3 Abgleich \u2026' : 'Mit SharePoint abgleichen', loadSp, !!st.busy || !st.idx || !cfg.url),
+        btn('Bericht exportieren (JSON)', exportJson, !d)),
+      a && h('div', null,
+        h('div', { style: { fontSize: '12px', color: '#475569', marginTop: '8px' } }, a.total + ' Einträge seit ' + fmt(st.idx.since)),
+        sec('Archivierungen ohne Mitarbeiter-ID', a.noUid, line, 'Erscheinen bei keinem Mitarbeiter unter „Meine Archivierungen“.'),
+        sec('Mitarbeiter-ID unbekannt', a.unknownUid, line),
+        sec('Ohne Standort', a.noShop, line),
+        sec('Unbekannter Standort', a.unknownShop, line),
+        sec('Fehlerhafte Zeitstempel', a.badTs, r => line(r) + ' · Datum ' + (r.datum || '–'), 'Zeitstempel fehlt, liegt in der Zukunft oder passt nicht zum Datum im Dateinamen.'),
+        sec('Alte Dateinamen ohne Kennzeichen (kollisionsgefährdet)', a.legacyName, line, 'Vor 57.0.0-beta.2 konnten gleichnamige Archivierungen (gleicher Kunde/Rufnummer, Shop, Typ, Tag) Datei und Index-Eintrag eines Kollegen überschreiben. Betroffene Einträge zeigen den LETZTEN Archivierer.'),
+        sec('„keinName“-Angebote (besonders gefährdet)', a.keinName, line),
+        sec('Mehrere Archivierungen mit gleichem Grundnamen', a.multi, g => g.base + ' → ' + g.rows.length + '× (' + g.rows.map(r => String(r.uid || '–').slice(0, 6)).join(', ') + ')', 'Seit dem Kennzeichen getrennt gespeichert – nur zur Information.')),
+      st.sp && h('div', null,
+        sec('Index-Eintrag vorhanden, PDF in SharePoint nicht gefunden', st.sp.missing, line, 'Mitarbeiter sehen diese als „fehlgeschlagen“. Ursache: Übergabe nicht angekommen oder Datei überschrieben/umbenannt.'),
+        st.sp.orphans ? sec('PDF in SharePoint ohne Index-Eintrag', st.sp.orphans, r => r.fileName + ' · ' + (r.modified || ''), 'Liegt sicher im Archiv, ist aber in „Meine Archivierungen“ und der Suche unsichtbar. Der Index-Abgleich (Archivsuche → Systemprüfung) nimmt sie ohne Mitarbeiterzuordnung auf.') : h('div', { style: { fontSize: '11px', color: '#94a3b8', marginTop: '6px' } }, 'Dateiliste nicht verfügbar (nur Admin, Flow-Aktion list).')),
+      h('div', { style: { fontSize: '10.5px', color: '#94a3b8', marginTop: '12px', lineHeight: 1.5 } }, 'Diese Diagnose ändert, löscht oder verschiebt nichts. Eine Neuzuordnung erfolgt nur nach eindeutigem Nachweis des Eigentümers durch einen Administrator (außerhalb der App).')));
 };
 
 // ═════════════════════════════════════════════════════════════════
@@ -27526,7 +27753,9 @@ function openParkDB() {
 async function parkArchiveEntry(entry) {
   // entry: { id, ts, type, agent, datum, kunde, pdfBlob }
   try {
-    entry = { uid: String(window.__PS_USER_UID || ''), ...entry, appBrand: 'o2' };
+    // FIX Archivierung: Eigentümer (uid) UND Shop zum Zeitpunkt des Parkens festhalten – beim späteren Nachtragen
+    // (anderer Benutzer am Tablet, Springer im anderen Shop) dürfen weder uid noch Shop vom aktuellen Login kommen.
+    entry = { uid: String(window.__PS_USER_UID || ''), shopId: String(window.__PS_SHOP_ORT || window.__PS_SHOP || '').toLowerCase(), ...entry, appBrand: 'o2' };
     const db = await openParkDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(PARK_STORE, 'readwrite');
@@ -27548,25 +27777,26 @@ async function listParkedArchive() {
       req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => reject(req.error);
     });
+    // FIX Archivierung: Früher wurden Vorgänge älter als 24 h hier beim bloßen Auflisten KOMMENTARLOS gelöscht
+    // (Datenverlust, wenn niemand rechtzeitig nachgetragen hat). Jetzt bleiben sie erhalten und gelten als "überfällig".
     const now = Date.now();
-    const fresh = [];
-    const expired = [];
+    const out = [];
     for (const o of all) {
-      if (o && o.appBrand && o.appBrand !== 'o2') continue;
-      if (o.ts && now - o.ts > PARK_MAX_AGE_MS) expired.push(o.id);else fresh.push(o);
+      if (!o || (o.appBrand && o.appBrand !== 'o2')) continue;
+      out.push({ ...o, overdue: !!(o.ts && now - o.ts > PARK_MAX_AGE_MS) });
     }
-    if (expired.length > 0) {
-      try {
-        const tx2 = db.transaction(PARK_STORE, 'readwrite');
-        const store = tx2.objectStore(PARK_STORE);
-        expired.forEach(id => store.delete(id));
-      } catch (_) {}
-    }
-    return fresh.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return out.sort((a, b) => (b.ts || 0) - (a.ts || 0));
   } catch (e) {
     console.warn('listParkedArchive:', e);
     return [];
   }
+}
+// Nur die geparkten Vorgänge DIESES Benutzers (geteilte Tablets). Alte Einträge ohne uid (vor der Zuordnung
+// angelegt) bleiben für alle sichtbar, weil ihr Eigentümer nicht eindeutig feststeht – sie werden NICHT automatisch zugeordnet.
+async function listParkedArchiveForUser(uid) {
+  const u = String(uid == null ? (window.__PS_USER_UID || '') : uid).trim();
+  const all = await listParkedArchive();
+  return all.filter(o => o && (o.uid ? (!!u && String(o.uid) === u) : true));
 }
 async function deleteParkedArchiveEntry(id) {
   try {
@@ -28071,7 +28301,7 @@ const ParkedArchiveModal = ({
   const [inputs, setInputs] = React.useState({});
   const load = React.useCallback(async () => {
     try {
-      setEntries(await listParkedArchive());
+      setEntries(await listParkedArchiveForUser());
     } catch (e) {
       setEntries([]);
     }
@@ -28088,6 +28318,11 @@ const ParkedArchiveModal = ({
     if (ok) load();
   };
   const handleDelete = async id => {
+    // FIX Archivierung: nie ohne Rückfrage löschen – die PDF liegt nur auf diesem Gerät
+    try {
+      if (!window.confirm('Diesen geparkten Vorgang wirklich löschen? Die Archiv-PDF liegt nur auf diesem Gerät und ist danach verloren.')) return;
+    } catch (e) {}
+    try { if (window.PSArchivQueue) PSArchivQueue.log({ archiveId: String(id), uid: window.__PS_USER_UID || '', step: 'park-delete', status: 'deleted' }); } catch (e) {}
     await deleteParkedArchiveEntry(id);
     load();
   };
@@ -28201,14 +28436,14 @@ const ParkedArchiveModal = ({
       lineHeight: 1.35,
       fontWeight: 600
     }
-  }, "Diese Angebote liegen nur auf ", /*#__PURE__*/React.createElement("u", null, "diesem Tablet"), " und verfallen nach 24 Stunden.")), entries && entries.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Diese Angebote liegen nur auf ", /*#__PURE__*/React.createElement("u", null, "diesem Tablet"), " und werden nicht automatisch gelöscht. Bitte zeitnah nachtragen.")), entries && entries.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'center',
       color: '#94a3b8',
       padding: '20px',
       fontSize: '13px'
     }
-  }, "Keine geparkten Angebote.", /*#__PURE__*/React.createElement("br", null), "Alles archiviert oder abgelaufen (24h)."), entries && entries.map(entry => /*#__PURE__*/React.createElement("div", {
+  }, "Keine geparkten Angebote.", /*#__PURE__*/React.createElement("br", null), "Alles archiviert."), entries && entries.map(entry => /*#__PURE__*/React.createElement("div", {
     key: entry.id,
     style: {
       border: '1.5px solid #fde68a',
@@ -28243,7 +28478,7 @@ const ParkedArchiveModal = ({
       fontSize: '11px',
       color: '#a16207'
     }
-  }, entry.agent || 'unbekannt', " · ", fmtAge(entry.ts))), /*#__PURE__*/React.createElement("button", {
+  }, entry.agent || 'unbekannt', " · ", fmtAge(entry.ts), entry.overdue ? " · ⚠️ überfällig" : "")), /*#__PURE__*/React.createElement("button", {
     onClick: () => handleDelete(entry.id),
     style: {
       border: 'none',
@@ -28365,7 +28600,8 @@ const psArchParseQuery = raw => {
 //   PENCIL_[Rufnummer]_[Shop]_Abschluss_[Datum].pdf
 const psArchParseFile = (name, shopIds) => {
   const base = String(name || '').replace(/\.pdf$/i, '');
-  const parts = base.split('_').filter(Boolean);
+  // FIX Archivierung: neues eindeutiges Kennzeichen "--1415k7q" hinter der Kennung gehört nicht zu Name/Rufnummer
+  const parts = base.split('_').filter(Boolean).map(p => p.replace(/--[A-Za-z0-9]{4,12}$/, ''));
   const shops = shopIds || [];
   let typ = '', datum = '', shopId = '', phone = '';
   const rest = [];
@@ -28572,7 +28808,11 @@ const psIdxCtxSet = ctx => {
   } catch (e) {}
 };
 // Aufruf NACH erfolgreicher Übergabe an den Archiv-Flow. Blockiert nie, wirft nie.
-const psIdxRecordArchive = async (dateiname, betreff) => {
+// FIX Archivierung: meta = { uid, shopId, ts, kunde, ruf, offerId } des EIGENTÜMERS der Archivierung. Früher kamen uid und
+// Shop immer vom gerade angemeldeten Benutzer – beim Nachsenden auf einem geteilten Tablet landete die Archivierung
+// so im Archiv eines anderen Mitarbeiters. Rückgabe true = genau dieser Eintrag ist geschrieben.
+const psIdxRecordArchive = async (dateiname, betreff, meta) => {
+  meta = meta || {};
   try {
     const shopIds = typeof SHOPS !== 'undefined' && SHOPS ? Object.keys(SHOPS) : [];
     const p = psArchParseFile(dateiname, shopIds);
@@ -28587,27 +28827,27 @@ const psIdxRecordArchive = async (dateiname, betreff) => {
     const leer = v => /^(keinName|keineNr)$/i.test(String(v || '').trim()) ? '' : v;
     let shop = '';
     try {
-      shop = String(window.__PS_SHOP_ORT || window.__PS_SHOP || '').toLowerCase();
+      shop = String(meta.shopId || window.__PS_SHOP_ORT || window.__PS_SHOP || '').toLowerCase();
     } catch (e) {}
     const entry = psIdxBuild({
       fileName: dateiname,
       typ,
       shopId: shop || p.shopId,
-      kunde: ctx && ctx.kunde || (typ === 'angebot' ? leer(p.kunde) : ''),
-      ruf: ctx && ctx.ruf || p.phone,
+      kunde: meta.kunde || ctx && ctx.kunde || (typ === 'angebot' ? leer(p.kunde) : ''),
+      ruf: meta.ruf || ctx && ctx.ruf || p.phone,
       datum: p.datum,
       agent: f[3] || '',
-      ts: Date.now(),
-      offerId: ctx && ctx.offerId || '',
+      ts: Number(meta.ts) || Date.now(),
+      offerId: meta.offerId || ctx && ctx.offerId || '',
       src: 'app',
-      uid: window.__PS_USER_UID || ''
+      uid: meta.uid != null && meta.uid !== '' ? String(meta.uid) : (window.__PS_USER_UID || '')
     });
-    if (!entry.fileName) return false;
+    if (!entry.fileName || !entry.uid) return false;
     const q = psIdxQueueGet().filter(x => psIdxId(x.fileName) !== psIdxId(entry.fileName));
     q.push(entry);
     psIdxQueueSet(q); // erst sichern, dann schreiben: übersteht auch ein sofortiges Neuladen der Seite
-    const n = await psIdxFlush(2500);
-    return n > 0;
+    await psIdxFlush(2500);
+    return !psIdxQueueGet().some(x => psIdxId(x && x.fileName) === psIdxId(entry.fileName));
   } catch (e) {
     return false;
   }
@@ -31724,8 +31964,16 @@ function App() {
   const [parkedCount, setParkedCount] = useState(0);
   const refreshParkedCount = React.useCallback(async () => {
     try {
-      const list = await listParkedArchive();
-      setParkedCount(list.length);
+      const list = await listParkedArchiveForUser();
+      let n = list.length;
+      // offene/fehlgeschlagene Archivierungen im Archiv-Ausgang zählen mit (nur eigene)
+      try {
+        if (window.PSArchivQueue && window.__PS_USER_UID) {
+          const own = await PSArchivQueue.queue('o2').listForUser(window.__PS_USER_UID);
+          n += own.filter(r => r.status === 'pending' || r.status === 'failed').length;
+        }
+      } catch (e) {}
+      setParkedCount(n);
     } catch (e) {}
   }, []);
   useEffect(() => {
@@ -32620,14 +32868,14 @@ function App() {
         _agent = getAgentDisplayNameForUpload();
         if (_agent === '–') _agent = '';
       } catch (e) {}
-      const _datum = new Date().toISOString().slice(0, 10);
+      const _datum = window.PSArchivQueue ? PSArchivQueue.localDate() : new Date().toISOString().slice(0, 10);
       const _ruf = (ruf || '').replace(/[^0-9+]/g, '');
       if (!_ruf) throw new Error('Rufnummer fehlt – Abschluss ohne Nummer ist nicht möglich.');
       // ⚠️ GESPERRT: festes 4-Feld-Format (siehe buildArchivBetreff)
       const _betreff = buildArchivBetreff('abschluss', _datum, _ruf, _agent);
-      // ⚠️ GESPERRT: PENCIL_-Präfix (siehe buildArchivDateiname)
-      const _name = buildArchivDateiname('abschluss', _datum, _ruf);
-      const result = await dispatchArchiveMail(blob, _name, _betreff, null, ARCHIVE_MANUAL_INTENT);
+      // ⚠️ GESPERRT: PENCIL_-Präfix (siehe buildArchivDateiname). FIX Archivierung: eindeutiges Kennzeichen.
+      const _name = archivEindeutig(buildArchivDateiname('abschluss', _datum, _ruf), window.PSArchivQueue ? PSArchivQueue.makeToken() : Date.now().toString(36).slice(-7));
+      const result = await dispatchArchiveMail(blob, _name, _betreff, null, ARCHIVE_MANUAL_INTENT, { ruf: _ruf, source: 'finalize' });
       if (!result || result.ok !== true) throw (result && result.error) || new Error('Archivierung nicht abgeschlossen.');
       setShowPdfFinalize(false);
     } catch (e) {
@@ -32829,6 +33077,7 @@ function App() {
     try { referralPdfRef.current = null; } catch (_) {}
     try { setReferralPdfBereit(false); setReferralStep1Done(false); } catch (_) {}
     try { archiveSentRef.current = false; archiveInFlightRef.current = false; } catch (_) {}
+    try { archivTokenRef.current = {}; } catch (_) {} // FIX Archivierung: neue Beratung → neuer eindeutiger Dateiname
     try { analyticsLoggedRef.current = false; analyticsRowIdRef.current = null; } catch (_) {}
     try { sessionIdRef.current = null; } catch (_) {}
     if (!keepOfferLinks) {
@@ -40682,9 +40931,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         if (_dsl !== 'ja' && _dsl !== 'nein') _dsl = 'nein';
         let _shop = '';
         try {
-          _shop = String(window.__PS_SHOP_ORT || '').trim();
+          _shop = String(opts.shop || window.__PS_SHOP_ORT || '').trim();
         } catch (e) {}
-        const _datum = new Date().toISOString().slice(0, 10);
+        // FIX Archivierung: lokales Datum (toISOString = UTC → kurz nach Mitternacht Vortag)
+        const _datum = window.PSArchivQueue ? PSArchivQueue.localDate() : new Date().toISOString().slice(0, 10);
 
         // ⚠️ GESPERRT: archiveSubject/archiveFileName MÜSSEN im Payload landen.
         // Quelle IMMER buildArchivBetreff()/buildArchivDateiname() - entweder
@@ -40746,7 +40996,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
             // 'ja' | 'nein'
             agent: _agent,
             shop: _shop,
-            date: _nowISO.slice(0, 10),
+            date: _datum,
             ts: _nowISO,
             archiveFileName: archiveFileName,
             archiveSubject: archiveSubject,
@@ -40757,8 +41007,11 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           // lange, BEVOR ueberhaupt ein Fehler auftritt. Deshalb wirkte es wie
           // endloses "immer wieder versuchen" statt einer klaren Meldung.
           // Jetzt: hartes 8s-Zeitlimit, danach gilt es als fehlgeschlagen.
+          // FIX Archivierung: Zeitlimit nach Dateigröße (8 s reichten bei ~1–2 MB und schwachem Netz nicht; ein Abbruch
+          // mitten im Hochladen wirkte als Fehler, obwohl die Daten evtl. ankamen). 15–45 s.
+          const _limitMs = Math.max(15000, Math.min(45000, Math.round((pdfBase64 ? pdfBase64.length : 0) / 40)));
           const _archiveAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
-          const _archiveAbortTimer = _archiveAbort ? setTimeout(() => _archiveAbort.abort(), 8000) : null;
+          const _archiveAbortTimer = _archiveAbort ? setTimeout(() => _archiveAbort.abort(), _limitMs) : null;
           try {
             await fetch(ARCHIVE_FLOW_URL, {
               method: 'POST',
@@ -41200,7 +41453,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
      Mit dem Präfix enthält auch dieser Ersatz-Betreff das Wort PENCIL.
      ══════════════════════════════════════════════════════════════════════════ */
   const ARCHIV_DATEI_PREFIX = 'PENCIL_'; // NIEMALS entfernen
-  const buildArchivDateiname = (typ, datum, kennung) => {
+  // FIX Archivierung: optionaler 4. Parameter shopOverride = Shop zum Zeitpunkt der Beratung (Nachtragen geparkter
+  // Vorgänge nach Shopwechsel/Benutzerwechsel). Ohne Angabe unverändert der aktuelle Shop.
+  const buildArchivDateiname = (typ, datum, kennung, shopOverride) => {
     // Typ auf die zwei erlaubten Werte begrenzen
     let _typ = String(typ || '').toLowerCase() === 'abschluss' ? 'Abschluss' : 'Angebot';
 
@@ -41229,7 +41484,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // ══════════════════════════════════════════════════════════════════════
     let _shop = '';
     try {
-      _shop = String(window.__PS_SHOP_ORT || '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/Ä/g, 'ae').replace(/Ö/g, 'oe').replace(/Ü/g, 'ue').replace(/ß/g, 'ss')
+      _shop = String((shopOverride ? shopOverride : window.__PS_SHOP_ORT) || '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/Ä/g, 'ae').replace(/Ö/g, 'oe').replace(/Ü/g, 'ue').replace(/ß/g, 'ss')
       // Bindestrich bewusst ERLAUBT: die Shop-IDs nutzen ihn
       // (schwaebisch-hall, stuttgart-vaihingen, telekom-crailsheim).
       .replace(/[^A-Za-z0-9\-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
@@ -41285,7 +41540,137 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     }
     return betreff;
   };
-  const dispatchArchiveMail = async (blob, dateiname, betreff, preOpenedTab, archiveIntent) => {
+  // ══════════════════════════════════════════════════════════════════════════
+  // FIX Archivierung (57.0.0-beta.2): ARCHIV-AUSGANG
+  //  - Jede Archivierung wird VOR dem Versand dauerhaft gespeichert (IndexedDB, frontend/services/archive-queue.js)
+  //    mit Eigentümer (uid, Name, E-Mail, Shop) und eindeutigem Dateinamen.
+  //  - Der Archiv-Flow antwortet wegen mode:'no-cors' unlesbar → "übergeben" ist KEIN Erfolg. Erfolgreich ist eine
+  //    Archivierung erst, wenn der Prüfdienst (Flow "PDF Archiv API V3", Aktion exists) die Datei in SharePoint findet.
+  //  - Ausstehende/fehlgeschlagene Archivierungen gehen nie verloren und werden automatisch wiederholt.
+  // ══════════════════════════════════════════════════════════════════════════
+  const archivQueue = () => {
+    try {
+      return window.PSArchivQueue ? PSArchivQueue.queue('o2') : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  const archivQueueDeps = () => ({
+    uid: String(window.__PS_USER_UID || ''),
+    online: () => !(window.__psIsOffline && window.__psIsOffline()) && !psArchOffline(),
+    send: async rec => {
+      const r = await sendArchivCopyToNewFlow(rec.pdfBlob, {
+        intent: ARCHIVE_MANUAL_INTENT,
+        type: rec.type,
+        agent: rec.agent,
+        dsl: rec.dsl === 'ja' ? 'ja' : 'nein',
+        shop: rec.shopOrt || rec.shopId || '',
+        archiveFileName: rec.fileName,
+        archiveSubject: rec.subject
+      });
+      if (r && r.ok === true) return { ok: true };
+      const e = r && r.error;
+      return { ok: false, code: e && (e.name === 'AbortError' ? 'timeout' : e.code || e.name) || 'send-failed' };
+    },
+    verify: names => psArchVerify(archivCfg(), names),
+    recordIndex: rec => psIdxRecordArchive(rec.fileName, rec.subject, { uid: rec.uid, shopId: rec.shopId, ts: rec.handedAt || rec.createdAt, kunde: rec.kunde, ruf: rec.ruf, offerId: rec.offerId }),
+    onEvent: ev => {
+      try {
+        const r = ev.rec || {};
+        const was = (r.type === 'abschluss' ? 'Abschluss ' : 'Angebot ') + (r.kunde || r.ruf || '');
+        if (ev.type === 'verified') triggerToast('✅ Archiv bestätigt: ' + was.trim() + ' liegt in SharePoint.');
+        if (ev.type === 'failed') triggerToast('❌ Archivierung fehlgeschlagen: ' + was.trim() + ' – PDF ist gesichert. Bitte unter Meine Statistik → Archiv erneut senden.');
+      } catch (e) {}
+      try { refreshParkedCount(); } catch (e) {}
+    }
+  });
+  window.__psArchivQueueDeps = archivQueueDeps; // für Archiv-Ansicht/Diagnose (gleiche Wege wie beim Archivieren)
+  // Eindeutiges Kennzeichen je Beratung + Kennung: Wiederholen/Doppeltipp → gleicher Dateiname (keine Dubletten),
+  // neue Beratung (resetCustomerState) → neues Kennzeichen.
+  const archivTokenRef = useRef({});
+  const archivTokenFor = (typ, kennung) => {
+    const k = String(typ || '') + '|' + String(kennung || '');
+    if (!archivTokenRef.current[k]) archivTokenRef.current[k] = window.PSArchivQueue ? PSArchivQueue.makeToken() : Date.now().toString(36).slice(-7);
+    return archivTokenRef.current[k];
+  };
+  const archivEindeutig = (dateiname, token) => window.PSArchivQueue ? PSArchivQueue.uniqueFileName(dateiname, token) : dateiname;
+  // Übergabe über den Archiv-Ausgang. Rückgabe wie dispatchArchiveMail: { ok, handedToFlow?, queued?, archiveId, status }
+  const archivViaQueue = async (blob, dateiname, betreff, meta) => {
+    meta = meta || {};
+    const q = archivQueue();
+    if (!q) return null; // kein Ausgang verfügbar → bisheriger Weg
+    const f = String(betreff || '').split('|');
+    const uid = String(meta.uid || window.__PS_USER_UID || '').trim();
+    if (!uid) {
+      try { triggerToast('⚠️ Nicht angemeldet – bitte neu anmelden. Vorgang bleibt geöffnet.'); } catch (e) {}
+      return { ok: false, error: new Error('Keine Benutzer-ID') };
+    }
+    if (!(await PSArchivQueue.isPdfBlob(blob))) {
+      try { PSArchivQueue.log({ uid, step: 'pdf-check', status: 'failed', code: 'no-pdf' }); } catch (e) {}
+      try { triggerToast('⚠️ Archiv-PDF konnte nicht korrekt erstellt werden – bitte erneut versuchen. Vorgang bleibt geöffnet.'); } catch (e) {}
+      return { ok: false, status: 'failed', error: new Error('Archiv-PDF ungültig') };
+    }
+    let _dsl = meta.dsl;
+    if (_dsl !== 'ja' && _dsl !== 'nein') {
+      try { _dsl = getDslFlagForUpload(); } catch (e) { _dsl = 'nein'; }
+    }
+    let ctx = null;
+    try { const c = window.__psIdxCtx; if (c && c.dateiname === dateiname) ctx = c; } catch (e) {}
+    let rec;
+    // Gleicher Dateiname wie eine ältere, bereits übergebene Archivierung (> 10 Min.) = neuer Vorgang mit
+    // wiederverwendetem Kennzeichen → frisches Kennzeichen statt "Doppelversand verhindert".
+    try {
+      const vorhanden = (await q.listForUser(uid)).find(x => x.fileName === dateiname);
+      if (vorhanden && (vorhanden.status === 'handed' || vorhanden.status === 'verified') && Date.now() - (vorhanden.createdAt || 0) > 10 * 60000) {
+        dateiname = PSArchivQueue.uniqueFileName(PSArchivQueue.baseFileName(dateiname), PSArchivQueue.makeToken());
+      }
+    } catch (e) {}
+    try {
+      rec = await q.create({
+        uid,
+        email: String(meta.email != null ? meta.email : (meta.uid && meta.uid !== window.__PS_USER_UID ? '' : (PSBackend.auth.currentEmail ? PSBackend.auth.currentEmail() : ''))),
+        employeeName: String(meta.employeeName || (meta.uid && meta.uid !== window.__PS_USER_UID ? '' : window.__PS_PROFILE_NAME) || ''),
+        shopId: String(meta.shopId || window.__PS_SHOP_ORT || window.__PS_SHOP || '').toLowerCase(),
+        shopOrt: String(meta.shopOrt || meta.shopId || window.__PS_SHOP_ORT || ''),
+        type: f[1] === 'abschluss' ? 'abschluss' : 'angebot',
+        subject: betreff,
+        agent: f[3] || '',
+        fileName: dateiname,
+        dsl: _dsl,
+        kunde: String(meta.kunde || ctx && ctx.kunde || '').slice(0, 80),
+        ruf: String(meta.ruf || ctx && ctx.ruf || '').slice(0, 24),
+        offerId: String(meta.offerId || ctx && ctx.offerId || ''),
+        consultationId: String(meta.consultationId || ''),
+        source: meta.source || 'app',
+        pdfBlob: blob
+      });
+    } catch (e) {
+      try { console.warn('[ARCHIV] Archiv-Ausgang nicht verfügbar:', e); } catch (_) {}
+      return null; // IndexedDB nicht verfügbar → bisheriger Weg
+    }
+    if (rec.duplicate) {
+      if (rec.status === 'handed' || rec.status === 'verified' || rec.status === 'sending') {
+        return { ok: true, handedToFlow: rec.status !== 'sending', archiveId: rec.archiveId, status: rec.status === 'verified' ? 'verified' : 'handed', duplicatePrevented: true };
+      }
+      if (rec.status === 'failed' && rec.pdfBlob) {
+        try { await q.retry(rec.archiveId, { uid, isAdmin: PS_IS_ADMIN() }); } catch (e) {}
+      }
+    }
+    const out = await q.sendNow(rec.archiveId, archivQueueDeps());
+    try { refreshParkedCount(); } catch (e) {}
+    if (out && out.status === 'handed') {
+      try { triggerToast('📤 An das Archiv übergeben – Ablage wird geprüft …'); } catch (e) {}
+      return { ok: true, handedToFlow: true, archiveId: out.archiveId, status: 'handed' };
+    }
+    if (out && out.status === 'pending') {
+      try { triggerToast('⏳ Archivierung ausstehend – wird automatisch gesendet, sobald die Verbindung steht. Nichts geht verloren.'); } catch (e) {}
+      return { ok: true, queued: true, archiveId: out.archiveId, status: 'pending' };
+    }
+    try { psArchFailLog(dateiname, betreff, new Error(out && out.lastError || 'failed')); } catch (e) {}
+    try { triggerToast('⚠️ Archivierung fehlgeschlagen – Vorgang bleibt geöffnet. Bitte erneut versuchen.'); } catch (e) {}
+    return { ok: false, archiveId: out && out.archiveId, status: 'failed', error: new Error(out && out.lastError || 'Archivierung fehlgeschlagen') };
+  };
+  const dispatchArchiveMail = async (blob, dateiname, betreff, preOpenedTab, archiveIntent, meta) => {
     // Harte Trennung: Nur bewusst ausgelöste Archiv-Aktionen dürfen bis zum
     // Flow gelangen. Kunden-PDF/Teilen/Drucken besitzen dieses Token nicht.
     if (archiveIntent !== ARCHIVE_MANUAL_INTENT) {
@@ -41314,7 +41699,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     try {
       if (String(betreff || '').split('|')[1] === 'abschluss') {
         const _mk = /^PENCIL_([^_]+)_/i.exec(String(dateiname || ''));
-        if (!_mk || !/\d/.test(_mk[1]) || /^keineNr$/i.test(_mk[1])) {
+        const _kn = _mk ? _mk[1].replace(/--[A-Za-z0-9]{4,12}$/, '') : '';
+        if (!_mk || !/\d/.test(_kn) || /^keineNr$/i.test(_kn)) {
           try { triggerToast('Abschluss ohne Rufnummer ist nicht möglich. Bitte Nummer eingeben.'); } catch (e) {}
           return { ok: false, blocked: true, error: new Error('Abschluss ohne Rufnummer ist nicht möglich.') };
         }
@@ -41328,6 +41714,9 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     // Bleibt ARCHIVE_FLOW_URL der Platzhalter, aendert sich am bisherigen
     // (Mail-)Verhalten nichts - die Teilen-Kette darunter greift dann.
     if (ARCHIVE_FLOW_URL && !ARCHIVE_FLOW_URL.includes('PASTE_NEW_POWER_AUTOMATE_URL_HERE')) {
+      const _viaQueue = await archivViaQueue(blob, dateiname, betreff, meta);
+      if (_viaQueue) return _viaQueue;
+      // Rückfall (IndexedDB nicht verfügbar): bisheriger Direktversand. Ergebnis gilt nur als "übergeben".
       const _felder = String(betreff || '').split('|');
       const _typUpload = _felder[1] === 'abschluss' ? 'abschluss' : 'angebot';
       const _agentUpload = _felder[3] || '';
@@ -41346,13 +41735,13 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         });
         if (!flowResult || flowResult.ok !== true) throw (flowResult && flowResult.error) || new Error('Archiv-Flow konnte nicht erreicht werden.');
         try {
-          triggerToast('✅ Archivierung an den Flow übergeben.');
+          triggerToast('📤 An das Archiv übergeben (Ablage wird unter Meine Statistik → Archiv geprüft).');
         } catch (e) {}
         // v55.10: Suchindex-Eintrag (nur Metadaten). Darf die Archivierung nie stören oder verzögern (max. 2,5 s).
         try {
-          await psIdxRecordArchive(dateiname, betreff);
+          await psIdxRecordArchive(dateiname, betreff, meta || {});
         } catch (e) {}
-        return { ok: true, handedToFlow: true };
+        return { ok: true, handedToFlow: true, status: 'handed' };
       } catch (e) {
         console.warn('[ARCHIV-FLOW] Upload fehlgeschlagen:', e);
         try { psArchFailLog(dateiname, betreff, e); } catch (_) {}
@@ -41494,6 +41883,20 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     return { ok: true, manualFallback: true };
   };
 
+  // Testzugang NUR für automatisierte Tests (window.__PS_TEST_HOOKS wird ausschließlich von Playwright gesetzt)
+  try {
+    if (window.__PS_TEST_HOOKS === true) {
+      window.__psArchivTest = {
+        submit: (blob, name, betreff, meta) => dispatchArchiveMail(blob, name, betreff, null, ARCHIVE_MANUAL_INTENT, meta),
+        name: (typ, datum, kennung, shop) => archivEindeutig(buildArchivDateiname(typ, datum, kennung, shop), archivTokenFor(typ, kennung)),
+        betreff: (typ, datum, agent) => buildArchivBetreff(typ, datum, '', agent),
+        resetTokens: () => { archivTokenRef.current = {}; },
+        resume: (entry, ruf) => resumeParkedArchive(entry, ruf),
+        autoFlush: () => autoFlushParkedArchive()
+      };
+    }
+  } catch (e) {}
+
   // ── ARCHIV: PDF speichern + vorausgefüllte Mail an Archiv-Postfach öffnen ──
   // Ablauf: PDF wird erzeugt & heruntergeladen → Mail-App öffnet mit fertiger Adresse + Betreff.
   // Mitarbeiter muss nur noch das eben gespeicherte PDF anhängen und auf Senden tippen.
@@ -41543,7 +41946,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       _agent = getAgentDisplayNameForUpload();
       if (_agent === '–') _agent = '';
     } catch (e) {}
-    const _datum = new Date().toISOString().slice(0, 10);
+    // FIX Archivierung: lokales Datum statt UTC
+    const _datum = window.PSArchivQueue ? PSArchivQueue.localDate() : new Date().toISOString().slice(0, 10);
 
     // v57: Kundenname (beim ANGEBOT das Suchkriterium – wurde vor der PDF-Erzeugung abgefragt)
     let _kunde = '';
@@ -41652,7 +42056,10 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // Dateiname: Abschluss → Rufnummer, Angebot → Kundenname. Immer mit Datum.
       // ⚠️ GESPERRT: Dateiname NUR über buildArchivDateiname() – PENCIL_-Präfix
       // steuert die Power-Automate-Sortierung.
-      const _dateiname = _type === 'abschluss' ? buildArchivDateiname('abschluss', _datum, _ruf) : buildArchivDateiname('angebot', _datum, _kunde);
+      // FIX Archivierung: eindeutiges Kennzeichen hinter der Kennung. Ohne Kennzeichen erhielten z. B. zwei Angebote
+      // "keinName" desselben Shops am selben Tag denselben Dateinamen → SharePoint-Datei und Suchindex-Eintrag des
+      // ersten Mitarbeiters wurden vom zweiten überschrieben (Archivierung "verschwunden" bzw. beim Kollegen sichtbar).
+      const _dateiname = archivEindeutig(_type === 'abschluss' ? buildArchivDateiname('abschluss', _datum, _ruf) : buildArchivDateiname('angebot', _datum, _kunde), archivTokenFor(_type, _type === 'abschluss' ? _ruf : _kunde));
       // v55.10: Kontext für den Suchindex (Kundenname, Rufnummer, verknüpftes gespeichertes Angebot)
       try {
         psIdxCtxSet({ dateiname: _dateiname, kunde: _kunde, ruf: _ruf, offerId: loadedOfferId || sessionOfferId || cloudSaveIdRef.current || '' });
@@ -41665,7 +42072,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       // obwohl kein Internet da ist. Jetzt: VOR dem Versand aktiv denselben
       // Verbindungsstatus wie das WLAN-Icon pruefen und bei Offline sofort
       // (ohne den fetch ueberhaupt zu versuchen) parken.
-      if (window.__psIsOffline && window.__psIsOffline()) {
+      // Mit Archiv-Ausgang übernimmt dieser das Offline-Verhalten (ausstehend + automatisch senden).
+      if (!archivQueue() && window.__psIsOffline && window.__psIsOffline()) {
         try {
           const parkedOkOffline = await parkArchiveEntry({
             id: 'park_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -41688,8 +42096,12 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
         }
       }
 
-      const dispatchResult = await dispatchArchiveMail(blob, _dateiname, _betreff, null, ARCHIVE_MANUAL_INTENT);
+      const dispatchResult = await dispatchArchiveMail(blob, _dateiname, _betreff, null, ARCHIVE_MANUAL_INTENT, {
+        kunde: _kunde, ruf: _ruf, offerId: loadedOfferId || sessionOfferId || cloudSaveIdRef.current || '', source: 'app'
+      });
       if (dispatchResult && dispatchResult.ok === true) return dispatchResult;
+      // Validierungsfehler (z. B. PDF fehlerhaft) oder Archiv-Ausgang meldet "fehlgeschlagen": Vorgang offen lassen
+      if (dispatchResult && (dispatchResult.status === 'failed' || dispatchResult.blocked)) return dispatchResult;
 
       // v55.6: Bisher wurde hier nur "fehlgeschlagen" gemeldet, das Angebot
       // blieb offen und man wusste nicht ob's am Netz lag. Jetzt: bei einem
@@ -41760,7 +42172,8 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       return false;
     }
     const _betreff = buildArchivBetreff(entry.type, entry.datum, _ruf, entry.agent);
-    const _dateiname = buildArchivDateiname(entry.type, entry.datum, _ruf);
+    // FIX Archivierung: Shop und Eigentümer vom Zeitpunkt des Parkens, eindeutiger Dateiname
+    const _dateiname = archivEindeutig(buildArchivDateiname(entry.type, entry.datum, _ruf, entry.shopId || ''), entry.token || (window.PSArchivQueue ? PSArchivQueue.makeToken(entry.ts) : ''));
     // v55.11: Gleicher aktiver Verbindungs-Check wie beim normalen
     // Archivieren - sonst wuerde ein Nachtragen-Versuch ohne Internet
     // still fehlschlagen/haengen statt klar zu sagen, dass es noch
@@ -41770,13 +42183,15 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       return false;
     }
     try {
-      const result = await dispatchArchiveMail(entry.pdfBlob, _dateiname, _betreff, null, ARCHIVE_MANUAL_INTENT);
+      const result = await dispatchArchiveMail(entry.pdfBlob, _dateiname, _betreff, null, ARCHIVE_MANUAL_INTENT, {
+        uid: entry.uid || '', shopId: entry.shopId || '', employeeName: entry.agent || '', kunde: entry.kunde || '', ruf: _ruf, source: 'park'
+      });
       if (!result || result.ok !== true) return false;
-      // Erst nach erfolgreicher Übergabe löschen. Bei Abbruch/Fehler bleibt
-      // der geparkte Vorgang vollständig für einen neuen Versuch erhalten.
+      // Erst nach erfolgreicher Übergabe (bzw. sicherer Übernahme in den Archiv-Ausgang) löschen. Bei Abbruch/Fehler
+      // bleibt der geparkte Vorgang vollständig für einen neuen Versuch erhalten.
       await deleteParkedArchiveEntry(entry.id);
       try {
-        triggerToast('✅ Nachgetragen und an den Flow übergeben.');
+        triggerToast(result.queued ? '⏳ Nachgetragen – wird gesendet, sobald die Verbindung steht.' : '📤 Nachgetragen und an das Archiv übergeben – Ablage wird geprüft.');
       } catch (e) {}
       try {
         refreshParkedCount();
@@ -41796,25 +42211,32 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
   // nachtragen. Angebote, die geparkt wurden WEIL die Rufnummer fehlte,
   // bleiben bewusst manuell (kein readyToAutoSend-Flag) - die braucht
   // weiterhin jemanden, der die Nummer eintippt.
+  // FIX Archivierung: läuft jetzt auch beim App-Start (nicht nur beim Wechsel offline → online) und übernimmt
+  // versandbereite geparkte Vorgänge ALLER Benutzer dieses Geräts mit ihren ORIGINALEN Angaben (uid, Shop, Name) in den
+  // Archiv-Ausgang. Vorgänge ohne uid (sehr alt) werden nicht automatisch zugeordnet. Meldung nur für eigene.
   const autoFlushParkedArchive = async () => {
     try {
       const entries = await listParkedArchive();
-      const ready = (entries || []).filter(e => e && e.readyToAutoSend === true);
+      const ready = (entries || []).filter(e => e && e.readyToAutoSend === true && e.uid && e.pdfBlob);
       if (!ready.length) return;
       let sent = 0;
+      const me = String(window.__PS_USER_UID || '');
       for (const entry of ready) {
-        if (window.__psIsOffline && window.__psIsOffline()) break; // erneut offline geworden -> abbrechen
+        if (!archivQueue() && window.__psIsOffline && window.__psIsOffline()) break; // ohne Ausgang: erneut offline → abbrechen
         try {
-          const result = await dispatchArchiveMail(entry.pdfBlob, entry.dateiname, entry.betreff || buildArchivBetreff(entry.type, entry.datum, '', entry.agent), null, ARCHIVE_MANUAL_INTENT);
+          const name = archivEindeutig(entry.dateiname, entry.token || (window.PSArchivQueue ? PSArchivQueue.makeToken(entry.ts) : ''));
+          const result = await dispatchArchiveMail(entry.pdfBlob, name, entry.betreff || buildArchivBetreff(entry.type, entry.datum, '', entry.agent), null, ARCHIVE_MANUAL_INTENT, {
+            uid: entry.uid, shopId: entry.shopId || '', employeeName: entry.agent || '', kunde: entry.kunde || '', email: entry.uid === me ? undefined : '', source: 'park-auto'
+          });
           if (result && result.ok === true) {
             await deleteParkedArchiveEntry(entry.id);
-            sent++;
+            if (entry.uid === me) sent++;
           }
         } catch (e) {}
       }
       if (sent > 0) {
         try {
-          triggerToast(`✅ Internet zurück – ${sent} geparkte${sent === 1 ? 's' : ''} Angebot${sent === 1 ? '' : 'e'} automatisch nachgetragen.`);
+          triggerToast(`📤 ${sent} geparkte${sent === 1 ? 's' : ''} Angebot${sent === 1 ? '' : 'e'} an das Archiv übergeben – Ablage wird geprüft.`);
         } catch (e) {}
         try { refreshParkedCount(); } catch (e) {}
       }
@@ -41833,6 +42255,40 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
     };
     window.addEventListener('ps-connectivity', handler);
     return () => window.removeEventListener('ps-connectivity', handler);
+  }, []);
+
+  // FIX Archivierung: Archiv-Ausgang im Hintergrund abarbeiten – beim Start (auch nach Absturz/Neustart/Update),
+  // jede Minute, bei Rückkehr der Verbindung und beim Zurückkehren in die App. Prüft die Ablage in SharePoint,
+  // wiederholt Ausstehendes und meldet Bestätigung/Fehler (nur dem jeweiligen Eigentümer).
+  React.useEffect(() => {
+    if (!window.PSArchivQueue) return undefined;
+    let stopped = false;
+    const run = () => {
+      if (stopped || !window.__PS_USER_UID) return;
+      try {
+        const q = archivQueue();
+        if (q) q.process(archivQueueDeps()).then(() => { try { refreshParkedCount(); } catch (e) {} }).catch(() => {});
+      } catch (e) {}
+    };
+    const t0 = setTimeout(() => {
+      Promise.resolve(autoFlushParkedArchive()).catch(() => {}).then(run);
+    }, 6000);
+    const iv = setInterval(run, 60000);
+    const soon = () => setTimeout(run, 2500);
+    const onConn = e => { if (e && e.detail && e.detail.offline === false) soon(); };
+    const onVis = () => { if (document.visibilityState === 'visible') soon(); };
+    window.addEventListener('online', soon);
+    window.addEventListener('ps-connectivity', onConn);
+    document.addEventListener('visibilitychange', onVis);
+    window.__psArchivQueueRun = run;
+    return () => {
+      stopped = true;
+      clearTimeout(t0);
+      clearInterval(iv);
+      window.removeEventListener('online', soon);
+      window.removeEventListener('ps-connectivity', onConn);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   // ── SEITE 3 HTML-BUILDER ── Premium Sales Design ──
@@ -42627,8 +43083,33 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
           let _nm = '';
           try { _nm = String(cleanKundeName(sharedKundeRef.current || textData?.Kundenname || '') || '').trim(); } catch (e) {}
           if (/^(keinName|keineNr)$/i.test(_nm)) _nm = '';
-          setArchivErfolg({ name: _nm, typ: _typ });
-          await new Promise(r => setTimeout(r, 2400));
+          // FIX Archivierung: ehrliche Rückmeldung. "Erfolgreich" nur, wenn die Datei in SharePoint gefunden wurde.
+          //   verifying → verified (bestätigt) | handed (übergeben, Bestätigung folgt) | queued (ausstehend) | parked | manual
+          const _phase0 = result.alreadyDone ? 'parked'
+            : result.status === 'handed' && result.archiveId ? 'verifying'
+            : result.queued || result.status === 'pending' ? 'queued'
+            : result.parked ? 'parked'
+            : result.sharedManually || result.manualFallback ? 'manual'
+            : 'handed';
+          window.__psArchivSkipWait = false;
+          setArchivErfolg({ name: _nm, typ: _typ, phase: _phase0 });
+          if (_phase0 === 'verifying') {
+            let _final = 'handed';
+            const _q = archivQueue();
+            const _bis = Date.now() + 20000;
+            while (_q && Date.now() < _bis && !window.__psArchivSkipWait) {
+              await new Promise(r => setTimeout(r, 4000));
+              if (window.__psArchivSkipWait) break;
+              try {
+                const _r = await _q.verifyNow(result.archiveId, archivQueueDeps());
+                if (_r && _r.status === 'verified') { _final = 'verified'; break; }
+              } catch (e) {}
+            }
+            setArchivErfolg({ name: _nm, typ: _typ, phase: _final });
+            await new Promise(r => setTimeout(r, _final === 'verified' ? 2200 : 3800));
+          } else {
+            await new Promise(r => setTimeout(r, _phase0 === 'queued' || _phase0 === 'parked' ? 3800 : 2400));
+          }
         } catch (e) {}
         // Erst jetzt das fertiggestellte Cloud-/lokale Angebot entfernen.
         if (loadedOfferId) {
@@ -44821,7 +45302,7 @@ input::placeholder,textarea::placeholder{color:transparent!important;opacity:0!i
       fontSize: '11px',
       color: '#854d0e'
     }
-  }, "Nummer fehlt noch – 24h abrufbar")), /*#__PURE__*/React.createElement("div", {
+  }, "Nummer fehlt noch – bitte nachtragen")), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '16px',
       color: '#ca8a04'

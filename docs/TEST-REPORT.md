@@ -1,3 +1,30 @@
+# Testbericht – Archivierung (57.0.0-beta.2)
+
+Lauf: 2026-11-27, Linux, Node 22, Playwright Chromium headless, Firebase-Testersatz, **Power-Automate-Attrappen**
+(kein echter Flow, kein SharePoint, kein echtes Firebase, synthetische Mitarbeiter/Kunden). Details: `docs/ARCHIVIERUNG.md`.
+
+| Suite | bestanden | fehlgeschlagen |
+|---|---:|---:|
+| Archivierung: Archiv-Ausgang (Logik) `tests/archive/` | 19 | 0 |
+| Browser: Archivierung (Zuordnung, Benutzerwechsel, Fehler, Wiederherstellung) `tests/e2e/archive-flow.test.mjs` | 19 Teiltests | 0 |
+| Browser: Archivierung über die Oberfläche (Fertigstellen → Ins Archiv, echte PDF) `tests/e2e/archive-ui.test.mjs` | 3 | 0 |
+| Regression: OCR-Logik 66 · Smart Capture 7 · Preise 8 · Release 7 · Smart-Scan-Dialog 12 · Smart-Capture-QR 4 · Firebase-Betrieb 1 | 105 | 0 |
+
+Vor der Reparatur am unveränderten Stand reproduziert: Überschreiben gleichnamiger Archivierungen (uid wechselt von A zu B,
+A sieht 0 Einträge), fremde geparkte Vorgänge sichtbar, Löschen geparkter Vorgänge nach 24 h, fehlende neue Einträge ab 300.
+
+| Pflicht-Szenario | Ergebnis |
+|---|---|
+| 1 Normale Archivierung · 2 sofortiger Abruf · 3 Abruf nach erneutem Login | ausgeführt ✅ (auch über die Oberfläche) |
+| 4 Zwei Mitarbeiter, gleiches Tablet · 5 zwei Standorte · 6 Springer · 7 Administrator | ausgeführt ✅ |
+| 8 Benutzerwechsel bei ausstehender Archivierung · 9 Doppelklick · 10 parallele Archivierungen | ausgeführt ✅ |
+| 11 Netzunterbrechung · 12 fehlerhafte Serverantwort · 13 verzögerte Power-Automate-Ablage | ausgeführt ✅ (Attrappen) |
+| 14 fehlerhafte PDF · 15 Browser-Neustart · 17 alte Archivierungen · 20 Wiederherstellung | ausgeführt ✅ |
+| 16 Monats-/Jahreswechsel | ausgeführt ✅ (Logik, lokales Datum; nicht mit verstellter Geräteuhr im Browser) |
+| 18 PWA-Update/Service-Worker | teilweise ✅: Neuladen/Neustart mit ausstehendem Eintrag; echtes SW-Update auf GitHub Pages nicht |
+| 19 Unberechtigter Zugriff auf fremde Archive | teilweise ✅: App zeigt nie fremde Einträge; **Firestore-Regeln und Flow-Prüfung nicht testbar** (liegen nur in Firebase/Power Automate) |
+| Echte Flows/SharePoint, echte Galaxy Tab S9 FE/iPads, Safari/WebKit | **nicht ausgeführt** (kein Zugriff; keine Produktivanfragen) |
+
 # Testbericht – 57.0.0-beta.1
 
 Lauf: 2026-11-26, `node scripts/run-tests.mjs` (Gesamtlauf nach Behebung der Review-Befunde) (Ergebnisdatei `tests/.out/test-summary.json`, nicht versioniert).

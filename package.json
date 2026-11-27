@@ -1,6 +1,6 @@
 {
   "name": "pencil-selling",
-  "version": "57.0.0-beta.1",
+  "version": "57.0.0-beta.2",
   "private": true,
   "description": "Pencil Selling – HeTec Independent Architecture (PWA + eigenes PHP-Backend). Node.js nur als Entwicklungswerkzeug, kein Python.",
   "type": "module",

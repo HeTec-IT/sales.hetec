@@ -18,6 +18,7 @@ const suites = [
   { name: 'OCR-Logik (Parser, Engine, Mehrseiten, Smart Scan)', files: ['tests/ocr/*.test.mjs', 'scripts/test-smart-scan.mjs'] },
   { name: 'Smart Capture: QR-Protokoll + Import (gemeinsame Testvektoren)', files: ['tests/smart-capture/*.test.mjs'] },
   { name: 'Preisdaten + Preis-Schutz', files: ['tests/prices/*.test.mjs'] },
+  { name: 'Archivierung: Archiv-Ausgang (Logik, synthetisch)', files: ['tests/archive/*.test.mjs'] },
   { name: 'Backend-API, Auth (Entra-Mock), Rechte, Statistik', files: ['tests/backend/*.test.mjs'], need: php && 'PHP+MariaDB', serial: true },
   { name: 'Firestore-Migration (synthetisch)', files: ['tests/migration/*.test.mjs'], need: php && 'PHP+MariaDB', serial: true },
   { name: 'Release-Artefakt', files: ['tests/release/*.test.mjs'], need: php && 'PHP' },
@@ -26,6 +27,8 @@ const suites = [
   { name: 'Browser: echte lokale OCR – Tesseract', files: ['tests/e2e/ocr-real.test.mjs'], need: pw && !quick && 'Playwright', env: { PS_OCR_ENGINES: 'tesseract' } },
   { name: 'Browser: echte lokale OCR – PaddleOCR/ONNX', files: ['tests/e2e/ocr-real.test.mjs'], need: pw && !quick && 'Playwright', env: { PS_OCR_ENGINES: 'neural' } },
   { name: 'Browser: Firebase-Betrieb (GitHub-Pages-Beta, Firebase-Testersatz)', files: ['tests/e2e/firebase-mode.test.mjs'], need: pw && 'Playwright', serial: true },
+  { name: 'Browser: Archivierung (Zuordnung, Benutzerwechsel, Fehler, Wiederherstellung)', files: ['tests/e2e/archive-flow.test.mjs'], need: pw && 'Playwright', serial: true },
+  { name: 'Browser: Archivierung über die Oberfläche (echte PDF, Flow-Attrappen)', files: ['tests/e2e/archive-ui.test.mjs'], need: pw && !quick && 'Playwright', serial: true },
   { name: 'Browser: Verwaltung (admin/)', files: ['tests/e2e/admin.test.mjs'], need: pw && php && 'Playwright+PHP', serial: true },
   { name: 'Browser: Release Ende-zu-Ende (Login, Offline, Sync, Update, CSP)', files: ['tests/e2e/app-release.test.mjs'], need: pw && php && 'Playwright+PHP', serial: true, prepare: 'release' },
 ];
