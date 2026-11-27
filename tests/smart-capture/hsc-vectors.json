@@ -1,0 +1,413 @@
+{
+ "note": "Automatisch erzeugt von scripts/make-vectors.mjs – synthetische Daten, keine Kunden.",
+ "now": 1795000000,
+ "valid": [
+  {
+   "name": "einzeltarif",
+   "parts": [
+    "HSC1:veinzeltar:1/1:2c464680:zPU29CsIwGHyVcJPCNySRKs0ogjioYMfQIdpQgmmqaVpE8d0lHbyDg_uB-2CAEgTXQGGyLrytTyaCEOf8BiU2ZcFnEF5_KyQnPObNE0oLzknXNSFBaY2zZMf-6rxlFVtILtdLEE52nGxM0bQgjUO4-3FwE9uZZMPU-7GzgYmC7bcgXHrTudCyKpnQmNigplVZliSy8Mx8ZqHmFB1Ubr4_"
+   ],
+   "offer": {
+    "id": "veinzeltar",
+    "rev": 1,
+    "created": 1795000000,
+    "expires": 1795000120,
+    "pages": 1,
+    "quality": {
+     "score": 100,
+     "warnings": []
+    },
+    "tarife": [
+     {
+      "name": "O2 Mobile S (2026)",
+      "art": "Neuvertrag",
+      "details": [
+       "Inklusiv Datenvolumen 15 GB",
+       "Roaming Standard"
+      ],
+      "e": 3999,
+      "m": 1999,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false
+     }
+    ],
+    "geraete": [],
+    "internet": [],
+    "zusatz": [],
+    "einmalig": 3999,
+    "monatlich": 1999,
+    "priceChanges": []
+   }
+  },
+  {
+   "name": "handy_zwei_tarife_aktionskarte",
+   "parts": [
+    "HSC1:vhandyzwei:1/1:ace8866e:zTY7LTsMwEEV_xborkGZhuw3E2bUCoUpQKkpZEHlhGqu1mjrBdVIe4t9RzHPuakajc887DigEwVUo0G-Nr17fjtaBENJ9jUKcq4ynIbz8rkJyQpt-nlGUKqMSq_lydXcJrQkRRVniVrKb5snVll2zE8nl2SkIc9v1NsRgNqASMx9t8Ca6xpuaPTRubdkyGl-ZUIEw87u6O7ieXZhofd_U3d56JjLOrqbQNFJK0WisFPEhmv53Lv86H4_WxZ0J0Q6dk91Qd0g7E9kXin8nG_Q3SX_StrVlbrFtvGUiZ4vQMHE_JTbtwqbzlQ0ggEpNcpQrzsl3df0DGjAWhRzLXCnCHkXyRGsGtsySu9Yfnw"
+   ],
+   "offer": {
+    "id": "vhandyzwei",
+    "rev": 1,
+    "created": 1795000000,
+    "expires": 1795000120,
+    "pages": 1,
+    "quality": {
+     "score": 95,
+     "warnings": [
+      "UNSURE"
+     ]
+    },
+    "tarife": [
+     {
+      "name": "O2 Mobile L (2026)",
+      "art": "Neuvertrag",
+      "details": [
+       "International Voice Standard",
+       "Inklusiv Datenvolumen 150 GB"
+      ],
+      "e": 3999,
+      "m": 3499,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false
+     },
+     {
+      "name": "O2 Mobile S (2026)",
+      "art": "Zweitkarte",
+      "details": [
+       "Aktionskarte 15 GB"
+      ],
+      "e": 0,
+      "m": 0,
+      "re": 0,
+      "rm": 0,
+      "ak": true,
+      "rbBad": false,
+      "unsure": true
+     }
+    ],
+    "geraete": [
+     {
+      "name": "Apple iPhone 18 Pro 1TB, Burgunder",
+      "art": "",
+      "details": [],
+      "e": 238900,
+      "m": null,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false,
+      "t": 0
+     }
+    ],
+    "internet": [],
+    "zusatz": [],
+    "einmalig": 242899,
+    "monatlich": 3499,
+    "priceChanges": [
+     {
+      "month": 25,
+      "m": 3999
+     }
+    ]
+   }
+  },
+  {
+   "name": "internet_rabatt",
+   "parts": [
+    "HSC1:vinternetr:1/1:de90ba8c:zPY7BSgMxEIZfZfhPCiNOYlc3ORahHlragxRh2UNrwxJIs5rdraXi2_gmvphka81AIJmZ7_8-0cEqht_B4uBj71J0fQIjjf-vsOrBFDIexvH_qbQw3mA14x22UiJc1TWjh60qLDUt2q0Pjha0CkNHV1r0_TUYa5f6tGm6g0vh5zs2Lg2xAVc13xljWOdL-EYVIiwZ2IzAWds2wdHKH10gJaR0OZsyLbed3_lNBGNkZI3z6lgqA_zF6KndO3qZ073IeR6P7UcM7WZHW9_RacgdWkx9f9uh5mxSTEadP5XThfS8pvklMg4h5Nxz4iTPOdhCTMnYw5bGlF-_"
+   ],
+   "offer": {
+    "id": "vinternetr",
+    "rev": 1,
+    "created": 1795000000,
+    "expires": 1795000120,
+    "pages": 2,
+    "quality": {
+     "score": 100,
+     "warnings": []
+    },
+    "tarife": [
+     {
+      "name": "O2 Mobile M Plus (2026)",
+      "art": "Vertragsverlängerung",
+      "details": [],
+      "e": 3999,
+      "m": 2999,
+      "re": 0,
+      "rm": -1500,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false
+     }
+    ],
+    "geraete": [
+     {
+      "name": "Google Pixel 10 128GB, Obsidian",
+      "art": "",
+      "details": [],
+      "e": 100,
+      "m": 1500,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false,
+      "t": 1
+     }
+    ],
+    "internet": [
+     {
+      "name": "O2 Home XL 600",
+      "art": "",
+      "details": [
+       "Download bis zu 600 MBit/s"
+      ],
+      "e": 999,
+      "m": 5499,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false
+     }
+    ],
+    "zusatz": [
+     {
+      "name": "O2 TV L",
+      "art": "",
+      "details": [],
+      "e": null,
+      "m": 1000,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": true
+     }
+    ],
+    "einmalig": 5098,
+    "monatlich": 8998,
+    "priceChanges": []
+   }
+  },
+  {
+   "name": "mehrfach_qr",
+   "parts": [
+    "HSC1:vmultiqr00:1/3:392fe7d8:zPY_dSgMxEEZfZfiuFEacxG7d5LII9aKlvZAiLHuxtWEJpLt2f2qp-Da-iS8mSa0JDAyZOd_JJ3pYxfA7WBz3Yxj8oRMBo4PVjDdY9WgySYdx-m-VFsZ7mjnAFkqEi7JkDLBFgZWmZbv1wdGS1mHs6",
+    "HSC1:vmultiqr00:2/3:392fe7d8:UaLnt6CsXHd0FV1f3Rd-PluateNTQ0uSn4wxrCORfhOZSIsEVgn4Lxt6-Bo7U8ukBJSOp_PmFbb3u981YCRGFHjspquigB_NXpu945eFzRN_wMXeGo_mtBWO9r6ns5jfKHlzA_3PUqOJtkk6fypnK-",
+    "HSC1:vmultiqr00:3/3:392fe7d8:klw0trpHNGELMvSRO4pyDzcTkjD1sbkz-9Qs"
+   ],
+   "offer": {
+    "id": "vmultiqr00",
+    "rev": 2,
+    "created": 1795000000,
+    "expires": 1795000120,
+    "pages": 2,
+    "quality": {
+     "score": 100,
+     "warnings": []
+    },
+    "tarife": [
+     {
+      "name": "O2 Mobile M Plus (2026)",
+      "art": "Vertragsverlängerung",
+      "details": [],
+      "e": 3999,
+      "m": 2999,
+      "re": 0,
+      "rm": -1500,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false
+     }
+    ],
+    "geraete": [
+     {
+      "name": "Google Pixel 10 128GB, Obsidian",
+      "art": "",
+      "details": [],
+      "e": 100,
+      "m": 1500,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false,
+      "t": 1
+     }
+    ],
+    "internet": [
+     {
+      "name": "O2 Home XL 600",
+      "art": "",
+      "details": [
+       "Download bis zu 600 MBit/s"
+      ],
+      "e": 999,
+      "m": 5499,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": false
+     }
+    ],
+    "zusatz": [
+     {
+      "name": "O2 TV L",
+      "art": "",
+      "details": [],
+      "e": null,
+      "m": 1000,
+      "re": 0,
+      "rm": 0,
+      "ak": false,
+      "rbBad": false,
+      "unsure": true
+     }
+    ],
+    "einmalig": 5098,
+    "monatlich": 8998,
+    "priceChanges": []
+   }
+  }
+ ],
+ "invalid": [
+  {
+   "name": "kein_hsc",
+   "parts": [
+    "https://example.org/"
+   ],
+   "code": "NOT_HSC"
+  },
+  {
+   "name": "andere_version",
+   "parts": [
+    "HSC2:veinzeltar:1/1:2c464680:zPU29CsIwGHyVcJPCNySRKs0ogjioYMfQIdpQgmmqaVpE8d0lHbyDg_uB-2CAEgTXQGGyLrytTyaCEOf8BiU2ZcFnEF5_KyQnPObNE0oLzknXNSFBaY2zZMf-6rxlFVtILtdLEE52nGxM0bQgjUO4-3FwE9uZZMPU-7GzgYmC7bcgXHrTudCyKpnQmNigplVZliSy8Mx8ZqHmFB1Ubr4_"
+   ],
+   "code": "VERSION"
+  },
+  {
+   "name": "pruefsumme",
+   "parts": [
+    "HSC1:veinzeltar:1/1:2c464680:zPU29CsIwGHyVcJPCNySRKs0ogjioYMfQIdpQgmmqaVpE8d0lHbyDg_uB-2CAEgTXQGGyLrytTyaCEOf8BiU2ZcFnEF5_KyQnPObNE0oLzknXNSFBaY2zZMf-6rxlFVtILtdLEE52nGxM0bQgjUO4-3FwE9uZZMPU-7GzgYmC7bcgXHrTudCyKpnQmNigplVZliSy8Mx8ZqHmFB1UbAAA"
+   ],
+   "code": "CHECKSUM"
+  },
+  {
+   "name": "abgelaufen",
+   "parts": [
+    "HSC1:veinzeltar:1/1:2c464680:zPU29CsIwGHyVcJPCNySRKs0ogjioYMfQIdpQgmmqaVpE8d0lHbyDg_uB-2CAEgTXQGGyLrytTyaCEOf8BiU2ZcFnEF5_KyQnPObNE0oLzknXNSFBaY2zZMf-6rxlFVtILtdLEE52nGxM0bQgjUO4-3FwE9uZZMPU-7GzgYmC7bcgXHrTudCyKpnQmNigplVZliSy8Mx8ZqHmFB1Ubr4_"
+   ],
+   "now": 1795000121,
+   "code": "EXPIRED"
+  },
+  {
+   "name": "zukunft",
+   "parts": [
+    "HSC1:veinzeltar:1/1:2c464680:zPU29CsIwGHyVcJPCNySRKs0ogjioYMfQIdpQgmmqaVpE8d0lHbyDg_uB-2CAEgTXQGGyLrytTyaCEOf8BiU2ZcFnEF5_KyQnPObNE0oLzknXNSFBaY2zZMf-6rxlFVtILtdLEE52nGxM0bQgjUO4-3FwE9uZZMPU-7GzgYmC7bcgXHrTudCyKpnQmNigplVZliSy8Mx8ZqHmFB1Ubr4_"
+   ],
+   "now": 1794999600,
+   "code": "FUTURE"
+  },
+  {
+   "name": "unvollstaendig",
+   "parts": [
+    "HSC1:vmultiqr00:2/3:392fe7d8:UaLnt6CsXHd0FV1f3Rd-PluateNTQ0uSn4wxrCORfhOZSIsEVgn4Lxt6-Bo7U8ukBJSOp_PmFbb3u981YCRGFHjspquigB_NXpu945eFzRN_wMXeGo_mtBWO9r6ns5jfKHlzA_3PUqOJtkk6fypnK-",
+    "HSC1:vmultiqr00:3/3:392fe7d8:klw0trpHNGELMvSRO4pyDzcTkjD1sbkz-9Qs"
+   ],
+   "code": "INCOMPLETE"
+  },
+  {
+   "name": "gemischt",
+   "parts": [
+    "HSC1:vmultiqr00:1/3:392fe7d8:zPY_dSgMxEEZfZfiuFEacxG7d5LII9aKlvZAiLHuxtWEJpLt2f2qp-Da-iS8mSa0JDAyZOd_JJ3pYxfA7WBz3Yxj8oRMBo4PVjDdY9WgySYdx-m-VFsZ7mjnAFkqEi7JkDLBFgZWmZbv1wdGS1mHs6",
+    "HSC1:veinzeltar:1/1:2c464680:zPU29CsIwGHyVcJPCNySRKs0ogjioYMfQIdpQgmmqaVpE8d0lHbyDg_uB-2CAEgTXQGGyLrytTyaCEOf8BiU2ZcFnEF5_KyQnPObNE0oLzknXNSFBaY2zZMf-6rxlFVtILtdLEE52nGxM0bQgjUO4-3FwE9uZZMPU-7GzgYmC7bcgXHrTudCyKpnQmNigplVZliSy8Mx8ZqHmFB1Ubr4_"
+   ],
+   "code": "MIXED"
+  },
+  {
+   "name": "personenbezogen",
+   "parts": [
+    "HSC1:vmanipul00:1/1:22d9c7bb:zPUy9CsIwGHyVcJPCN3yJqOR7Apfg4BgyRM0QaGubtlIQ312SwTs4uB_ugxmiCfkJwbuPQx7XjhmE0vIHRJ_tkRsI299qw4SxbSaI18zkQyAsEO9xNcq97rlL6qZ2hs1pDwLI45JKUS5uyq3zkkofhwGBDtZa0lW4sv4kSEvRQ2rz_QE"
+   ],
+   "code": "PERSONAL_DATA"
+  },
+  {
+   "name": "iban",
+   "parts": [
+    "HSC1:vmanipul00:1/1:b601d667:zPUy5CsJAFPyVx1QKr5jdTYz7ai3FwnJJ4ZEikGg8EcR_l93CGRiYg_ngDnOK_gTDa9yf--k5kFDcSn6EuSbWLFC8_9Z5KqayucKSIzW1reIBSwlbL5vLoR862cnM0y_mUEATVutllNCwErKqhHXwQhcoJFoNMUZ1WZiZ_zpYSTHCcvP9AQ"
+   ],
+   "code": "PERSONAL_DATA"
+  },
+  {
+   "name": "unbekanntes_feld",
+   "parts": [
+    "HSC1:vmanipul00:1/1:5601661a:zPU29CsIwGHyVcJPCNySVKs0ogjioYMfQIdpQQtu0tkkoiO8uzeAdHNwP3AczpCDYGhKx186OoeMchCnlL0hxKHKeQFj-VmScMKbNG1IJzklVFcFDKoV7xq7D03aGlWyT8Wy_BeFmQjSTn3QDUri4tguzjeykvXFx6EJvHBM5Ox9BeAy6t65hpdeu1lONinZFUZBYha9czwxkStFDpgZtcLWBxILvDw"
+   ],
+   "code": "INVALID"
+  },
+  {
+   "name": "negativer_preis",
+   "parts": [
+    "HSC1:vmanipul00:1/1:50152b24:zPY1NC8IwGIP_SslJ4RXaypT2KIJ4UEGPZYfqyii23ew-EMT_LtvBBAJ5COSDDloQfAWNMdrk2yFwDkKe-QNabFXBZxHe_yokJ7Tz5gVtBOdkypLQQxuDi2Sn5u6DYze2kFxuliCc3TC63GdbgwyO6RmGzo9sb3uXxiYM0SUmCnbYgXBtbPSpZrfepsrmCiWtlVIkpuCTpzMHPVNE6FXx_QE"
+   ],
+   "code": "INVALID"
+  },
+  {
+   "name": "html_im_namen",
+   "parts": [
+    "HSC1:vmanipul00:1/1:b3e1c360:zPUvLCsIwEPyVMieFPewqIllsfyTkUGqQQNPWbZWC-O-SHJyBgXl9sEKFkO5QvHM_peU1MoNgNR-gcnUXriDsfysnJix184R6YSYfAmGDeo9byo9mtaHdm3mKZrO1_RhtO8ixAwHkA52dcyRFuLCcI7SmyNDSfH8"
+   ],
+   "code": "INVALID"
+  },
+  {
+   "name": "zu_viele_tarife",
+   "parts": [
+    "HSC1:vmanipul00:1/1:d7cd1b1f:z7YpLCgJBEEOv0mSlkEVVi0rXHcSFy6IXfmbRMKPjF0G8u3QvxEOYQCDJe-EKU6IcYHgM22MZ770IiEvb9zBdprk0Ec9v1SjE2JgzzFWEnjNxg7ljHcPqtCt9FzZhEiUupiBAz5yllKg1pDrzD__AmehgbcUAq8_7Aw"
+   ],
+   "code": "INVALID"
+  },
+  {
+   "name": "id_passt_nicht",
+   "parts": [
+    "HSC1:vmanipul00:1/1:8ef265a9:zPU29CsIwGHyVcJPCNySVKskogjioYMfQIZoPCbappj8I4rtLOngHB_cD90EPowjBw2By0XPi4CUIac5vMGqjSzmD8P5bVUjCc968YKySkmxdEwYYa3EuxLG7hoZFJRaFLNZLEE48TpyG5O4gi0N8NGMfJrFzA8epa8aWo1Cl2G9BuHSuDfEuqsFF75JHTSutNaksMjOfMcycooXJzfcH"
+   ],
+   "code": "INVALID"
+  },
+  {
+   "name": "gueltigkeit_zu_lang",
+   "parts": [
+    "HSC1:vmanipul00:1/1:c23d6856:zNU3NCsIwGHuVkpPCd2g3NlmPIogHFdyx7FBdGcWtm91aBPHdpQMTCOQH8sEMKQi2hUQctLNT6DkHwa_5A1LsqoKvILz_Ni-TndbNC1IJzkk1DWGBVArXjJ3Hu-0Nq9km41m5BeFiQjR-8boDKZzcsw-zjeygF-Pi2IfBOCYKdtyDcBv1YF3H6kW7VvsWDeVVVZFIwhPTmYFcUwyQqfn-AA"
+   ],
+   "code": "INVALID"
+  },
+  {
+   "name": "schema_2",
+   "parts": [
+    "HSC1:vmanipul00:1/1:9f73d250:zPU29CsIwGHyVcJPCNySRKskogjioYMfQIdpQgk1a2zQI4rtLO3gHB_cD98EILQm-hkYONvp-ajkHYYAWhAe02KmCLyC8_1ZITuiXzQvaCM7JVBUhQRuDq2Tn7u5bx0q2klxu1yBc3JTdkAbbgAxO8dlOo8_sYJOLuWun4CITBTvuQbh1NvjYsDLZWNuhRkUbpRSJWfjM-cxBLykC9Nx8fw"
+   ],
+   "code": "VERSION"
+  },
+  {
+   "name": "kein_json",
+   "parts": [
+    "HSC1:vmanipul00:1/1:5212c1ef:je2thcHV0dA"
+   ],
+   "code": "DECODE"
+  },
+  {
+   "name": "zip_bombe",
+   "parts": [
+    "HSC1:vmanipul00:1/1:1918c2f6:z7cExAQAAAMKgKuuf0gz-QAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAArwE"
+   ],
+   "code": "DECODE"
+  }
+ ]
+}

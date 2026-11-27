@@ -99,6 +99,10 @@ function PsO2Import({ onApply, onClose, initial }) {
   // v55.225: Kennzeichen des Angebots im Dialog (Beratungs-ID / "erstellt am") + ein Foto, das zu einem ANDEREN Angebot gehoert und auf Bestaetigung wartet
   const offerRef = React.useRef({ id: (initial && initial.beratungsId) || '', ts: '' });
   const [pending, setPending] = React.useState(null);
+  // Smart Capture (QR vom PC): gescannte Angebote bis zur Übernahme (ID + Version gegen doppelte Übernahme) und Wahl Ergänzen/Ersetzen
+  const hscRef = React.useRef([]);
+  const [hscPend, setHscPend] = React.useState(null);
+  const applyNow = x => { psHscMarkImported(hscRef.current); hscRef.current = []; onApply(x); };
   React.useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; runRef.current++; try { engRef.current && engRef.current.cancel('unmount'); } catch (e) {} psO2Release(); }; }, []);
   const cancelRead = () => { runRef.current++; try { engRef.current && engRef.current.cancel('user'); } catch (e) {} setBusy(''); setNote('Erkennung abgebrochen – neu fotografieren oder unten von Hand eintragen. Bereits Erkanntes bleibt erhalten.'); };
   const [crop, setCrop] = React.useState(null);
@@ -208,6 +212,30 @@ function PsO2Import({ onApply, onClose, initial }) {
     if (r.d.einmalig || r.d.monatlich) parts.push('Kosten');
     setNote('✓ Vom PC übernommen: ' + (parts.join(', ') || 'nichts') + ' – bitte kurz prüfen.');
   };
+  // Smart Capture: QR-Code vom PC scannen (HSC-Protokoll). Keine OCR auf dem Tablet.
+  const hscSummary = o => { const nT = o.tarife.length, nG = o.geraete.length, nN = o.internet.length, p = [];
+    if (nT) p.push(nT + (nT === 1 ? ' Tarif' : ' Tarife')); if (nG) p.push(nG + (nG === 1 ? ' Handy' : ' Handys')); if (nN) p.push('Internet@Home'); if (o.zusatz.length) p.push(o.zusatz.length + ' Zusatzprodukt' + (o.zusatz.length > 1 ? 'e' : ''));
+    return p.join(', ') || 'Gesamtkosten'; };
+  const hscTake = (o, mode) => {
+    const nd = psHscToProposal(o), w = psHscWarnText(o);
+    if (mode === 'merge') { setD(p => psHscMerge(p, nd, PS_O2_MAX)); hscRef.current = hscRef.current.concat([{ id: o.id, rev: o.rev }]); }
+    else { droppedRef.current = []; scanPrevRef.current = null; offerRef.current = { id: '', ts: '' }; dRef.current = { ...nd }; setD({ ...nd }); hscRef.current = [{ id: o.id, rev: o.rev }]; }
+    setOpenG({}); setEditAll(false);
+    setNote('✓ Von Smart Capture übernommen: ' + hscSummary(o) + (o.pages > 1 ? ' (' + o.pages + ' Seiten)' : '') + (mode === 'merge' ? ' – ergänzt, Summen addiert' : '') + ' – bitte prüfen und „Angebot übernehmen“.' + (w ? ' Hinweis vom PC: ' + w + '.' : ''));
+  };
+  const scanHsc = async () => {
+    setNote(''); setHscPend(null);
+    let r = null;
+    try { r = await psHscScan(); } catch (e) { setNote('QR-Scanner nicht möglich: ' + (e && e.message || e)); return; }
+    if (!aliveRef.current || !r) return; // abgebrochen
+    if (!r.ok) { setNote(r.message || 'QR-Code ungültig.'); return; }
+    const o = r.offer;
+    if (psHscWasImported(o) || hscRef.current.some(x => x.id === o.id && x.rev === o.rev)) { setNote('Dieses Angebot wurde bereits übernommen (Angebots-ID ' + o.id + '). Eine doppelte Übernahme wird verhindert. Bei einem anderen Angebot am PC „Neues Angebot“ wählen.'); return; }
+    const cur = dRef.current, has = !!(cur.tarife.length || cur.geraete.length || cur.internet.length || cur.einmalig || cur.monatlich);
+    if (has) { setHscPend(o); setNote(''); return; } // vorhandene Angaben nie ohne Zustimmung überschreiben
+    hscTake(o, 'replace');
+  };
+  const hscPendGo = mode => { const o = hscPend; setHscPend(null); if (!o || mode === 'cancel') { setNote('Import abgebrochen – die bisherigen Angaben sind unverändert.'); return; } hscTake(o, mode); };
   const openSnip = async () => {
     setNote('');
     const res = await psO2SnipOpen({ auto: true, onShot: (file, art) => {
@@ -493,13 +521,21 @@ function PsO2Import({ onApply, onClose, initial }) {
         h('button', { onClick: () => blockMode ? openBlocks('kosten') : pick(stage, false), disabled: !!busy, className: sBtn }, label),
         blockMode ? null : h('button', { onClick: () => pick(stage, true), disabled: !!busy, className: gBtn, 'aria-label': 'Foto aus der Mediathek wählen' }, '🖼'))),
     body);
-  const photoActions = more => h('div', { className: 'grid grid-cols-2 gap-2 mt-2' },
-    h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' py-3' }, more ? '📷 Weiteres Foto' : '📷 Vorschlag fotografieren'),
-    h('button', { onClick: () => pick('ganz', true), disabled: !!busy, className: gBtn + ' py-3' }, 'Foto hochladen'));
+  const photoActions = more => more ? h('div', { className: 'grid grid-cols-2 gap-2 mt-2' },
+    h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: sBtn + ' py-3' }, '📷 Weiteres Foto'),
+    h('button', { onClick: () => pick('ganz', true), disabled: !!busy, className: gBtn + ' py-3' }, 'Foto hochladen'))
+    // Startansicht: 2. Angebot fotografieren · 3. Datei importieren (1. Smart Capture steht darüber, siehe hscStartEl) – Foto-OCR unverändert
+    : h('div', { className: 'grid grid-cols-2 gap-2 mt-2' },
+      h('button', { onClick: () => pick('ganz', false), disabled: !!busy, className: gBtn + ' py-3' }, '📷 Angebot fotografieren'),
+      h('button', { onClick: () => pick('ganz', true), disabled: !!busy, className: gBtn + ' py-3' }, 'Datei importieren'));
+  // 1. Importmöglichkeit: Smart Capture – QR-Code vom PC scannen (immer sichtbar, solange noch nichts erkannt ist)
+  const hscStartEl = () => h('div', { className: 'mt-3', 'data-ps-import-options': '1' },
+      h('button', { onClick: scanHsc, disabled: !!busy, className: sBtn + ' w-full py-4 text-base flex items-center justify-center gap-2', 'data-ps-hsc': '1' }, psO2Ico('scan', 20), 'Smart Capture – QR-Code scannen'),
+      h('div', { className: 'text-xs text-slate-500 mt-1 text-center' }, 'Am PC: Screenshot mit Windows + Shift + S → in HeTec Smart Capture STRG + V → QR-Code hier scannen. Oder selbst fotografieren:'));
   const any = d.einmalig || d.monatlich || d.tarife.length || d.geraete.length || d.internet.length;
   const nItems = d.tarife.length + d.geraete.length + d.internet.length, compact = nItems > 0;
   const closeTap = () => { const dirty = JSON.stringify(d) !== JSON.stringify(initD.current); if (!dirty || askClose) { onClose(); return; } setAskClose(true); setTimeout(() => setAskClose(false), 3500); };
-  const resetAll = () => { runRef.current++; try { engRef.current && engRef.current.cancel('reset'); } catch (e) {} setBusy(''); droppedRef.current = []; offerRef.current = { id: '', ts: '' }; setPending(null); setBlur(null); setNote(''); setOpenG({}); setEditAll(false); photosRef.current.forEach(x => { try { URL.revokeObjectURL(x.url); } catch (e) {} }); photoIds.current = new WeakMap(); setPhotos([]); setZoom(false); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', beratungsId: '' }); };
+  const resetAll = () => { hscRef.current = []; setHscPend(null); runRef.current++; try { engRef.current && engRef.current.cancel('reset'); } catch (e) {} setBusy(''); droppedRef.current = []; offerRef.current = { id: '', ts: '' }; setPending(null); setBlur(null); setNote(''); setOpenG({}); setEditAll(false); photosRef.current.forEach(x => { try { URL.revokeObjectURL(x.url); } catch (e) {} }); photoIds.current = new WeakMap(); setPhotos([]); setZoom(false); setD({ internet: [], tarife: [], geraete: [], einmalig: '', monatlich: '', hinweis: '', beratungsId: '' }); };
   const modeBtns = (camOk || snipOk) ? h('div', { className: 'flex gap-2 mt-2' }, [['ganz', 'Foto']].concat(camOk ? [['scan', 'Scannen']] : [], snipOk ? [['snip', 'Bildschirm']] : []).map(([m, lbl]) =>
         h('button', { key: m, onClick: () => setMode(m), className: 'flex-1 px-3 py-2 rounded-lg font-black text-sm border ' + (eff === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, lbl))) : null;
   const optChecks = quick ? null : h(React.Fragment, null, h('label', { className: 'flex items-center gap-2 mt-2 text-xs font-bold text-slate-500' },
@@ -515,6 +551,13 @@ function PsO2Import({ onApply, onClose, initial }) {
         h('div', { className: 'flex gap-2 mt-2' },
           h('button', { onClick: () => { const b = blur; setBlur(null); pick(b.stage, libModeRef.current); }, className: sBtn }, '📷 Neu aufnehmen'),
           h('button', { onClick: () => { const b = blur; setBlur(null); readPhoto(Promise.resolve(b.file), b.stage, b.file); }, className: gBtn }, 'Trotzdem lesen'))) : null;
+  const hscPendEl = hscPend ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border-2 border-amber-400 p-3', role: 'alert' },
+        h('div', { className: 'text-sm font-black text-amber-900' }, 'Smart-Capture-Angebot erkannt: ' + hscSummary(hscPend)),
+        h('div', { className: 'text-xs font-bold text-amber-800 mt-1' }, 'Im Dialog sind bereits Angaben vorhanden. Sie werden nur mit Ihrer Zustimmung geändert.'),
+        h('div', { className: 'flex flex-wrap gap-2 mt-2' },
+          h('button', { onClick: () => hscPendGo('merge'), className: sBtn }, 'Angebot ergänzen'),
+          h('button', { onClick: () => hscPendGo('replace'), className: sBtn }, 'Angebot ersetzen'),
+          h('button', { onClick: () => hscPendGo('cancel'), className: gBtn }, 'Import abbrechen'))) : null;
   const pendingEl = pending ? h('div', { className: 'mt-3 rounded-xl bg-amber-50 border-2 border-amber-400 p-3', role: 'alert' },
         h('div', { className: 'text-sm font-black text-amber-900' }, 'Anderes Angebot erkannt'),
         h('div', { className: 'text-xs font-bold text-amber-800 mt-1' }, 'Das Foto gehört nicht zum bisherigen Angebot (Beratungs-ID bzw. Erstellzeit weichen ab). Es wird nicht automatisch vermischt.'),
@@ -629,7 +672,7 @@ function PsO2Import({ onApply, onClose, initial }) {
         open ? h('div', { className: 'px-3 pb-3' }, item(key, g, cc[2])) : null);
     }))));
     const body = h(React.Fragment, null,
-      pendingEl, blurEl, busyEl,
+      hscPendEl, pendingEl, blurEl, busyEl,
       busy ? null : h('div', { className: 'mt-3 rounded-2xl px-4 py-3 flex items-start gap-3 ' + (ok ? 'bg-green-50' : 'bg-amber-50'), role: 'status' },
         h('span', { className: 'mt-0.5 ' + (ok ? 'text-green-600' : 'text-amber-500') }, psO2Ico(ok ? 'checkc' : 'alert', 24)),
         h('div', { className: 'min-w-0' },
@@ -649,9 +692,10 @@ function PsO2Import({ onApply, onClose, initial }) {
       had ? h('div', { className: 'mt-3 text-xs font-semibold text-slate-500 text-center' }, 'Beim Übernehmen werden die Angebotskarten neu geschrieben.') : null);
     const camBtn = h('button', { onClick: () => scanMode ? openScan() : pick('ganz', false), disabled: !!busy, className: outBtn }, psO2Ico('camera', 20), scanMode ? 'Weiter scannen' : 'Weiteres Foto');
     const upBtn = h('button', { onClick: () => pick('ganz', true), disabled: !!busy, className: outBtn }, psO2Ico('upload', 20), 'Hochladen');
-    const applyBtn = h('button', { onClick: () => onApply(d), disabled: !!busy || !any, className: 'w-full ' + (full ? '' : 'mt-3 ') + 'py-4 rounded-2xl bg-blue-600 text-white font-black text-lg flex items-center justify-center gap-2 disabled:opacity-50' }, psO2Ico('check', 22), 'Angebot übernehmen');
+    const applyBtn = h('button', { onClick: () => applyNow(d), disabled: !!busy || !any, className: 'w-full ' + (full ? '' : 'mt-3 ') + 'py-4 rounded-2xl bg-blue-600 text-white font-black text-lg flex items-center justify-center gap-2 disabled:opacity-50' }, psO2Ico('check', 22), 'Angebot übernehmen');
     const links = h('div', { className: full ? 'flex items-center text-sm font-medium text-slate-500' : 'mt-3 text-center text-sm font-medium text-slate-500' },
       h('button', { onClick: resetAll, className: 'px-2 py-2' }, 'Neu beginnen'), ' · ',
+      h('button', { onClick: scanHsc, disabled: !!busy, className: 'px-2 py-2', 'data-ps-hsc': '1' }, 'Smart Capture QR'), ' · ',
       h('button', { onClick: () => setShowSet(v => !v), 'aria-expanded': showSet, className: 'px-2 py-2' }, 'Scan-Einstellungen'));
     const shield = h('div', { className: full ? 'flex items-center gap-1.5 text-sm font-medium text-slate-500' : 'mt-4 flex items-center justify-center gap-1.5 text-sm font-medium text-slate-500' }, psO2Ico('shield', 16), 'Verarbeitung direkt auf deinem Gerät');
     const settings = showSet ? h('div', { className: 'mt-1 rounded-2xl border border-slate-200 bg-slate-50 p-3' },
@@ -689,6 +733,7 @@ function PsO2Import({ onApply, onClose, initial }) {
   const hadNoteEl = had && !compact ? h('div', { className: 'mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2 text-sm font-bold text-slate-700' }, 'Einträge unten direkt korrigieren oder ein weiteres Foto machen – dann „Ins Angebot übernehmen“: die Karten werden neu geschrieben.') : null;
   // bisherige Ansicht (noch nichts erkannt: Foto aufnehmen, Bereiche, Kostenblock von Hand)
   const legacyEl = () => h(React.Fragment, null,
+      !any ? hscStartEl() : null,
       scanOk ? h('button', { onClick: () => scanQr(false), disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, '📲 Vom PC scannen') : null,
       scanOk ? h('div', { className: 'text-xs text-slate-500 mt-1 text-center' }, 'Am PC erscheint der QR-Code, sobald dort der Bildschirm gelesen wurde. Oder selbst fotografieren:') : null,
       modeBtns,
@@ -707,7 +752,7 @@ function PsO2Import({ onApply, onClose, initial }) {
           h('div', { className: 'text-sm font-black ' + (done2 && okS ? 'text-green-800' : 'text-slate-800') }, msg),
           photoActions(true),
           h('div', { className: 'flex gap-2 mt-2' },
-            h('button', { onClick: () => onApply(d), className: (done2 ? sBtn : gBtn) + ' flex-1 py-3 text-base' }, '✓ Fertig – übernehmen')));
+            h('button', { onClick: () => applyNow(d), className: (done2 ? sBtn : gBtn) + ' flex-1 py-3 text-base' }, '✓ Fertig – übernehmen')));
       })() : null,
       snipMode && any ? h('button', { onClick: sendQr, disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, '📲 QR-Code fürs Tablet') : null,
       snipMode ? h('button', { onClick: openSnip, disabled: !!busy, className: (any ? gBtn : sBtn) + ' w-full mt-2 py-3 text-base' }, any ? '🖥 Nochmal lesen (z. B. nach Scrollen)' : '🖥 Bildschirm lesen') : null,
@@ -717,13 +762,13 @@ function PsO2Import({ onApply, onClose, initial }) {
       scanMode ? h('button', { onClick: openScan, disabled: !!busy, className: sBtn + ' w-full mt-2 py-4 text-base' }, any ? '📷 Weiter scannen' : '📷 Scannen starten') : null,
       blockMode ? h('button', { onClick: () => openBlocks('block'), disabled: !!busy, className: sBtn + ' w-full mt-2 py-3 text-base' }, d.tarife.length || d.geraete.length || d.internet.length ? '📷 Weitere Blöcke fotografieren' : '📷 Block-Fotos starten') : null,
       optChecks,
-      busyEl, blurEl, pendingEl, noteEl, seenEl,
+      busyEl, blurEl, hscPendEl, pendingEl, noteEl, seenEl,
       any ? h('div', { className: 'mt-3 grid grid-cols-2 gap-2 rounded-xl bg-[#0b1e42] p-3 text-white' },
          [['Einmalig', d.einmalig], ['Monatlich', d.monatlich]].map(([lbl, val]) => h('div', { key: lbl, className: 'min-w-0' }, h('div', { className: 'text-xs font-bold text-blue-100' }, lbl + ' gesamt'), h('div', { className: 'text-xl font-black tabular-nums' }, val ? val + ' €' : 'Offen')))) : null,
       editor(),
       h('div', { className: 'flex gap-2 mt-4' },
         h('button', { onClick: closeTap, className: 'px-4 py-3 rounded-lg border font-bold text-sm ' + (askClose ? 'border-red-500 bg-red-600 text-white' : 'border-slate-300 text-slate-600') }, askClose ? 'Wirklich verwerfen?' : 'Abbrechen'),
-        h('button', { onClick: () => onApply(d), disabled: !!busy || !any, className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, 'Ins Angebot übernehmen')));
+        h('button', { onClick: () => applyNow(d), disabled: !!busy || !any, className: 'flex-1 px-4 py-3 rounded-lg bg-blue-600 text-white font-black text-sm disabled:opacity-50' }, 'Ins Angebot übernehmen')));
   const full = wide && photos.length > 0;
   const parts = compact ? compactParts(full) : null;
   return h('div', { className: 'fixed inset-0 flex items-center justify-center' + (full ? '' : ' p-3'), style: { zIndex: 100002, background: 'rgba(15,23,42,0.6)' } },

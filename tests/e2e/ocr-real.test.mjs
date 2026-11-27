@@ -44,7 +44,7 @@ async function run(b, engine, name) {
   await pg.evaluate(() => localStorage.setItem('ps_o2_mode', 'ganz'));
   await pg.evaluate('mountUi()');
   await pg.waitForTimeout(400);
-  const btn = pg.getByRole('button', { name: /Weiteres Foto|Vorschlag fotografieren/ }).first();
+  const btn = pg.getByRole('button', { name: /Weiteres Foto|Angebot fotografieren|Vorschlag fotografieren/ }).first();
   const [fc] = await Promise.all([pg.waitForEvent('filechooser'), btn.click()]);
   const t0 = Date.now();
   await fc.setFiles(path.join(tmp, name + '.jpg'));

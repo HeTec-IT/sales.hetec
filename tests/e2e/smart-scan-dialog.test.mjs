@@ -49,7 +49,7 @@ async function settle(pg) {
   await pg.waitForTimeout(250);
 }
 async function shoot(pg, file = photo1, wait = true) {
-  const btn = pg.getByRole('button', { name: /Weiteres Foto|Vorschlag fotografieren/ }).first();
+  const btn = pg.getByRole('button', { name: /Weiteres Foto|Angebot fotografieren|Vorschlag fotografieren/ }).first();
   const [fc] = await Promise.all([pg.waitForEvent('filechooser'), btn.click()]);
   await fc.setFiles(file);
   if (wait) await settle(pg);
@@ -124,7 +124,7 @@ const scenarios = [
     await ocr(pg, '', { hang: true }); const t0 = Date.now(); await shoot(pg); const dt = Date.now() - t0; const t = await text(pg);
     assert.ok(dt < 45000, dt + ' ms');
     assert.ok(!/Nichts erkannt/.test(t));
-    assert.ok(/Angebot übernehmen|Vorschlag fotografieren|Weiteres Foto/.test(t));
+    assert.ok(/Angebot übernehmen|Angebot fotografieren|Vorschlag fotografieren|Weiteres Foto/.test(t));
     assert.ok(await pg.evaluate('window.__ocr.terminated') >= 1);
   }],
   ['Abbrechen wirkt sofort (< 1 s); verspätetes Ergebnis ändert danach nichts', async pg => {

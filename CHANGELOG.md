@@ -1,5 +1,12 @@
 # Changelog
 
+## Smart Capture QR-Import (Branch feature/hetec-smart-capture, nicht produktiv freigegeben)
+
+- **Neu:** Smart-Scan-Dialog – Importweg „Smart Capture – QR-Code scannen“: Angebot vom PC (HeTec Smart Capture) per QR-Code
+  übernehmen, ohne OCR auf dem Tablet. Prüfung von Protokoll, Version, Ablauf (2 Min.), Prüfsumme, Allowlist und
+  personenbezogenen Daten; Bestätigung durch den Mitarbeiter; Ergänzen/Ersetzen/Abbrechen; Schutz gegen doppelte Übernahme;
+  Mehrfach-QR. Foto-Import und Datei-Import unverändert. Details: docs/SMART-CAPTURE.md.
+
 ## 57.0.0-beta.1 – HeTec Independent Architecture (Entwicklungsstand, nicht produktiv freigegeben)
 
 Ausgangsstand: 56.0-beta.4. Produktive Freigabe erst nach Abnahme auf echter Infrastruktur und echten Geräten.
